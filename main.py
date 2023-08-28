@@ -5,7 +5,7 @@ Created on Mon Aug 28 09:26:08 2023
 @author: ccslon
 """
 
-from asssembler import Assembler
+from asssembler import Assembler, ASMParser
 
 fact = '''
 mov A, 6
@@ -82,5 +82,5 @@ end:
 '''
 
 if __name__ == '__main__':
-    assembler = Assembler()
+    assembler = Assembler(ASMParser)
     assembler.assemble(test)

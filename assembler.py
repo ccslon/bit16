@@ -5,7 +5,7 @@ Created on Fri Aug 25 10:49:03 2023
 @author: ccslon
 """
 
-import re
+from re import compile as re_compile, I
 from bit16 import Reg, Op, Cond, Inst1, Inst2, Inst3, Inst4, Inst5, Load0, Load1, Jump
 
 TOKENS = {'dec': r'-?\d+',
@@ -27,10 +27,10 @@ TOKENS = {'dec': r'-?\d+',
           'error': r'\S+'}
 
 def lex(text):
-    regexp = re.compile('|'.join(rf'(?P<{token}>{pattern})' for token, pattern in TOKENS.items()), re.I)
+    regexp = re_compile('|'.join(rf'(?P<{token}>{pattern})' for token, pattern in TOKENS.items()), I)
     return [(match.lastgroup, match.group()) for match in regexp.finditer(text)] + [('end', '')]
 
-class Parser:
+class ASMParser:
     def parse(self, program):        
         rom = []
         label = None
@@ -174,8 +174,8 @@ class Parser:
         raise SyntaxError(f'Unexpected {etype} token "{evalue}" at {self.index}')
 
 class Assembler:
-    def __init__(self):
-        self.parser = Parser()
+    def __init__(self, parser_type):
+        self.parser = parser_type()
         
     def assemble(self, program):
         rom = self.parser.parse(program)
@@ -200,3 +200,4 @@ class Assembler:
             bin_ = ' '.join(inst.bin)
             print('>>' if i in indices else '  ', f'{i:03x}', f'{orig: <{maxl}}', f'{bin_: <22}', hex_)   
         print('\n', ' '.join(contents))
+        return contents
