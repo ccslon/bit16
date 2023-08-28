@@ -74,8 +74,8 @@ class Inst3(Inst):
         self.bin = '011',f'{op:03b}','X',f'{rs2:03b}',f'{rs:03b}',f'{rd:03b}'
 class Inst4(Inst):
     def __init__(self, op, rd, rs, const4):
-        op >>= 1
         assert -8 <= const4 < 8
+        op >>= 1
         self.dec = 4,op,const4,rs,rd
         if const4 < 0:
             const4 = negative(const4, 4)
