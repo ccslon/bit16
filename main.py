@@ -5,7 +5,7 @@ Created on Mon Aug 28 09:26:08 2023
 @author: ccslon
 """
 
-from asssembler import Assembler, ASMParser
+from assembler import Assembler, ASMParser
 
 fact = '''
 mov A, 6

@@ -6,7 +6,7 @@ Created on Fri Aug 25 10:49:03 2023
 """
 
 from re import compile as re_compile, I
-from bit16 import Reg, Op, Cond, Inst1, Inst2, Inst3, Inst4, Inst5, Load0, Load1, Jump
+from bit16 import Reg, Op, Cond, Nop, Inst1, Inst2, Inst3, Inst4, Inst5, Load0, Load1, Jump
 
 TOKENS = {'dec': r'-?\d+',
           'hex': r'x[0-9a-f]+',
@@ -45,7 +45,9 @@ class ASMParser:
                     label = next(self)
                     self.expect(':')
                 else:
-                    if self.peek('cond'):
+                    if self.accept('nop'):
+                        rom.append((label, line, Nop, ()))
+                    elif self.peek('cond'):
                         rom.append((label, line[:3], Jump, (next(self), self.expect('label'))))  
                     elif self.accept('ld'):
                         if self.peek('reg'): #load
@@ -91,7 +93,6 @@ class ASMParser:
                             if self.peek('reg'):
                                 rs = next(self)
                                 if self.accept(','):
-                                    op >>= 1
                                     if self.peek('reg'):
                                         inst, args = Inst3, (op, rd, rs, next(self)) #Inst3
                                     elif self.peek('dec','hex','bin'):
@@ -106,7 +107,6 @@ class ASMParser:
                             else:
                                 self.error()
                         else:
-                            op >>= 3
                             inst, args = Inst5, (op, rd) #Inst5
                         rom.append((label, line, inst, args))
                     elif self.accept('psh'):
@@ -198,6 +198,7 @@ class Assembler:
             hex_ = inst.hex()
             contents.append(hex_)
             bin_ = ' '.join(inst.bin)
-            print('>>' if i in indices else '  ', f'{i:03x}', f'{orig: <{maxl}}', f'{bin_: <22}', hex_)   
+            dec = ' '.join(map(str,map(int,inst.dec)))
+            print('>>' if i in indices else '  ', f'{i:03x}', f'{orig: <{maxl}}', f'| {dec: <11}', f'{bin_: <22}', hex_)   
         print('\n', ' '.join(contents))
         return contents
