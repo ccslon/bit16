@@ -22,7 +22,7 @@ fact:
     ld B, [sp, 0]
     cmp B, 0
     jne .L0
-    mov B, 0
+    mov B, 1
     jmp .L1
 .L0:
     ld B, [sp, 0]
@@ -33,16 +33,12 @@ fact:
     mul B, C    
 .L1:
     mov A, B
+    add sp, 1
     pop pc, B, C
 '''
 
-halt = '''
-mov B, 5
-mov A, B
-add A, B
-'''
 test = '''
-; nop
+nop
 mov A, 5 ; 2
 mov B, 3
 add A, B ; 1
@@ -54,25 +50,25 @@ sub E, C, 3 ; 4
 neg B ; 5
 '''
 
-ldtest = '''
-mov A, 10
-mov B, 11
-mov C, 3
-mov D, 1
+ld_test = '''
+mov A, 3
+mov B, 1
+mov C, 10
+mov D, 11
 mov E, 12
-ld [C], A
-ld [C, D], B
-ld [C, 2], E
+ld [A], C
+ld [A, B], D
+ld [A, 2], E
 
-ld A, [C]
-ld B, [C, D]
-ld C, [C, 2]
+ld C, [A, 2]
+ld B, [A, B]
+ld A, [A]
 '''
 
-jmptest = '''
+jmp_test = '''
 mov A, 0
 mov B, 5
-loop:
+ loop:
     cmp A, B
     jge end
     add A, 1
@@ -80,7 +76,20 @@ loop:
 end:
     jmp end
 '''
+clear_ram = '''
+mov A, 0
+mov B, 0
+mov C, 0
+not C
+loop:
+    cmp B, C
+    jge end
+    ld [B], A
+    add B, 1
+    jmp loop
+end:
+'''
 
 if __name__ == '__main__':
     assembler = Assembler(ASMParser)
-    assembler.assemble(test)
+    assembler.assemble(fact)
