@@ -12,6 +12,7 @@ TOKENS = {'dec': r'-?\d+',
           'hex': r'x[0-9a-f]+',
           'bin': r'b[01]+',
           'ld': r'ld',
+          'nop': r'nop',
           'op': '|'.join(op.name for op in Op),
           'cond': '|'.join(cond.name for cond in Cond),
           'psh': r'psh',
@@ -122,7 +123,7 @@ class ASMParser:
                         args = [self.expect('reg')]
                         while self.accept(','):
                             args.append(self.expect('reg'))
-                        rom.append((label, line, Inst2, (Op.SUB, Reg.SP, 1))) 
+                        rom.append((label, line, Inst2, (Op.ADD, Reg.SP, 1))) 
                         rom.append((None, '', Load1, (False, args[-1], Reg.SP, -1)))
                         for reg in reversed(args[:-1]):
                             rom.append((None, '', Inst2, (Op.ADD, Reg.SP, 1))) 
@@ -199,6 +200,6 @@ class Assembler:
             contents.append(hex_)
             bin_ = ' '.join(inst.bin)
             dec = ' '.join(map(str,map(int,inst.dec)))
-            print('>>' if i in indices else '  ', f'{i:03x}', f'{orig: <{maxl}}', f'| {dec: <11}', f'{bin_: <22}', hex_)   
+            print('>>' if i in indices else '  ', f'{i:03x}', f'{orig: <{maxl}}', f'| {dec: <12}', f'{bin_: <22}', hex_)   
         print('\n', ' '.join(contents))
         return contents
