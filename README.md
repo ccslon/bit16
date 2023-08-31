@@ -1,5 +1,5 @@
 ### bit16
-#Repository for my toy CPU design "bit16"
+# Repository for my toy CPU design "bit16"
 
 Created a basic 16-bit CPU as an excercise
 
