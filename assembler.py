@@ -188,7 +188,7 @@ class Assembler:
             if label:
                 labels[label] = i
                 indices[i] = label
-        contents = []
+        contents = []        
         for i, (label, orig, inst, args) in enumerate(rom):
             if inst is Jump:
                 cond, target = args
@@ -200,6 +200,6 @@ class Assembler:
             contents.append(hex_)
             bin_ = ' '.join(inst.bin)
             dec = ' '.join(map(str,map(int,inst.dec)))
-            print('>>' if i in indices else '  ', f'{i:03x}', f'{orig: <{maxl}}', f'| {dec: <12}', f'{bin_: <22}', hex_)   
+            print('>>' if i in indices else '  ', f'{i:03x}', f'{orig: <{maxl}}', f'| {dec: <12}', f'{bin_: <22}', hex_)
         print('\n', ' '.join(contents))
         return contents
