@@ -8,3 +8,5 @@ Included are the following:
 - Image of the circuit
 - Basic assembler/parser
 - Documentation for the bit16 CPU
+
+![Circuit Diagram](bit16v1.png)
