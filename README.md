@@ -9,4 +9,4 @@ Included are the following:
 - Basic assembler/parser
 - Documentation for the bit16 CPU
 
-![Circuit Diagram](bit16v1.png)
+![Circuit Diagram](bit16v3.png)
