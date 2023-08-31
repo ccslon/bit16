@@ -1,6 +1,12 @@
 # bit16
-Repository for my toy CPU design "bit16"
-!!! EVERYTHING IS STILL UNDER CONSTRUCTION !!!
-Created a basic 16 bit CPU
-Circuit file = "bit16.circ"
-Included are a basic assembler and some docs
+## Repository for my toy CPU design "bit16"
+
+Created a basic 16-bit CPU as an excercise
+
+Included are the following:
+- bit16 circuit file
+- Image of the circuit
+- Basic assembler/parser
+- Documentation for the bit16 CPU
+
+![Circuit Diagram](bit16v1.png)
