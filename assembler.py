@@ -47,9 +47,9 @@ class ASMParser:
                     self.expect(':')
                 else:
                     if self.accept('nop'):
-                        rom.append((label, line, Nop, ()))
+                        rom.append((label, Nop, ()))
                     elif self.peek('cond'):
-                        rom.append((label, line[:3], Jump, (next(self), self.expect('label'))))  
+                        rom.append((label, Jump, (next(self), self.expect('label'))))  
                     elif self.accept('ld'):
                         if self.peek('reg'): #load
                             storing = False
@@ -86,7 +86,7 @@ class ASMParser:
                             rd = self.expect('reg')
                         else:
                             self.error()
-                        rom.append((label, line, inst, (storing, rd, rb, o)))                     
+                        rom.append((label, inst, (storing, rd, rb, o)))                     
                     elif self.peek('op'):
                         op = next(self)
                         rd = self.expect('reg')
@@ -109,33 +109,33 @@ class ASMParser:
                                 self.error()
                         else:
                             inst, args = Inst5, (op, rd) #Inst5
-                        rom.append((label, line, inst, args))
+                        rom.append((label, inst, args))
                     elif self.accept('psh'):
                         args = [self.expect('reg')]
                         while self.accept(','):
                             args.append(self.expect('reg'))
-                        rom.append((label, line, Inst2, (Op.SUB, Reg.SP, 1)))
-                        rom.append((None, '', Load1, (True, args[0], Reg.SP, 0)))
+                        rom.append((label, Inst2, (Op.SUB, Reg.SP, 1)))
+                        rom.append((None, Load1, (True, args[0], Reg.SP, 0)))
                         for reg in args[1:]:
-                            rom.append((None, '', Inst2, (Op.SUB, Reg.SP, 1)))
-                            rom.append((None, '', Load1, (True, reg, Reg.SP, 0)))                            
+                            rom.append((None, Inst2, (Op.SUB, Reg.SP, 1)))
+                            rom.append((None, Load1, (True, reg, Reg.SP, 0)))
                     elif self.accept('pop'):
                         args = [self.expect('reg')]
                         while self.accept(','):
                             args.append(self.expect('reg'))
-                        rom.append((label, line, Inst2, (Op.ADD, Reg.SP, 1))) 
-                        rom.append((None, '', Load1, (False, args[-1], Reg.SP, -1)))
+                        rom.append((label, Inst2, (Op.ADD, Reg.SP, 1))) 
+                        rom.append((None, Load1, (False, args[-1], Reg.SP, -1)))
                         for reg in reversed(args[:-1]):
-                            rom.append((None, '', Inst2, (Op.ADD, Reg.SP, 1))) 
-                            rom.append((None, '', Load1, (False, reg, Reg.SP, -1)))                            
+                            rom.append((None, Inst2, (Op.ADD, Reg.SP, 1))) 
+                            rom.append((None, Load1, (False, reg, Reg.SP, -1)))                            
                     elif self.accept('call'):
-                        rom.append((label, line, Inst1, (Op.MOV, Reg.LR, Reg.PC )))
-                        rom.append((None, '', Inst2, (Op.ADD, Reg.LR, 3)))
-                        rom.append((None, 'jmp', Jump, (Cond.JMP, self.expect('label'))))                        
+                        rom.append((label, Inst1, (Op.MOV, Reg.LR, Reg.PC )))
+                        rom.append((None, Inst2, (Op.ADD, Reg.LR, 3)))
+                        rom.append((None, Jump, (Cond.JMP, self.expect('label'))))                        
                     elif self.accept('ret'):
-                        rom.append((label, line, Inst1, (Op.MOV, Reg.PC, Reg.LR)))                        
+                        rom.append((label, Inst1, (Op.MOV, Reg.PC, Reg.LR)))                        
                     else:
-                        self.error()      
+                        self.error()
                     label = None
                 self.expect('end')
         return rom            
@@ -181,25 +181,25 @@ class Assembler:
     def assemble(self, program):
         rom = self.parser.parse(program)
         labels = {}
-        indices = {}
-        maxl = 8
-        for i, (label, orig, inst, args) in enumerate(rom):
-            maxl = max(maxl, len(orig))
+        indices = []
+        for i, (label, inst, args) in enumerate(rom):
             if label:
                 labels[label] = i
-                indices[i] = label
-        contents = []        
-        for i, (label, orig, inst, args) in enumerate(rom):
+                indices.append(i)
+            rom[i] = (inst, args)
+        print(labels)
+        contents = []
+        for i, (inst, args) in enumerate(rom):
             if inst is Jump:
                 cond, target = args
-                target = labels[target]
-                orig = f'{orig} x{target:03x}'
+                target = labels[target]                
                 args = cond, target
             inst = inst(*args)
             hex_ = inst.hex()
             contents.append(hex_)
             bin_ = ' '.join(inst.bin)
             dec = ' '.join(map(str,map(int,inst.dec)))
-            print('>>' if i in indices else '  ', f'{i:03x}', f'{orig: <{maxl}}', f'| {dec: <12}', f'{bin_: <22}', hex_)
+            print('>>' if i in indices else '  ', f'{i:03x}', f'{inst.str: <15}', f'| {dec: <12}', f'{bin_: <22}', hex_)
+        
         print('\n', ' '.join(contents))
         return contents
