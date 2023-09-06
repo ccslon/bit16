@@ -8,11 +8,11 @@ Created on Mon Jul  3 19:47:39 2023
 import re
 from nodes import Var, Const, Unary, Binary, Compare, Call, Args, Func, Assign, \
                   If, Block, Program, Return, While, For, Break, Continue, \
-                  Script, Global, Struct, Params, Fields, Logic, Attr, Pointer, \
-                  Address
-
+                  Script, Struct, Params, Fields, Logic, Attr, Pointer, \
+                  Address, Main
 
 TOKENS = {'const': r"(\"[^\"]*\")|(\'[^\']*\')|(\d+(\.\d+)?)|(true)|(false)|(null)",
+          'main': r'main',
           'if': r'if',
           'else': r'else',
           'while': r'while',
@@ -292,50 +292,60 @@ class Parser:
         '''
         params = Params()
         if self.peek('var'):
-            params.append( Var(next(self)) )
+            params.append(Var(next(self)))
             while self.accept(','):
-                params.append( Var(self.expect('var')) )
+                params.append(Var(self.expect('var')))
         return params
     
     def fields(self):
         '''
-        FIELDS -> {var ['=' CONSTS]}
+        FIELDS -> {var ['=' const]}
         '''
         fields = Fields()
         while self.peek('var'):
             field = Var(next(self))
             if self.accept('='):
-                self.consts()
+                self.expect('const')
             fields.append( field )
-        return fields
-       
-    def consts(self):
-        '''
-        CONSTS -> const...
-        '''
-        return Const(self.expect('const'))
     
     def program(self):
         '''
-        PROGRAM -> {GLOBAL|STRUCT|FUNC}
+        PROGRAM -> {STRUCT|FUNC} ['main' '(' ')' '{ BLOCK '}'] {STRUCT|FUNC}
                   
-        GLOBAL -> var '=' CONSTS
+        // IMPORT -> 'from' var 'import' PARAMS
         STRUCT -> var '{' FIELDS '}'
         FUNC ->   var '(' PARAMS ')' '{' BLOCK '}'
         '''
         program = Program()
         while self.peek('var'):
             var = Var(next(self))
-            if self.accept('='): #Global definition
-                program.append( Global(var, self.consts()) )
-            elif self.accept('{'): #Struct definision
-                program.append( Struct(var, self.fields()) )
+            if self.accept('{'): #Struct definision
+                program.append(Struct(var, self.fields()))
                 self.expect('}')
             elif self.accept('('): #Func definition
                 params = self.params()
                 self.expect(')')
                 self.expect('{')
-                program.append( Func(var, params, self.block()) )
+                program.append(Func(var, params, self.block()))
+                self.expect('}')
+            else:
+                self.error()
+        if self.accept('main'):
+            self.expect('(')
+            self.expect(')')
+            self.expect('{')
+            program.insert(0, Main(self.block()))
+            self.expect('}')
+        while self.peek('var'):
+            var = Var(next(self))
+            if self.accept('{'): #Struct definision
+                program.append(Struct(var, self.fields()))
+                self.expect('}')
+            elif self.accept('('): #Func definition
+                params = self.params()
+                self.expect(')')
+                self.expect('{')
+                program.append(Func(var, params, self.block()))
                 self.expect('}')
             else:
                 self.error()
