@@ -5,7 +5,7 @@ Created on Mon Aug 28 09:26:08 2023
 @author: ccslon
 """
 
-from assembler import Assembler, ASMParser
+from assemble import Assembler, ASMParser
 
 fact = '''
 mov A, 6
@@ -13,7 +13,7 @@ call fact
 mov B, 0
 ld [B], A
 halt:
-    jmp halt
+    jmp halt ; mov pc, pc
 
 fact:
     psh lr, B, C
