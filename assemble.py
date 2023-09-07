@@ -19,6 +19,7 @@ TOKENS = {'dec': r'-?\d+',
           'pop': r'pop',
           'call': r'call',
           'ret': r'ret',
+          'halt': r'halt',
           'reg': r'|'.join(map(r'\b{}\b'.format, (reg.name for reg in Reg))),
           'label': r'\.?[a-z](\w|\d)*',
           'colon': r':',
@@ -32,9 +33,12 @@ def lex(text):
     return [(match.lastgroup, match.group()) for match in regexp.finditer(text)] + [('end', '')]
 
 class ASMParser:
+    def new_inst(self, op, args):
+        self.objects.append((self.labels, op, args))
+        self.labels = []    
     def parse(self, program):        
-        rom = []
-        labels = []
+        self.objects = []
+        self.labels = []
         for line in map(str.strip, program.strip().split('\n')):
             if ';' in line:
                 line, comment = map(str.strip, line.split(';', 1))
@@ -44,14 +48,14 @@ class ASMParser:
                 self.index = 0
                 if self.peek('label'):
                     print(line)
-                    labels.append(next(self))
+                    self.labels.append(next(self))
                     self.expect(':')
                 else:
-                    print(' ', line)
+                    print(f'  {line}')
                     if self.accept('nop'):
-                        rom.append((labels, Nop, ()))
+                        self.new_inst(Nop, ())
                     elif self.peek('cond'):
-                        rom.append((labels, Jump, (next(self), self.expect('label'))))  
+                        self.new_inst(Jump, (next(self), self.expect('label')))
                     elif self.accept('ld'):
                         if self.peek('reg'): #load
                             storing = False
@@ -88,7 +92,7 @@ class ASMParser:
                             rd = self.expect('reg')
                         else:
                             self.error()
-                        rom.append((labels, inst, (storing, rd, rb, o)))                     
+                        self.new_inst(inst, (storing, rd, rb, o))
                     elif self.peek('op'):
                         op = next(self)
                         rd = self.expect('reg')
@@ -111,36 +115,33 @@ class ASMParser:
                                 self.error()
                         else:
                             inst, args = Inst5, (op, rd) #Inst5
-                        rom.append((labels, inst, args))
+                        self.new_inst(inst, args)
                     elif self.accept('psh'):
                         args = [self.expect('reg')]
                         while self.accept(','):
                             args.append(self.expect('reg'))
-                        rom.append((labels, Inst2, (Op.SUB, Reg.SP, 1)))
-                        rom.append(([], Load1, (True, args[0], Reg.SP, 0)))
-                        for reg in args[1:]:
-                            rom.append(([], Inst2, (Op.SUB, Reg.SP, 1)))
-                            rom.append(([], Load1, (True, reg, Reg.SP, 0)))
+                        for reg in args:
+                            self.new_inst(Inst2, (Op.SUB, Reg.SP, 1))
+                            self.new_inst(Load1, (True, reg, Reg.SP, 0))
                     elif self.accept('pop'):
                         args = [self.expect('reg')]
                         while self.accept(','):
                             args.append(self.expect('reg'))
-                        rom.append((labels, Inst2, (Op.ADD, Reg.SP, 1))) 
-                        rom.append(([], Load1, (False, args[-1], Reg.SP, -1)))
-                        for reg in reversed(args[:-1]):
-                            rom.append(([], Inst2, (Op.ADD, Reg.SP, 1))) 
-                            rom.append(([], Load1, (False, reg, Reg.SP, -1)))                            
+                        for reg in reversed(args):
+                            self.new_inst(Inst2, (Op.ADD, Reg.SP, 1))
+                            self.new_inst(Load1, (False, reg, Reg.SP, -1))
                     elif self.accept('call'):
-                        rom.append((labels, Inst1, (Op.MOV, Reg.LR, Reg.PC )))
-                        rom.append(([], Inst2, (Op.ADD, Reg.LR, 3)))
-                        rom.append(([], Jump, (Cond.JMP, self.expect('label'))))                        
+                        self.new_inst(Inst1, (Op.MOV, Reg.LR, Reg.PC ))
+                        self.new_inst(Inst2, (Op.ADD, Reg.LR, 3))
+                        self.new_inst(Jump, (Cond.JMP, self.expect('label')))
                     elif self.accept('ret'):
-                        rom.append((labels, Inst1, (Op.MOV, Reg.PC, Reg.LR)))                        
+                        self.new_inst(Inst1, (Op.MOV, Reg.PC, Reg.LR))
+                    elif self.accept('halt'):
+                        self.new_inst(Inst1, (Op.MOV, Reg.PC, Reg.PC))
                     else:
                         self.error()
-                    labels = []
                 self.expect('end')
-        return rom            
+        return self.objects            
                 
     def __next__(self):
         type_, value = self.tokens[self.index]
@@ -177,11 +178,8 @@ class ASMParser:
         raise SyntaxError(f'Unexpected {etype} token "{evalue}" at {self.index}')
 
 class Assembler:
-    def __init__(self, parser_type):
-        self.parser = parser_type()
-        
     def assemble(self, program):
-        rom = self.parser.parse(program)
+        rom = ASMParser().parse(program)
         targets = {}
         indices = set()
         for i, (labels, inst, args) in enumerate(rom):
@@ -194,14 +192,10 @@ class Assembler:
         for i, (inst, args) in enumerate(rom):
             if inst is Jump:
                 cond, target = args
-                target = targets[target]                
+                target = targets[target]
                 args = cond, target
             inst = inst(*args)
-            hex_ = inst.hex()
-            contents.append(hex_)
-            bin_ = ' '.join(inst.bin)
-            dec = ' '.join(map(str,map(int,inst.dec)))
-            print('>>' if i in indices else '  ', f'{i:03x}', f'{inst.str: <15}', f'| {dec: <12}', f'{bin_: <22}', hex_)
-        
+            contents.append(inst.hex())
+            print('>>' if i in indices else '  ', f'{i:03x}', f'{inst.str: <15}', f'| {inst.dec(): <12}', f'{inst.bin(): <22}', inst.hex())
         print('\n', ' '.join(contents))
         return contents

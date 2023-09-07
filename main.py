@@ -5,15 +5,14 @@ Created on Mon Aug 28 09:26:08 2023
 @author: ccslon
 """
 
-from assemble import Assembler, ASMParser
+from assemble import Assembler
 
 fact = '''
 mov A, 6
 call fact
 mov B, 0
 ld [B], A
-halt:
-    jmp halt ; mov pc, pc
+halt
 
 fact:
     psh lr, B, C
@@ -91,5 +90,4 @@ end:
 '''
 
 if __name__ == '__main__':
-    assembler = Assembler(ASMParser)
-    assembler.assemble(fact)
+    Assembler().assemble(fact)
