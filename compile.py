@@ -48,5 +48,6 @@ abs(n) {
 '''
 
 if __name__ == '__main__':
-    assembler = assemble.Assembler(parse.Parser)
-    assembler.assemble(abs_)
+    ast = parse.Parser().parse(abs_)
+    asm = ast.compile()
+    assemble.Assembler().assemble(asm)

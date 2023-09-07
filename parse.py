@@ -355,9 +355,9 @@ class Parser:
         self.tokens = lex(text)
         #for i, (t, v) in enumerate(self.tokens): print(i, t, v)
         self.index = 0
-        rom = self.program()
+        ast = self.program()
         self.expect('end')
-        return rom.compile()
+        return ast
         
     def __next__(self):
         _, value = self.tokens[self.index]
