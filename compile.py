@@ -39,15 +39,45 @@ fib(n) {
 '''
 abs_ = '''
 abs(n) {
-    if n < 0 {
-        return -n
-    } else {
-        return n
+    if n < 0 return -n
+    return n
+}
+'''
+div = '''
+div(n, d):
+    q = 0
+    while n >= d {
+        n = n - d
+        q = q + 1
     }
+    return q
+'''
+mod = '''
+mod(n, d):
+    while n >= d {
+        n = n - d
+    }
+    return n
+'''
+pow_ = '''
+pow(b, e) {
+    p = 1
+    while e > 0 {
+        p = p * b
+        e = e - 1
+    }
+    return p
 }
 '''
 
+test = '''
+foo(n) {
+    bar = 5 * n
+}
+'''
+
+
 if __name__ == '__main__':
-    ast = parse.Parser().parse(abs_)
+    ast = parse.Parser().parse(test)
     asm = ast.compile()
     assemble.Assembler().assemble(asm)
