@@ -25,12 +25,14 @@ class Env:
         self.structs = {}
         self.locals = SetList()
         self.functions = []
+        self.if_jump_end = False
     def reset_scope(self):
         self.func = None
         self.locals.clear()
         self.args = 0
         self.regs = 0
-        self.returns = False             
+        self.returns = False
+        self.calls = False
     def start_loop(self):
         self.loop.append((self.next_label(), self.next_label()))
     def end_loop(self):
@@ -50,12 +52,18 @@ class Traveler:
             self.asm.append(f'{label}:')
         self.asm.append(f'  {asm}')
         self.labels.clear()
-    def push(self, *regs):
-        self.add('PSH '+', '.join(reg.name for reg in regs))
-    def pop(self, *regs):
-        self.add('POP '+', '.join(reg.name for reg in regs))
+    def push(self, lr, *regs):
+        regs = ((Reg.LR,) if lr else ()) + regs
+        if regs:
+            self.add('PSH '+', '.join(reg.name for reg in regs))
+    def pop(self, pc, *regs):
+        regs = ((Reg.PC,) if pc else ()) + regs
+        if regs:
+            self.add('POP '+', '.join(reg.name for reg in regs))
     def call(self, label):
         self.add(f'CALL {label}')
+    def ret(self):
+        self.add('RET')
     def load(self, rd, rb, offset5=None):
         self.add(f'LD {rd.name}, [{rb.name}'+(f', {offset5}' if offset5 is not None else '')+']')
     def store(self, rd, rb, offset5):
@@ -77,7 +85,7 @@ class Traveler:
 class Expr:
     IS_CONST = False
     def load(self, trav, n):
-        self.compile(trav, n)
+        return self.compile(trav, n)
     def branch(self, trav, n, _):
         self.compile(trav, n)
     def compare(self, trav, n, label):
@@ -96,8 +104,11 @@ class Const(Expr):
         elif value in ['false','null']:
             value = 0
         self.value = int(value)
+    def analyze(self, trav, n):
+        trav.env.regs = max(trav.env.regs, n)
     def load(self, trav, n):
         trav.inst(True, Op.MOV, Reg(n), self.value)
+        return Reg(n)
     def compile(self, trav, n):
         return self.value
     def __str__(self):
@@ -128,6 +139,7 @@ class Address(Expr):
         self.unary.analyze(trav, n)
     def compile(self, trav, n):
         self.unary.address(trav, n)
+        return Reg(n)
     def __str__(self):
         return f'{self.__class__.__name__}({self.unary})'
 
@@ -172,9 +184,10 @@ class Binary(Expr):
         self.op, self.left, self.right = self.OPS[op], left, right
     def analyze(self, trav, n):
         self.left.analyze(trav, n)
-        self.right.analyze(trav, n+1)
+        if not isinstance(self.right, Const):
+            self.right.analyze(trav, n+1)
     def compile(self, trav, n):
-        trav.inst(self.right.IS_CONST, self.op, self.left.compile(trav, n), self.right.compile(trav, n+1))
+        trav.inst(self.right.IS_CONST, self.op, self.left.load(trav, n), self.right.compile(trav, n+1))
         return Reg(n)
     def __str__(self):
         return f'{self.op[0].upper() + self.op[1:]}({self.left},{self.right})'
@@ -193,25 +206,39 @@ class Compare(Binary):
            'ge':Cond.JLT,
            'le':Cond.JGT}
     def compare(self, trav, n, label):
-        trav.inst(self.right.IS_CONST, Op.CMP, self.left.compile(trav, n), self.right.compile(trav, n+1))
+        trav.inst(self.right.IS_CONST, Op.CMP, self.left.load(trav, n), self.right.compile(trav, n+1))
         trav.jump(self.INV[self.op], f'.L{label}')
+    def compile(self, trav, n):
+        label = trav.env.next_label()
+        sublabel = trav.env.next_label()
+        trav.inst(self.right.IS_CONST, Op.CMP, self.left.load(trav, n), self.right.compile(trav, n+1))
+        trav.jump(self.INV[self.op], f'.L{sublabel}')
+        trav.inst(True, Op.MOV, Reg(n), 1)
+        trav.jump(Cond.JMP, f'.L{label}')
+        trav.labels.append(f'.L{sublabel}')
+        trav.inst(True, Op.MOV, Reg(n), 0)
+        trav.labels.append(f'.L{label}')        
 
 class Logic(Binary):
+    OPS = {'and':Op.AND,
+           'or':Op.OR}
     def __init__(self, op, left, right):
-        self.op, self.left, self.right = op, left, right
+        self.op, self.left, self.right = self.OPS[op], left, right
     def compare(self, trav, n, label):
-        if self.op == 'and':
+        if self.op == Op.AND:
             trav.inst(True, Op.CMP, self.left.compile(trav, n), 0)
             trav.jump(Cond.JEQ, f'.L{label}')
             trav.inst(True, Op.CMP, self.right.compile(trav, n), 0)
             trav.jump(Cond.JEQ, f'.L{label}')
-        elif self.op == 'or':
+        elif self.op == Op.OR:
             sublabel = trav.env.next_label()
             trav.inst(True, Op.CMP, self.left.compile(trav, n), 0)
             trav.jump(Cond.JNE, f'.L{sublabel}')
             trav.inst(True, Op.CMP, self.right.compile(trav, n), 0)
             trav.jump(Cond.JEQ, f'.L{label}')
             trav.labels.append(f'.L{sublabel}')
+    def compile(self, trav, n):
+        trav.inst(self.right.IS_CONST, self.op, self.left.load(trav, n), self.right.compile(trav, n+1))
 
 class Assign(Expr):
     def __init__(self, left, right):
@@ -243,8 +270,9 @@ class Call(Expr):
     def __init__(self, var, args):
         self.var, self.args = var, args
     def analyze(self, trav, n):
+        trav.env.calls = True
         self.args.analyze(trav, n)
-        trav.env.regs = max(trav.env.regs, len(self.args), n)
+        trav.env.regs = max(trav.env.regs, len(self.args), n) # len(args) because args are copied e.g. A, B <- Reg(regs), Reg(regs+1). n because no if args
         trav.env.args = max(trav.env.args, len(self.args))
     def compile(self, trav, n):
         self.args.compile(trav, n)
@@ -264,23 +292,29 @@ class If(Expr):
         if self.false:
             self.false.analyze(trav, 1)
     def compile(self, trav, n):
+        trav.env.if_jump_end = False
         label = trav.env.next_label()
         sublabel = trav.env.next_label() if self.false else label
         self.cond.compare(trav, n, sublabel)
         self.true.compile(trav, n)
         if self.false:
-            trav.jump(Cond.JMP, f'.L{label}')
+            if not (isinstance(self.true, Return) or (isinstance(self.true, Block) and self.true and isinstance(self.true[-1], Return))):
+                trav.jump(Cond.JMP, f'.L{label}')
+                trav.env.if_jump_end = True
             trav.labels.append(f'.L{sublabel}')
             self.false.branch(trav, n, label)
-        trav.labels.append(f'.L{label}')
+        if trav.env.if_jump_end:
+            trav.labels.append(f'.L{label}')
     def branch(self, trav, n, root):
         sublabel = trav.env.next_label()
         self.cond.compare(trav, n, sublabel)
         self.true.compile(trav, n)
-        trav.jump(Cond.JMP, f'.L{root}')
-        trav.labels.append(f'.L{sublabel}')
         if self.false:
-            self.false.branch(trav, n, root)
+            if not (isinstance(self.true, Return) or (isinstance(self.true, Block) and self.true and isinstance(self.true[-1], Return))):
+                trav.jump(Cond.JMP, f'.L{root}')
+                trav.env.if_jump_end = True
+            trav.labels.append(f'.L{sublabel}')
+            self.false.branch(trav, n, root)     
     def __str__(self):
         return f'{self.__class__.__name__}({self.cond},{self.true},{self.false})'
 
@@ -427,13 +461,13 @@ class Func(Expr):
     def compile(self, trav):
         trav.env.reset_scope()
         self.params.analyze(trav)
-        self.block.analyze(trav, 0)
+        self.block.analyze(trav, 1)
         if trav.env.returns:
             trav.env.func = trav.env.next_label()
         trav.labels.append(self.var.name)
-        #print(trav.env.args, trav.env.regs)
+        print(trav.env.args, trav.env.regs)
         push = list(map(Reg, range(max(len(self.params), trav.env.returns), trav.env.args + trav.env.regs)))
-        trav.push(Reg.LR, *push)
+        trav.push(trav.env.calls, *push)
         if trav.env.locals:
             trav.inst(True, Op.SUB, Reg.SP, len(trav.env.locals))
         self.params.compile(trav)
@@ -444,8 +478,9 @@ class Func(Expr):
                 trav.inst(False, Op.MOV, Reg.A, Reg(trav.env.args))
         if trav.env.locals:
             trav.inst(True, Op.ADD, Reg.SP, len(trav.env.locals))
-        trav.pop(Reg.PC, *push)
-        
+        trav.pop(trav.env.calls, *push)
+        if not trav.env.calls:
+            trav.ret()
     def __str__(self):
         return f'{self.__class__.__name__}({self.var},{self.params},{self.block})'
 
@@ -456,8 +491,12 @@ class Main(Expr):
         pass
     def compile(self, trav):
         trav.env.reset_scope()
-        self.block.analyze(trav, 0)
+        self.block.analyze(trav, 1)
+        if trav.env.locals:
+            trav.inst(True, Op.SUB, Reg.SP, len(trav.env.locals))
         self.block.compile(trav, 0)
+        if trav.env.locals:
+            trav.inst(True, Op.ADD, Reg.SP, len(trav.env.locals))
         trav.halt()
 
 class Program(Expr, UserList):
