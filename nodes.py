@@ -272,7 +272,7 @@ class Call(Expr):
     def analyze(self, trav, n):
         trav.env.calls = True
         self.args.analyze(trav, n)
-        trav.env.regs = max(trav.env.regs, len(self.args), n) # len(args) because args are copied e.g. A, B <- Reg(regs), Reg(regs+1). n because no if args
+        trav.env.regs = max(trav.env.regs, len(self.args), n) # len(args) because args are copied e.g. A, B <- Reg(regs), Reg(regs+1). n because if no args
         trav.env.args = max(trav.env.args, len(self.args))
     def compile(self, trav, n):
         self.args.compile(trav, n)
@@ -465,7 +465,7 @@ class Func(Expr):
         if trav.env.returns:
             trav.env.func = trav.env.next_label()
         trav.labels.append(self.var.name)
-        print(trav.env.args, trav.env.regs)
+        #print(trav.env.args, trav.env.regs)
         push = list(map(Reg, range(max(len(self.params), trav.env.returns), trav.env.args + trav.env.regs)))
         trav.push(trav.env.calls, *push)
         if trav.env.locals:
