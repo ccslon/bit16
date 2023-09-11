@@ -66,8 +66,8 @@ class Traveler:
         self.add('RET')
     def load(self, rd, rb, offset5=None):
         self.add(f'LD {rd.name}, [{rb.name}'+(f', {offset5}' if offset5 is not None else '')+']')
-    def store(self, rd, rb, offset5):
-        self.add(f'LD [{rb.name}, {offset5}], {rd.name}')
+    def store(self, rd, rb, offset5=None):
+        self.add(f'LD [{rb.name}'+(f', {offset5}' if offset5 is not None else '')+f'], {rd.name}')
     def inst(self, is_const, op, rd, src):
         if is_const:
             self.add(f'{op.name} {rd.name}, {src}')
@@ -387,13 +387,13 @@ class Script(Expr):
     def address(self, trav, n):
         self.var.compile(trav, n)
         self.sub.compile(trav, n+1)
-        trav.inst(False, Reg(n), Reg(n+1))
+        trav.inst(False, Op.ADD, Reg(n), Reg(n+1))
     def store(self, trav, n):
         self.address(trav, n+1)
-        trav.store(Reg(n), Reg(n+1), 0)
+        trav.store(Reg(n), Reg(n+1))
     def compile(self, trav, n):
         self.address(trav, n)
-        trav.load(Reg(n), Reg(n), 0)
+        trav.load(Reg(n), Reg(n))
         return Reg(n)
     def __str__(self):
         return f'{self.__class__.__name__}({self.var},{self.sub})'
