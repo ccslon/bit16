@@ -261,7 +261,11 @@ class Parser:
         elif self.accept('while'):
             state = While(self.expr(), self.state())
         elif self.accept('for'):
-            state = For(self.assign(), self.expr(), self.assign(), self.state())
+            init = self.assign()
+            self.expect(',')
+            cond = self.expr()
+            self.expect(',')
+            state = For(init, cond, self.assign(), self.state())
         elif self.accept('return'):
             state = Return()
             if self.peek('const','var','(','-','+','not','~','@'):
@@ -306,7 +310,7 @@ class Parser:
             field = Var(next(self))
             if self.accept('='):
                 self.expect('const')
-            fields.append( field )
+            fields.append(field)
     
     def program(self):
         '''
