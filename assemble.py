@@ -15,7 +15,7 @@ TOKENS = {'dec': r'-?\d+',
           'nop': r'nop',
           'op': '|'.join(op.name for op in Op),
           'cond': '|'.join(cond.name for cond in Cond),
-          'psh': r'psh',
+          'push': r'push',
           'pop': r'pop',
           'call': r'call',
           'ret': r'ret',
@@ -116,7 +116,7 @@ class ASMParser:
                         else:
                             inst, args = Inst5, (op, rd) #Inst5
                         self.new_inst(inst, args)
-                    elif self.accept('psh'):
+                    elif self.accept('push'):
                         args = [self.expect('reg')]
                         while self.accept(','):
                             args.append(self.expect('reg'))

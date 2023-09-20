@@ -55,7 +55,7 @@ class Traveler:
     def push(self, lr, *regs):
         regs = ((Reg.LR,) if lr else ()) + regs
         if regs:
-            self.add('PSH '+', '.join(reg.name for reg in regs))
+            self.add('PUSH '+', '.join(reg.name for reg in regs))
     def pop(self, pc, *regs):
         regs = ((Reg.PC,) if pc else ()) + regs
         if regs:

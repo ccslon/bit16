@@ -15,7 +15,7 @@ ld [B], A
 halt
 
 fact:
-    psh lr, B, C
+    push lr, B, C
     sub sp, 1
     ld [sp, 0], A
     ld B, [sp, 0]

@@ -23,7 +23,7 @@ const() {
 '''
 CONST_ASM = '''
 const:
-  PSH A
+  PUSH A
   SUB SP, 1
   MOV A, 3
   LD [SP, 0], A
@@ -40,7 +40,7 @@ rconst() {
 '''
 RCONST_ASM = '''
 rconst:
-  PSH A, B
+  PUSH A, B
   SUB SP, 2
   MOV A, 3
   LD [SP, 0], A
@@ -62,7 +62,7 @@ multi() {
 '''
 MULTI_ASM = '''
 multi:
-  PSH A, B
+  PUSH A, B
   SUB SP, 3
   MOV A, 3
   LD [SP, 0], A
@@ -90,7 +90,7 @@ paren() {
 '''
 PAREN_ASM = '''
 paren:
-  PSH A, B
+  PUSH A, B
   SUB SP, 4
   MOV A, 3
   LD [SP, 0], A
@@ -148,7 +148,7 @@ fact(n) {
 '''
 FACT_ASM = '''
 fact:
-  PSH LR, B, C
+  PUSH LR, B, C
   SUB SP, 1
   LD [SP, 0], A
   LD B, [SP, 0]
@@ -183,7 +183,7 @@ fib(n) {
 '''
 FIB_ASM = '''
 fib:
-  PSH LR, B, C
+  PUSH LR, B, C
   SUB SP, 1
   LD [SP, 0], A
   LD B, [SP, 0]
@@ -227,7 +227,7 @@ sum(n) {
 '''
 SUM_ASM = '''
 sum:
-  PSH B
+  PUSH B
   SUB SP, 3
   LD [SP, 0], A
   MOV A, 0
@@ -340,7 +340,7 @@ foo (x,y,z) {
 '''
 CALLS_ASM = '''
 foo:
-  PSH LR, D, E
+  PUSH LR, D, E
   SUB SP, 3
   LD [SP, 0], A
   LD [SP, 1], B
