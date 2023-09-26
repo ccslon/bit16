@@ -46,7 +46,14 @@ class Cond(IntEnum):
     JLE = 6
     JNV = 7
     
-class Inst:     
+class Data:
+    def __init__(self, value):
+        assert -32767 <= value < 32767
+        self.str = str(value)
+        self._dec = value,
+        if value < 0:
+            value = negative(value, 16)
+        self._bin = f'{value:016b}',
     def int(self):
         return int(''.join(self._bin).replace('X','0'), base=2)    
     def hex(self):
@@ -57,6 +64,9 @@ class Inst:
         return ' '.join(self._bin)
     def __str__(self):
         return self.str
+
+class Inst(Data):
+    pass
 
 class Nop(Inst):
     def __init__(self):
@@ -117,7 +127,12 @@ class Load1(Inst):
         self._bin = '110',str(int(storing)),'1',f'{offset5:05b}',f'{rb:03b}',f'{rd:03b}'    
 class Jump(Inst):
     def __init__(self, cond, const10):
-        assert 0 <= const10 < 1024
-        self.str = f'{cond.name} x{const10:03x}'
+        assert -512 <= const10 < 512
+        if const10 < 0:
+            self.str = f'{cond.name} -x{-const10:03x}'
+        else:
+            self.str = f'{cond.name} x{const10:03x}'
         self._dec = 7,cond,const10
+        if const10 < 0:
+            const10 = negative(const10, 10)
         self._bin = '111', f'{cond:03b}', f'{const10:010b}'

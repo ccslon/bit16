@@ -5,7 +5,7 @@ Created on Mon Aug 28 09:26:08 2023
 @author: ccslon
 """
 
-from assemble import Assembler
+import assemble
 
 fact = '''
 mov A, 6
@@ -50,7 +50,11 @@ neg B ; 5
 '''
 
 ld_test = '''
-mov A, 3
+lol 34
+nop
+nop
+nop
+ld A, =lol
 mov B, 1
 mov C, 10
 mov D, 11
@@ -73,7 +77,7 @@ mov B, 5
     add A, 1
     jmp loop
 end:
-    jmp end
+    halt
 '''
 clear_ram = '''
 mov A, 0
@@ -90,4 +94,4 @@ end:
 '''
 
 if __name__ == '__main__':
-    Assembler().assemble(fact)
+    assemble.assemble(fact)
