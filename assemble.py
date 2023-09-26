@@ -6,15 +6,15 @@ Created on Fri Aug 25 10:49:03 2023
 """
 
 from re import compile as re_compile, I
-from bit16 import Reg, Op, Cond, Nop, Inst1, Inst2, Inst3, Inst4, Inst5, Load0, Load1, Jump
+from bit16 import Reg, Op, Cond, Nop, Data, Inst1, Inst2, Inst3, Inst4, Inst5, Load0, Load1, Jump
 
 TOKENS = {'dec': r'-?\d+',
           'hex': r'x[0-9a-f]+',
           'bin': r'b[01]+',
           'ld': r'ld',
           'nop': r'nop',
-          'op': '|'.join(op.name for op in Op),
-          'cond': '|'.join(cond.name for cond in Cond),
+          'op': '|'.join(map(r'\b{}\b'.format, (op.name for op in Op))),
+          'cond': '|'.join(map(r'\b{}\b'.format, (cond.name for cond in Cond))),
           'push': r'push',
           'pop': r'pop',
           'call': r'call',
@@ -22,6 +22,7 @@ TOKENS = {'dec': r'-?\d+',
           'halt': r'halt',
           'reg': r'|'.join(map(r'\b{}\b'.format, (reg.name for reg in Reg))),
           'label': r'\.?[a-z](\w|\d)*',
+          'equal': r'=',
           'colon': r':',
           'lbrace': r'\[',
           'rbrace': r'\]',
@@ -32,14 +33,18 @@ def lex(text):
     regexp = re_compile('|'.join(rf'(?P<{token}>{pattern})' for token, pattern in TOKENS.items()), I)
     return [(match.lastgroup, match.group()) for match in regexp.finditer(text)] + [('end', '')]
 
-class ASMParser:
-    def new_inst(self, op, args):
-        self.objects.append((self.labels, op, args))
-        self.labels = []    
-    def parse(self, program):        
-        self.objects = []
+class Assembler:
+    def new_inst(self, inst, args):
+        self.insts.append((self.labels, inst, args))
         self.labels = []
-        for line in map(str.strip, program.strip().split('\n')):
+    def new_data(self, value):
+        self.datas.append((self.labels, Data, (value,)))
+        self.labels = []
+    def assemble(self, asm):        
+        self.insts = []
+        self.datas = []
+        self.labels = []
+        for line in map(str.strip, asm.strip().split('\n')):
             if ';' in line:
                 line, comment = map(str.strip, line.split(';', 1))
             if line:
@@ -49,7 +54,12 @@ class ASMParser:
                 if self.peek('label'):
                     print(line)
                     self.labels.append(next(self))
-                    self.expect(':')
+                    if self.peek('dec','hex','bin'):
+                        self.new_data(next(self))
+                    elif self.accept(':'):
+                        pass
+                    else:
+                        self.error()
                 else:
                     print(f'  {line}')
                     if self.accept('nop'):
@@ -61,19 +71,25 @@ class ASMParser:
                             storing = False
                             rd = next(self)
                             self.expect(',')
-                            self.expect('[')
-                            rb = self.expect('reg')
-                            if self.accept(','):
-                                if self.peek('reg'):
-                                    inst = Load0
-                                elif self.peek('dec','hex','bin'):
-                                    inst = Load1
+                            if self.accept('['):
+                                rb = self.expect('reg')
+                                if self.accept(','):
+                                    if self.peek('reg'):
+                                        inst = Load0
+                                    elif self.peek('dec','hex','bin'):
+                                        inst = Load1
+                                    else:
+                                        self.error()
+                                    o = next(self)
                                 else:
-                                    self.error()
-                                o = next(self)
+                                    inst, o = Load1, 0
+                                self.expect(']')
+                            elif self.accept('='):
+                                self.new_inst(Inst2, (Op.MOV, rd, self.expect('label')))
+                                self.expect('end')
+                                continue
                             else:
-                                inst, o  = Load1, 0
-                            self.expect(']')
+                                self.error()
                         elif self.accept('['): #store
                             storing = True
                             rb = self.expect('reg')
@@ -102,15 +118,14 @@ class ASMParser:
                                 if self.accept(','):
                                     if self.peek('reg'):
                                         inst, args = Inst3, (op, rd, rs, next(self)) #Inst3
-                                    elif self.peek('dec','hex','bin'):
+                                    elif self.peek('dec','hex','bin','label'):
                                         inst, args = Inst4, (op, rd, rs, next(self)) #Inst4
                                     else:
                                         self.error()
                                 else:
                                     inst, args = Inst1, (op, rd, rs) #Inst1
-                            elif self.peek('dec','hex','bin'):
-                                const = next(self)
-                                inst, args = Inst2, (op, rd, const) #Inst2
+                            elif self.peek('dec','hex','bin','label'):
+                                inst, args = Inst2, (op, rd, next(self)) #Inst2
                             else:
                                 self.error()
                         else:
@@ -141,7 +156,12 @@ class ASMParser:
                     else:
                         self.error()
                 self.expect('end')
-        return self.objects            
+        objects = []
+        if self.datas:
+            objects.append(([], Jump, (Cond.JMP, len(self.datas) + 1)))
+            objects.extend(self.datas)
+        objects.extend(self.insts)
+        return objects            
                 
     def __next__(self):
         type_, value = self.tokens[self.index]
@@ -177,25 +197,31 @@ class ASMParser:
         etype, evalue = self.tokens[self.index-offset]
         raise SyntaxError(f'Unexpected {etype} token "{evalue}" at {self.index}')
 
-class Assembler:
-    def assemble(self, program):
-        rom = ASMParser().parse(program)
+class Linker:
+    def link(objects):
         targets = {}
         indices = set()
-        for i, (labels, inst, args) in enumerate(rom):
+        for i, (labels, inst, args) in enumerate(objects):
             for label in labels:
                 targets[label] = i
                 indices.add(i)
-            rom[i] = (inst, args)
-        print('-'*65)
+            objects[i] = (inst, args)
+        print('-'*66)
         contents = []
-        for i, (inst, args) in enumerate(rom):
-            if inst is Jump:
-                cond, target = args
-                target = targets[target]
-                args = cond, target
+        for i, (inst, args) in enumerate(objects):
+            if args:
+                *args, last = args
+                if type(last) is str:
+                    last = targets[last]
+                if inst is Jump:
+                    last -= i
+                args = *args, last
             inst = inst(*args)
             contents.append(inst.hex())
-            print('>>' if i in indices else '  ', f'{i:03x}', f'{inst.str: <15}', f'| {inst.dec(): <12}', f'{inst.bin(): <22}', inst.hex())
+            print('>>' if i in indices else '  ', f'{i:03x}', f'{inst.str: <15}', f'| {inst.dec(): <13}', f'{inst.bin(): <22}', inst.hex())
         print('\n', ' '.join(contents))
         return contents
+    
+def assemble(program):
+    objects = Assembler().assemble(program)
+    Linker.link(objects)
