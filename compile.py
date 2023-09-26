@@ -75,9 +75,22 @@ foo(n) {
     bar = 5 * n
 }
 '''
+set_ = '''
+set(g, i, t) {
+    g[i] = t
+}
+'''
+get2 = '''
+get2(g, i, j) {
+    return g[i][j]
+}
+'''
 
+def compile(program):
+    ast = parse.Parser().parse(program)
+    asm = ast.compile()
+    objects = assemble.Assembler().assemble(asm)
+    assemble.Linker.link(objects)
 
 if __name__ == '__main__':
-    ast = parse.Parser().parse(test)
-    asm = ast.compile()
-    assemble.Assembler().assemble(asm)
+    compile(get2)

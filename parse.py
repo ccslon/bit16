@@ -6,10 +6,7 @@ Created on Mon Jul  3 19:47:39 2023
 """
 
 import re
-from nodes import Var, Const, Unary, Binary, Compare, Call, Args, Func, Assign, \
-                  If, Block, Program, Return, While, For, Break, Continue, \
-                  Script, Struct, Params, Fields, Logic, Attr, Pointer, \
-                  Address, Main
+from nodes import Var, Const, Unary, Binary, Compare, Call, Args, Func, Assign, If, Block, Program, Return, While, For, Break, Continue, Script, Struct, Params, Fields, Logic, Attr, Pointer, Address, Main, Global
 
 TOKENS = {'const': r"(\"[^\"]*\")|(\'[^\']*\')|(\d+(\.\d+)?)|(true)|(false)|(null)",
           'main': r'main',
@@ -314,7 +311,7 @@ class Parser:
     
     def program(self):
         '''
-        PROGRAM -> {STRUCT|FUNC} ['main' '(' ')' '{ BLOCK '}'] {STRUCT|FUNC}
+        PROGRAM -> {STRUCT|FUNC|GLOBAL} ['main' '(' ')' '{ BLOCK '}'] {STRUCT|FUNC|GLOBAL}
                   
         // IMPORT -> 'from' var 'import' PARAMS
         STRUCT -> var '{' FIELDS '}'
@@ -332,6 +329,8 @@ class Parser:
                 self.expect('{')
                 program.append(Func(var, params, self.block()))
                 self.expect('}')
+            elif self.accept('='):
+                program.append(Global(self.expect('const')))
             else:
                 self.error()
         if self.accept('main'):
@@ -351,6 +350,8 @@ class Parser:
                 self.expect('{')
                 program.append(Func(var, params, self.block()))
                 self.expect('}')
+            elif self.accept('='):
+                program.append(Global(self.expect('const')))
             else:
                 self.error()
         return program

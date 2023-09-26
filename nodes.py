@@ -23,6 +23,7 @@ class Env:
         self.labels = 0
         self.loop = Loop()
         self.structs = {}
+        self.globals = SetList()
         self.locals = SetList()
         self.functions = []
         self.if_jump_end = False
@@ -52,6 +53,8 @@ class Traveler:
             self.asm.append(f'{label}:')
         self.asm.append(f'  {asm}')
         self.labels.clear()
+    def glob(self, name, value):
+        self.asm.append(f'{name} {value}')
     def push(self, lr, *regs):
         regs = ((Reg.LR,) if lr else ()) + regs
         if regs:
@@ -64,6 +67,8 @@ class Traveler:
         self.add(f'CALL {label}')
     def ret(self):
         self.add('RET')
+    def load_glob(self, rd, name):
+        self.add(f'LD {rd.name}, ={name}')
     def load(self, rd, rb, offset5=None):
         self.add(f'LD {rd.name}, [{rb.name}'+(f', {offset5}' if offset5 is not None else '')+']')
     def store(self, rd, rb, offset5=None):
@@ -93,6 +98,10 @@ class Expr:
         trav.jump(Cond.JMP, f'.L{label}')
     def analyze(self, trav, n):
         pass
+    def analyze_right(self, trav, n):
+        self.analyze(trav, n)
+    def analyze_store(self, trav, n):
+        self.analyze(trav, n)
     def __str__(self):
         return f'{self.__class__.__name__}()'
     
@@ -106,6 +115,8 @@ class Const(Expr):
         self.value = int(value)
     def analyze(self, trav, n):
         trav.env.regs = max(trav.env.regs, n)
+    def analyze_right(self, trav, n):
+        pass
     def load(self, trav, n):
         trav.inst(True, Op.MOV, Reg(n), self.value)
         return Reg(n)
@@ -118,16 +129,27 @@ class Var(Expr):
     def __init__(self, name):
         self.name = name
     def analyze(self, trav, n):
-        if self.name not in trav.env.locals:
+        if self.name not in trav.env.locals and self.name not in trav.env.globals:
             trav.env.locals.append(self.name)
         trav.env.regs = max(trav.env.regs, n)
     def address(self, trav, n):
-        trav.inst4(Op.ADD, Reg(n), Reg.SP, trav.env.locals.index(self.name))
+        if self.name in trav.env.locals:
+            trav.inst4(Op.ADD, Reg(n), Reg.SP, trav.env.locals.index(self.name))
+        elif self.name in trav.env.globals:
+            trav.load_glob(Reg(n), self.name)
         return Reg(n)
     def store(self, trav, n):
-        trav.store(Reg(n), Reg.SP, trav.env.locals.index(self.name))
+        if self.name in trav.env.locals:
+            trav.store(Reg(n), Reg.SP, trav.env.locals.index(self.name))
+        elif self.name in trav.env.globals:
+            trav.load_glob(Reg(n+1), self.name)
+            trav.store(Reg(n), Reg(n+1))
     def compile(self, trav, n):
-        trav.load(Reg(n), Reg.SP, trav.env.locals.index(self.name))
+        if self.name in trav.env.locals:
+            trav.load(Reg(n), Reg.SP, trav.env.locals.index(self.name))
+        elif self.name in trav.env.globals:
+            trav.load_glob(Reg(n), self.name)
+            trav.load(Reg(n), Reg(n))
         return Reg(n)
     def __str__(self):
         return f"{self.__class__.__name__}('{self.name}')"    
@@ -137,6 +159,8 @@ class Address(Expr):
         self.unary = unary
     def analyze(self, trav, n):
         self.unary.analyze(trav, n)
+    def analyze_store(self, trav, n):
+        self.analyze(trav, n+1)
     def compile(self, trav, n):
         self.unary.address(trav, n)
         return Reg(n)
@@ -184,8 +208,7 @@ class Binary(Expr):
         self.op, self.left, self.right = self.OPS[op], left, right
     def analyze(self, trav, n):
         self.left.analyze(trav, n)
-        if not isinstance(self.right, Const):
-            self.right.analyze(trav, n+1)
+        self.right.analyze_right(trav, n+1)
     def compile(self, trav, n):
         trav.inst(self.right.IS_CONST, self.op, self.left.load(trav, n), self.right.compile(trav, n+1))
         return Reg(n)
@@ -245,7 +268,7 @@ class Assign(Expr):
         self.left, self.right = left, right
     def analyze(self, trav, n):
         self.right.analyze(trav, n)
-        self.left.analyze(trav, n+1 if isinstance(self.left, (Attr, Script, Pointer)) else n)
+        self.left.analyze_store(trav, n)
     def compile(self, trav, n):
         self.right.load(trav, n)
         self.left.store(trav, n)
@@ -384,6 +407,8 @@ class Script(Expr):
     def analyze(self, trav, n):
         self.var.analyze(trav, n)
         self.sub.analyze(trav, n+1)
+    def analyze_store(self, trav, n):
+        self.analyze(trav, n+1)
     def address(self, trav, n):
         self.var.compile(trav, n)
         self.sub.compile(trav, n+1)
@@ -403,6 +428,8 @@ class Attr(Expr):
         self.var, self.attr = var, attr
     def analyze(self, trav, n):
         self.var.analyze(trav, n)
+    def analyze_store(self, trav, n):
+        self.analyze(trav, n+1)
     def address(self, trav, n):
         self.var.compile(trav, n)
         trav.inst(True, Op.ADD, Reg(n), trav.env.structs[self.attr])
@@ -414,6 +441,12 @@ class Attr(Expr):
         trav.load(Reg(n), Reg(n), 0)
     def __str__(self):
         return f'{self.__class__.__name__}({self.var},{self.attr})'
+
+class Global(Assign):
+    def declare(self, trav):
+        trav.env.globals.add(self.left.name)
+    def compile(self, trav):
+        trav.glob(self.laft.name, self.right.value)
 
 class Fields(Expr, UserList):
     def declare(self, trav):
