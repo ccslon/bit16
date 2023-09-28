@@ -92,6 +92,29 @@ loop:
     jmp loop
 end:
 '''
+string_test = '''
+msg "hello\0"
+ld A, =msg
+call print
+halt
+print:
+    push B, C, D
+    mov B, 0
+    mov D, 1
+    shl D, 7
+    .L0:
+        ld C, [A, B]
+        cmp C, 0
+        jeq .L1
+        ld [D], C
+        add B, 1
+        jmp .L0
+    .L1:
+        pop B, C, D
+        ret
+'''
+
+
 
 if __name__ == '__main__':
-    assemble.assemble(fact)
+    assemble.assemble(string_test)

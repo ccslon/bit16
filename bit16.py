@@ -48,7 +48,7 @@ class Cond(IntEnum):
     
 class Data:
     def __init__(self, value):
-        assert -32767 <= value < 32767
+        assert -32767 <= value < 65536
         self.str = str(value)
         self._dec = value,
         if value < 0:
@@ -65,6 +65,13 @@ class Data:
     def __str__(self):
         return self.str
 
+class Char(Data):
+    def __init__(self, char):
+        assert 0 <= ord(char) < 128
+        self.str = char
+        self._dec = ord(char),
+        self._bin = f'{ord(char):016b}',
+
 class Inst(Data):
     pass
 
@@ -80,7 +87,7 @@ class Inst1(Inst):
         self._bin = '001',f'{op:04b}','XXX',f'{rs:03b}',f'{rd:03b}'
 class Inst2(Inst):
     def __init__(self, op, rd, const6):
-        assert -32 <= const6 < 32
+        assert -32 <= const6 < 64
         self.str = f'{op.name} {rd.name}, {const6}'
         self._dec = 2,op,const6,rd
         if const6 < 0:

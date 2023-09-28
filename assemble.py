@@ -6,11 +6,13 @@ Created on Fri Aug 25 10:49:03 2023
 """
 
 from re import compile as re_compile, I
-from bit16 import Reg, Op, Cond, Nop, Data, Inst1, Inst2, Inst3, Inst4, Inst5, Load0, Load1, Jump
+from bit16 import Reg, Op, Cond, Nop, Data, Char, Inst1, Inst2, Inst3, Inst4, Inst5, Load0, Load1, Jump
 
 TOKENS = {'dec': r'-?\d+',
           'hex': r'x[0-9a-f]+',
           'bin': r'b[01]+',
+          'string': r'"[^"]*"',
+          'char': r"'[^']'",
           'ld': r'ld',
           'nop': r'nop',
           'op': '|'.join(map(r'\b{}\b'.format, (op.name for op in Op))),
@@ -40,6 +42,9 @@ class Assembler:
     def new_data(self, value):
         self.datas.append((self.labels, Data, (value,)))
         self.labels = []
+    def new_char(self, char):
+        self.datas.append((self.labels, Char, (char,)))
+        self.labels = []
     def assemble(self, asm):        
         self.insts = []
         self.datas = []
@@ -56,6 +61,9 @@ class Assembler:
                     self.labels.append(next(self))
                     if self.peek('dec','hex','bin'):
                         self.new_data(next(self))
+                    elif self.peek('string'):
+                        for char in next(self)[1:-1]:
+                            self.new_char(char)
                     elif self.accept(':'):
                         pass
                     else:
@@ -151,6 +159,10 @@ class Assembler:
                         self.new_inst(Jump, (Cond.JMP, self.expect('label')))
                     elif self.accept('ret'):
                         self.new_inst(Inst1, (Op.MOV, Reg.PC, Reg.LR))
+                    elif self.accept('out'):
+                        rd = self.expect('reg')
+                        self.new_inst(Inst1, (Op.Mov, rd, 1))
+                        self.new_inst(Load1, (True, ))
                     elif self.accept('halt'):
                         self.new_inst(Inst1, (Op.MOV, Reg.PC, Reg.PC))
                     else:
@@ -209,7 +221,7 @@ class Linker:
         print('-'*66)
         contents = []
         for i, (inst, args) in enumerate(objects):
-            if args:
+            if args and inst is not Char:
                 *args, last = args
                 if type(last) is str:
                     last = targets[last]
