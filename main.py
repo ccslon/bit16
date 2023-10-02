@@ -108,7 +108,7 @@ print:
         jeq .L1
         ld [D], C
         add B, 1
-        jmp .L0
+        jr .L0
     .L1:
         pop B, C, D
         ret

@@ -37,19 +37,19 @@ class Op(IntEnum):
     MOV = 15
 
 class Cond(IntEnum):
-    JMP = 0
+    JNV = 0
     JEQ = 1
     JNE = 2
     JGT = 3
     JLT = 4
     JGE = 5
     JLE = 6
-    JNV = 7
+    JR = 7
     
 class Data:
     def __init__(self, value):
-        assert -32767 <= value < 65536
-        self.str = str(value)
+        assert -32768 <= value < 65536
+        self.str = f'{value:04x}'
         self._dec = value,
         if value < 0:
             value = negative(value, 16)
@@ -74,12 +74,18 @@ class Char(Data):
 
 class Inst(Data):
     pass
-
-class Nop(Inst):
-    def __init__(self):
-        self.str = 'NOP'
-        self._dec = 0,0
-        self._bin = '000','XXXXXXXXXXXXX'
+        
+class Jump(Inst):
+    def __init__(self, cond, const10):
+        assert -512 <= const10 < 512
+        if const10 < 0:
+            self.str = f'{cond.name} -x{-const10:03x}'
+        else:
+            self.str = f'{cond.name} x{const10:03x}'
+        self._dec = 0,cond,const10
+        if const10 < 0:
+            const10 = negative(const10, 10)
+        self._bin = '000', f'{cond:03b}', f'{const10:010b}'
 class Inst1(Inst):
     def __init__(self, op, rd, rs):
         self.str = f'{op.name} {rd.name}, {rs.name}'
@@ -109,10 +115,7 @@ class Inst4(Inst):
             const4 = negative(const4, 4)
         self._bin = '100',f'{op:03b}',f'{const4:04b}',f'{rs:03b}',f'{rd:03b}'
 class Inst5(Inst):
-    def __init__(self, op, rd):
-        self.str = f'{op.name} {rd.name}'
-        self._dec = 5,op,0,rd
-        self._bin = '101',f'{op:04b}','XXXXXX',f'{rd:03b}'        
+    pass      
 class Load0(Inst):
     def __init__(self, storing, rd, rb, ro):
         if storing:
@@ -132,14 +135,8 @@ class Load1(Inst):
         if offset5 < 0:
             offset5 = negative(offset5, 5)
         self._bin = '110',str(int(storing)),'1',f'{offset5:05b}',f'{rb:03b}',f'{rd:03b}'    
-class Jump(Inst):
-    def __init__(self, cond, const10):
-        assert -512 <= const10 < 512
-        if const10 < 0:
-            self.str = f'{cond.name} -x{-const10:03x}'
-        else:
-            self.str = f'{cond.name} x{const10:03x}'
-        self._dec = 7,cond,const10
-        if const10 < 0:
-            const10 = negative(const10, 10)
-        self._bin = '111', f'{cond:03b}', f'{const10:010b}'
+class Imm(Inst):
+    def __init__(self, rd):
+        self.str = f'LD {rd.name}'
+        self._dec = 7,0,rd
+        self._bin = '111','XXXXXXXXXX',f'{rd:03b}'

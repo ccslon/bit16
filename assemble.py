@@ -6,7 +6,7 @@ Created on Fri Aug 25 10:49:03 2023
 """
 
 from re import compile as re_compile, I
-from bit16 import Reg, Op, Cond, Nop, Data, Char, Inst1, Inst2, Inst3, Inst4, Inst5, Load0, Load1, Jump
+from bit16 import Reg, Op, Cond, Data, Char, Jump, Inst1, Inst2, Inst3, Inst4, Load0, Load1, Imm
 
 TOKENS = {'dec': r'-?\d+',
           'hex': r'x[0-9a-f]+',
@@ -37,17 +37,23 @@ def lex(text):
 
 class Assembler:
     def new_inst(self, inst, args):
-        self.insts.append((self.labels, inst, args))
+        self.data.append((self.labels, inst, args))
         self.labels = []
     def new_data(self, value):
-        self.datas.append((self.labels, Data, (value,)))
+        self.data.append((self.labels, Data, (value,)))
+        self.labels = []
+    def new_global(self, value):
+        self.data.append((self.labels, Data, (value,)))
+        self.globals = []
+    def new_global_char(self, value):
+        self.globals.append((self.labels, Char, (value,)))
         self.labels = []
     def new_char(self, char):
-        self.datas.append((self.labels, Char, (char,)))
+        self.data.append((self.labels, Char, (char,)))
         self.labels = []
     def assemble(self, asm):        
-        self.insts = []
-        self.datas = []
+        self.data = []
+        self.globals = []
         self.labels = []
         for line in map(str.strip, asm.strip().split('\n')):
             if ';' in line:
@@ -63,7 +69,7 @@ class Assembler:
                         self.new_data(next(self))
                     elif self.peek('string'):
                         for char in next(self)[1:-1]:
-                            self.new_char(char)
+                            self.new_global_char(char)
                     elif self.accept(':'):
                         pass
                     else:
@@ -71,7 +77,7 @@ class Assembler:
                 else:
                     print(f'  {line}')
                     if self.accept('nop'):
-                        self.new_inst(Nop, ())
+                        self.new_inst(Jump, (Cond.JNV, 0))
                     elif self.peek('cond'):
                         self.new_inst(Jump, (next(self), self.expect('label')))
                     elif self.accept('ld'):
@@ -93,7 +99,18 @@ class Assembler:
                                     inst, o = Load1, 0
                                 self.expect(']')
                             elif self.accept('='):
-                                self.new_inst(Inst2, (Op.MOV, rd, self.expect('label')))
+                                self.new_inst(Imm, (rd,))
+                                self.new_data(self.expect('label'))
+                                self.expect('end')
+                                continue
+                            elif self.peek('dec','hex','bin'):
+                                self.new_inst(Imm, (rd,))
+                                self.new_data(next(self))
+                                self.expect('end')
+                                continue
+                            elif self.peek('char'):
+                                self.new_inst(Imm, (rd,))
+                                self.new_char(next(self))
                                 self.expect('end')
                                 continue
                             else:
@@ -137,7 +154,7 @@ class Assembler:
                             else:
                                 self.error()
                         else:
-                            inst, args = Inst5, (op, rd) #Inst5
+                            inst, args = Inst1, (op, rd, 0) #Unary
                         self.new_inst(inst, args)
                     elif self.accept('push'):
                         args = [self.expect('reg')]
@@ -156,7 +173,7 @@ class Assembler:
                     elif self.accept('call'):
                         self.new_inst(Inst1, (Op.MOV, Reg.LR, Reg.PC ))
                         self.new_inst(Inst2, (Op.ADD, Reg.LR, 3))
-                        self.new_inst(Jump, (Cond.JMP, self.expect('label')))
+                        self.new_inst(Jump, (Cond.JR, self.expect('label')))
                     elif self.accept('ret'):
                         self.new_inst(Inst1, (Op.MOV, Reg.PC, Reg.LR))
                     elif self.accept('out'):
@@ -165,14 +182,15 @@ class Assembler:
                         self.new_inst(Load1, (True, ))
                     elif self.accept('halt'):
                         self.new_inst(Inst1, (Op.MOV, Reg.PC, Reg.PC))
+                    elif self.accept('jump'):
+                        self.new_inst(Imm, (Reg.PC,))
+                        self.new_data(self.expect('label'))
                     else:
                         self.error()
                 self.expect('end')
         objects = []
-        if self.datas:
-            objects.append(([], Jump, (Cond.JMP, len(self.datas) + 1)))
-            objects.extend(self.datas)
-        objects.extend(self.insts)
+        objects.extend(self.data)
+        objects.extend(self.globals)
         return objects            
                 
     def __next__(self):
@@ -213,24 +231,24 @@ class Linker:
     def link(objects):
         targets = {}
         indices = set()
-        for i, (labels, inst, args) in enumerate(objects):
+        for i, (labels, type_, args) in enumerate(objects):
             for label in labels:
                 targets[label] = i
                 indices.add(i)
-            objects[i] = (inst, args)
+            objects[i] = (type_, args)
         print('-'*66)
         contents = []
-        for i, (inst, args) in enumerate(objects):
-            if args and inst is not Char:
+        for i, (type_, args) in enumerate(objects):
+            if args and type_ is not Char:
                 *args, last = args
                 if type(last) is str:
                     last = targets[last]
-                if inst is Jump:
+                if type_ is Jump:
                     last -= i
                 args = *args, last
-            inst = inst(*args)
-            contents.append(inst.hex())
-            print('>>' if i in indices else '  ', f'{i:03x}', f'{inst.str: <15}', f'| {inst.dec(): <13}', f'{inst.bin(): <22}', inst.hex())
+            data = type_(*args)
+            contents.append(data.hex())
+            print('>>' if i in indices else '  ', f'{i:03x}', f'{data.str: <15}', f'| {data.dec(): <13}', f'{data.bin(): <22}', data.hex())
         print('\n', ' '.join(contents))
         return contents
     
