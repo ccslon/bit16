@@ -71,37 +71,24 @@ ld A, [A]
 jmp_test = '''
 mov A, 0
 mov B, 5
- loop:
-    cmp A, B
-    jge end
-    add A, 1
-    jmp loop
-end:
-    halt
-'''
-clear_ram = '''
-mov A, 0
-mov B, 0
-mov C, 0
-not C
 loop:
-    cmp B, C
-    jge end
-    ld [B], A
-    add B, 1
-    jmp loop
+  cmp A, B
+  jge end
+  add A, 1
+  jr loop
 end:
+  halt
 '''
+
 string_test = '''
 msg "hello\0"
 ld A, =msg
 call print
 halt
 print:
-    push B, C, D
+    push {B-D}
     mov B, 0
-    mov D, 1
-    shl D, 7
+    ld D, x7fff
     .L0:
         ld C, [A, B]
         cmp C, 0
@@ -110,7 +97,7 @@ print:
         add B, 1
         jr .L0
     .L1:
-        pop B, C, D
+        pop {B-D}
         ret
 '''
 
