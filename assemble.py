@@ -30,6 +30,7 @@ TOKENS = {'const': r'(-?\d+)|(x[0-9a-f]+)|(b[01]+)',
           'lbrack': r'\{',
           'rbrack': r'\}',
           'comma': r',',
+          'end': r'$',
           'error': r'\S+'}
 
 RE = re.compile('|'.join(rf'(?P<{token}>{pattern})' for token, pattern in TOKENS.items()), re.I)
@@ -151,6 +152,7 @@ class Assembler:
                         args = [self.expect('reg')]
                         while self.accept(','):
                             args.append(self.expect('reg'))
+                        self.expect('end')
                         for reg in args:
                             self.inst2(Op.SUB, Reg.SP, 1)
                             self.store(Reg.SP, reg)                                            
@@ -158,6 +160,7 @@ class Assembler:
                         args = [self.expect('reg')]
                         while self.accept(','):
                             args.append(self.expect('reg'))
+                        self.expect('end')
                         for reg in reversed(args):
                             self.inst2(Op.ADD, Reg.SP, 1)
                             self.load1(reg, Reg.SP , -1)                                                        
@@ -181,6 +184,7 @@ class Assembler:
         return objects
     
     def match(self, *pattern):
+        pattern += ('end',)
         return len(self.tokens) == len(pattern) and all(pattern[i] in (type_, value) for i, (type_, value) in enumerate(self.tokens))
     
     def trans(self, type_, value):
@@ -214,15 +218,16 @@ class Assembler:
             return self.trans(type_, value)
         return value
         
-    def peek(self, symbol):
-        return self.index < len(self.tokens) and symbol in self.tokens[self.index]
+    def peek(self, *symbols):
+        type_, value = self.tokens[self.index]
+        return type_ in symbols or value in symbols
     
-    def accept(self, symbol):
-        if self.peek(symbol):
+    def accept(self, *symbols):
+        if self.peek(*symbols):
             return next(self)
     
-    def expect(self, symbol):
-        if self.peek(symbol):
+    def expect(self, *symbols):
+        if self.peek(*symbols):
             return next(self)
         self.error()
         
