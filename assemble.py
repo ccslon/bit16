@@ -33,36 +33,9 @@ TOKENS = {'const': r'(-?\d+)|(x[0-9a-f]+)|(b[01]+)',
           'error': r'\S+'}
 
 RE = re.compile('|'.join(rf'(?P<{token}>{pattern})' for token, pattern in TOKENS.items()), re.I)
+
 def lex(text):
     return [(match.lastgroup , match.group()) for match in RE.finditer(text)]
-
-class Pattern:
-    def __init__(self, text):
-        self.tokens = lex(text)
-        self.values = self._values()
-    def starts_with(self, type_):
-        return self.tokens[0][0] == type_
-    def match(self, *pattern):
-        return len(self.tokens) == len(pattern) and all(pattern[i] in (type_, value) for i, (type_, value) in enumerate(self.tokens))
-    def _values(self):
-        for type_, value in self.tokens:
-            if type_ == 'const':
-                if value.startswith('x'):
-                    yield int(value[1:], base=16)
-                elif value.startswith('b'):
-                    yield int(value[1:], base=2)
-                else:
-                    yield int(value)
-            elif type_ in ['string', 'char']:
-                yield value[1:-1]
-            elif type_ == 'reg':
-                yield Reg[value.upper()]
-            elif type_ == 'cond':
-                yield Cond[value.upper()]
-            elif type_ == 'op':
-                yield Op[value.upper()]
-            elif type_ == 'label':
-                yield value
 
 class Assembler:
     def label(self, label):
@@ -126,105 +99,136 @@ class Assembler:
             if ';' in line:
                 line, comment = map(str.strip, line.split(';', 1))
             if line:
-                pattern = Pattern(line)
-                if pattern.starts_with('label'):
+                self.tokens = lex(line)
+                self.index = 0
+                if self.peek('label'):
                     print(line)
-                    if pattern.match('label', ':'):
-                        self.label(*pattern.values)
-                    elif pattern.match('label', ':', 'const'):
-                        self.const(*pattern.values)
-                    elif pattern.match('label', ':', 'char'):
-                        self.char(*pattern.values)
-                    elif pattern.match('label', ':', 'string'):
-                        self.string(*pattern.values)
+                    if self.match('label', ':'):
+                        self.label(*self.values())
+                    elif self.match('label', ':', 'const'):
+                        self.const(*self.values())
+                    elif self.match('label', ':', 'char'):
+                        self.char(*self.values())
+                    elif self.match('label', ':', 'string'):
+                        self.string(*self.values())
                     else:
                         self.error()
                 else:
                     print(f'  {line}')
-                    if pattern.match('nop'):
+                    if self.match('nop'):
                         self.jump(Cond.JNV, 0)
-                    elif pattern.match('cond', 'label'):
-                        self.jump(*pattern.values)
-                    elif pattern.match('ld', 'reg', ',', '[', 'reg', ',', 'reg', ']'):
-                        self.load0(*pattern.values)
-                    elif pattern.match('ld', 'reg', ',', '[', 'reg', ']'):
-                        self.load1(*pattern.values, 0)
-                    elif pattern.match('ld', 'reg', ',', '[', 'reg', ',', 'const', ']'):
-                        self.load1(*pattern.values)
-                    elif pattern.match('ld', '[', 'reg', ',', 'reg', ']', ',', 'reg'):
-                        self.store0(*pattern.values)
-                    elif pattern.match('ld', '[', 'reg', ']', ',', 'reg'):
-                        self.store(*pattern.values)
-                    elif pattern.match('ld', '[', 'reg', ',', 'const', ']', ',', 'reg'):
-                        self.store1(*pattern.values)
-                    elif pattern.match('ld', 'reg', ',', 'const'):
-                        self.imm(*pattern.values)
-                    elif pattern.match('ld', 'reg', ',', 'char'):
-                        self.imm_char(*pattern.values)
-                    elif pattern.match('ld', 'reg', ',', '=', 'label'):
-                        self.imm(*pattern.values)
-                    elif pattern.match('op', 'reg'):
-                        self.inst1(*pattern.values, Reg.A)
-                    elif pattern.match('op', 'reg', ',', 'reg'):                    
-                        self.inst1(*pattern.values)
-                    elif pattern.match('op', 'reg', ',', 'const'):
-                        self.inst2(*pattern.values)                    
-                    elif pattern.match('op', 'reg', ',', 'reg', ',', 'reg'):
-                        self.inst3(*pattern.values)                    
-                    elif pattern.match('op', 'reg', ',', 'reg', ',', 'const'):
-                        self.inst4(*pattern.values)
-                    elif pattern.match('push', 'reg'):
-                        self.inst2(Op.SUB, Reg.SP, 1)
-                        self.store(Reg.SP, *pattern.values)
-                    elif pattern.match('push', '{', 'reg', '-', 'reg', '}'):
-                        start, end = pattern.values
-                        for reg in range(start, end+1):
+                    elif self.match('cond', 'label'):
+                        self.jump(*self.values())
+                    elif self.match('ld', 'reg', ',', '[', 'reg', ',', 'reg', ']'):
+                        self.load0(*self.values())
+                    elif self.match('ld', 'reg', ',', '[', 'reg', ']'):
+                        self.load1(*self.values(), 0)
+                    elif self.match('ld', 'reg', ',', '[', 'reg', ',', 'const', ']'):
+                        self.load1(*self.values())
+                    elif self.match('ld', '[', 'reg', ',', 'reg', ']', ',', 'reg'):
+                        self.store0(*self.values())
+                    elif self.match('ld', '[', 'reg', ']', ',', 'reg'):
+                        self.store(*self.values())
+                    elif self.match('ld', '[', 'reg', ',', 'const', ']', ',', 'reg'):
+                        self.store1(*self.values())
+                    elif self.match('ld', 'reg', ',', 'const'):
+                        self.imm(*self.values())
+                    elif self.match('ld', 'reg', ',', 'char'):
+                        self.imm_char(*self.values())
+                    elif self.match('ld', 'reg', ',', '=', 'label'):
+                        self.imm(*self.values())
+                    elif self.match('op', 'reg'):
+                        self.inst1(*self.values(), Reg.A)
+                    elif self.match('op', 'reg', ',', 'reg'):                    
+                        self.inst1(*self.values())
+                    elif self.match('op', 'reg', ',', 'const'):
+                        self.inst2(*self.values())                    
+                    elif self.match('op', 'reg', ',', 'reg', ',', 'reg'):
+                        self.inst3(*self.values())                    
+                    elif self.match('op', 'reg', ',', 'reg', ',', 'const'):
+                        self.inst4(*self.values())
+                    elif self.accept('push'):
+                        args = [self.expect('reg')]
+                        while self.accept(','):
+                            args.append(self.expect('reg'))
+                        for reg in args:
                             self.inst2(Op.SUB, Reg.SP, 1)
-                            self.store(Reg.SP, Reg(reg))
-                    elif pattern.match('push', 'lr', ',', '{', 'reg', '-', 'reg', '}'):
-                        lr, start, end = pattern.values
-                        self.inst2(Op.SUB, Reg.SP, 1)
-                        self.store(Reg.SP, lr)
-                        for reg in range(start, end+1):
-                            self.inst2(Op.SUB, Reg.SP, 1)
-                            self.store(Reg.SP, Reg(reg))
-                    elif pattern.match('pop', 'reg'):
-                        self.inst2(Op.ADD, Reg.SP, 1)
-                        self.load1(Reg(reg), Reg.SP , -1)
-                    elif pattern.match('pop', '{', 'reg', '-', 'reg', '}'):
-                        start, end = pattern.values
-                        for reg in reversed(range(start, end+1)):
+                            self.store(Reg.SP, reg)                                            
+                    elif self.accept('pop'):
+                        args = [self.expect('reg')]
+                        while self.accept(','):
+                            args.append(self.expect('reg'))
+                        for reg in reversed(args):
                             self.inst2(Op.ADD, Reg.SP, 1)
-                            self.load1(Reg(reg), Reg.SP , -1)
-                    elif pattern.match('pop', 'pc', ',', '{', 'reg', '-', 'reg', '}'):
-                        pc, start, end = pattern.values
-                        for reg in reversed(range(start, end+1)):
-                            self.inst2(Op.ADD, Reg.SP, 1)
-                            self.load1(Reg(reg), Reg.SP , -1)
-                        self.inst2(Op.ADD, Reg.SP, 1)
-                        self.load1(pc, Reg.SP, -1)
-                    elif pattern.match('jump', 'label'):
-                        self.imm(*pattern.values)
-                    elif pattern.match('call', 'label'):
+                            self.load1(reg, Reg.SP , -1)                                                        
+                    elif self.match('jump', 'label'):
+                        self.imm(*self.values())
+                    elif self.match('call', 'label'):
                         self.inst1(Op.MOV, Reg.LR, Reg.PC)
                         self.inst2(Op.ADD, Reg.LR, 3)
-                        self.jump(Cond.JR, *pattern.values)
-                    elif pattern.match('ret'):
+                        self.jump(Cond.JR, *self.values())
+                    elif self.match('ret'):
                         self.inst1(Op.MOV, Reg.PC, Reg.LR)
-                    elif pattern.match('out', 'reg'):
+                    elif self.match('out', 'reg'):
                         pass
-                    elif pattern.match('halt'):
+                    elif self.match('halt'):
                         self.inst1(Op.MOV, Reg.PC, Reg.PC)
                     else:
-                        self.error(line)
-                    
+                        self.error(line)                    
         objects = []
         objects.extend(self.inst)
         objects.extend(self.data)
         return objects
+    
+    def match(self, *pattern):
+        return len(self.tokens) == len(pattern) and all(pattern[i] in (type_, value) for i, (type_, value) in enumerate(self.tokens))
+    
+    def trans(self, type_, value):
+        if type_ == 'const':
+            if value.startswith('x'):
+                return int(value[1:], base=16)
+            elif value.startswith('b'):
+                return int(value[1:], base=2)
+            else:
+                return int(value)
+        elif type_ in ['string', 'char']:
+            return value[1:-1]
+        elif type_ == 'reg':
+            return Reg[value.upper()]
+        elif type_ == 'cond':
+            return Cond[value.upper()]
+        elif type_ == 'op':
+            return Op[value.upper()]
+        elif type_ == 'label':
+            return value
+    
+    def values(self):
+        for type_, value in self.tokens:
+            if type_ in ['const','string','char','reg','cond','op','label']:
+                yield self.trans(type_, value)
+    
+    def __next__(self):
+        type_, value = self.tokens[self.index]
+        self.index += 1
+        if type_ in ['const','string','char','reg','cond','op','label']:
+            return self.trans(type_, value)
+        return value
         
-    def error(self, line):
-        raise SyntaxError(f'Syntax error in line : "{line}"')
+    def peek(self, symbol):
+        return self.index < len(self.tokens) and symbol in self.tokens[self.index]
+    
+    def accept(self, symbol):
+        if self.peek(symbol):
+            return next(self)
+    
+    def expect(self, symbol):
+        if self.peek(symbol):
+            return next(self)
+        self.error()
+        
+    def error(self, offset=0):
+        etype, evalue = self.tokens[self.index-offset]
+        raise SyntaxError(f'Unexpected {etype} token "{evalue}" at {self.index}')
 
 class Linker:
     def link(objects):

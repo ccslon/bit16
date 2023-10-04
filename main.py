@@ -13,7 +13,7 @@ call fact
 halt
 
 fact:
-    push lr, {B-C}
+    push lr, B, C
     sub sp, 1
     ld [sp, 0], A
     ld B, [sp, 0]
@@ -31,7 +31,7 @@ fact:
 .L1:
     mov A, B
     add sp, 1
-    pop pc, {B-C}
+    pop pc, B, C
 '''
 
 test = '''
@@ -84,7 +84,7 @@ ld A, =msg
 call print
 halt
 print:
-  push {B-D}
+  push B, C, D
   mov B, 0
   ld D, x7fff
 .L0:
@@ -95,7 +95,7 @@ print:
   add B, 1
   jr .L0
 .L1:
-  pop {B-D}
+  pop B, C, D
   ret
 '''
 

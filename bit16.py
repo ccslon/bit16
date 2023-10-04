@@ -69,8 +69,8 @@ class Char(Data):
     def __init__(self, char):
         assert 0 <= ord(char) < 128
         self.str = char
-        self._dec = ord(char),
-        self._bin = f'{ord(char):016b}',
+        self._dec = 0,ord(char)
+        self._bin = 'XXXXXXXXX',f'{ord(char):07b}'
 
 class Inst(Data):
     pass
