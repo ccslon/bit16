@@ -10,19 +10,17 @@ import assemble
 fact = '''
 mov A, 6
 call fact
-mov B, 0
-ld [B], A
 halt
 
 fact:
-    push lr, B, C
+    push lr, {B-C}
     sub sp, 1
     ld [sp, 0], A
     ld B, [sp, 0]
     cmp B, 0
     jne .L0
     mov B, 1
-    jmp .L1
+    jr .L1
 .L0:
     ld B, [sp, 0]
     ld A, [sp, 0]
@@ -33,7 +31,7 @@ fact:
 .L1:
     mov A, B
     add sp, 1
-    pop pc, B, C
+    pop pc, {B-C}
 '''
 
 test = '''
@@ -50,7 +48,7 @@ neg B ; 5
 '''
 
 ld_test = '''
-lol 34
+lol: 34
 nop
 nop
 nop
@@ -81,24 +79,24 @@ end:
 '''
 
 string_test = '''
-msg "hello\0"
+msg: "Hello world!\0"
 ld A, =msg
 call print
 halt
 print:
-    push {B-D}
-    mov B, 0
-    ld D, x7fff
-    .L0:
-        ld C, [A, B]
-        cmp C, 0
-        jeq .L1
-        ld [D], C
-        add B, 1
-        jr .L0
-    .L1:
-        pop {B-D}
-        ret
+  push {B-D}
+  mov B, 0
+  ld D, x7fff
+.L0:
+  ld C, [A, B]
+  cmp C, 0
+  jeq .L1
+  ld [D], C
+  add B, 1
+  jr .L0
+.L1:
+  pop {B-D}
+  ret
 '''
 
 

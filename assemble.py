@@ -31,6 +31,7 @@ TOKENS = {'const': r'(-?\d+)|(x[0-9a-f]+)|(b[01]+)',
           'rbrack': r'\}',
           'comma': r',',
           'error': r'\S+'}
+
 RE = re.compile('|'.join(rf'(?P<{token}>{pattern})' for token, pattern in TOKENS.items()), re.I)
 def lex(text):
     return [(match.lastgroup , match.group()) for match in RE.finditer(text)]
@@ -39,6 +40,8 @@ class Pattern:
     def __init__(self, text):
         self.tokens = lex(text)
         self.values = self._values()
+    def starts_with(self, type_):
+        return self.tokens[0][0] == type_
     def match(self, *pattern):
         return len(self.tokens) == len(pattern) and all(pattern[i] in (type_, value) for i, (type_, value) in enumerate(self.tokens))
     def _values(self):
@@ -89,6 +92,9 @@ class Assembler:
     def imm(self, rd, value):
         self.new_inst(Imm, rd)
         self.new_imm(value)
+    def imm_char(self, rd, value):
+        self.new_inst(Imm, rd)
+        self.new_imm_char(value)
     def inst1(self, op, rd, rs):
         self.new_inst(Inst1, op, rd, rs)
     def inst2(self, op, rd, const6):
@@ -102,6 +108,9 @@ class Assembler:
         self.labels = []
     def new_imm(self, value):
         self.inst.append((self.labels, Data, (value,)))
+        self.labels = []
+    def new_imm_char(self, value):
+        self.inst.append((self.labels, Char, (value,)))
         self.labels = []
     def new_data(self, value):
         self.data.append((self.labels, Data, (value,)))
@@ -118,88 +127,96 @@ class Assembler:
                 line, comment = map(str.strip, line.split(';', 1))
             if line:
                 pattern = Pattern(line)
-                if pattern.match('label', ':'):
-                    self.label(*pattern.values)
-                elif pattern.match('label', 'const'):
-                    self.const(*pattern.values)
-                elif pattern.match('label', 'char'):
-                    self.char(*pattern.values)
-                elif pattern.match('label', 'string'):
-                    self.string(*pattern.values)
-                elif pattern.match('nop'):
-                    self.jump(Cond.JNV, 0)
-                elif pattern.match('cond', 'label'):
-                    self.jump(*pattern.values)
-                elif pattern.match('ld', 'reg', ',', '[', 'reg', ',', 'reg', ']'):
-                    self.load0(*pattern.values)
-                elif pattern.match('ld', 'reg', ',', '[', 'reg', ']'):
-                    self.load1(*pattern.values, 0)
-                elif pattern.match('ld', 'reg', ',', '[', 'reg', ',', 'const', ']'):
-                    self.load1(*pattern.values)
-                elif pattern.match('ld', '[', 'reg', ',', 'reg', ']', ',', 'reg'):
-                    self.store0(*pattern.values)
-                elif pattern.match('ld', '[', 'reg', ']', ',', 'reg'):
-                    self.store(*pattern.values)
-                elif pattern.match('ld', '[', 'reg', ',', 'const', ']', ',', 'reg'):
-                    self.store1(*pattern.values)
-                elif pattern.match('ld', 'reg', ',', 'const'):
-                    self.imm(*pattern.values)
-                elif pattern.match('ld', 'reg', ',', '=', 'label'):
-                    self.imm(*pattern.values)
-                elif pattern.match('op', 'reg'):
-                    self.inst1(*pattern.values, Reg.A)
-                elif pattern.match('op', 'reg', ',', 'reg'):                    
-                    self.inst1(*pattern.values)
-                elif pattern.match('op', 'reg', ',', 'const'):
-                    self.inst2(*pattern.values)                    
-                elif pattern.match('op', 'reg', ',', 'reg', ',', 'reg'):
-                    self.inst3(*pattern.values)                    
-                elif pattern.match('op', 'reg', ',', 'reg', ',', 'const'):
-                    self.inst4(*pattern.values)
-                elif pattern.match('push', 'reg'):
-                    self.inst2(Op.SUB, Reg.SP, 1)
-                    self.store(Reg.SP, *pattern.values)
-                elif pattern.match('push', '{', 'reg', '-', 'reg', '}'):
-                    start, end = pattern.values
-                    for reg in range(start, end+1):
-                        self.inst2(Op.SUB, Reg.SP, 1)
-                        self.store(Reg.SP, Reg(reg))
-                elif pattern.match('push', 'lr', ',', '{', 'reg', '-', 'reg', '}'):
-                    lr, start, end = pattern.values
-                    self.inst2(Op.SUB, Reg.SP, 1)
-                    self.store(Reg.SP, lr)
-                    for reg in range(start, end+1):
-                        self.inst2(Op.SUB, Reg.SP, 1)
-                        self.store(Reg.SP, Reg(reg))
-                elif pattern.match('pop', 'reg'):
-                    self.inst2(Op.ADD, Reg.SP, 1)
-                    self.load1(Reg(reg), Reg.SP , -1)
-                elif pattern.match('pop', '{', 'reg', '-', 'reg', '}'):
-                    start, end = pattern.values
-                    for reg in reversed(range(start, end+1)):
-                        self.inst2(Op.ADD, Reg.SP, 1)
-                        self.load1(Reg(reg), Reg.SP , -1)
-                elif pattern.match('pop', 'pc', ',', '{', 'reg', '-', 'reg', '}'):
-                    pc, start, end = pattern.values
-                    for reg in reversed(range(start, end+1)):
-                        self.inst2(Op.ADD, Reg.SP, 1)
-                        self.load1(Reg(reg), Reg.SP , -1)
-                    self.inst2(Op.ADD, Reg.SP, 1)
-                    self.load1(pc, Reg.SP, -1)
-                elif pattern.match('jump', 'label'):
-                    self.imm(*pattern.values)
-                elif pattern.match('call', 'label'):
-                    self.inst1(Op.MOV, Reg.LR, Reg.PC)
-                    self.inst2(Op.ADD, Reg.LR, 3)
-                    self.jump(Cond.JR, *pattern.values)
-                elif pattern.match('ret'):
-                    self.inst1(Op.MOV, Reg.PC, Reg.LR)
-                elif pattern.match('out', 'reg'):
-                    pass
-                elif pattern.match('halt'):
-                    self.inst1(Op.MOV, Reg.PC, Reg.PC)
+                if pattern.starts_with('label'):
+                    print(line)
+                    if pattern.match('label', ':'):
+                        self.label(*pattern.values)
+                    elif pattern.match('label', ':', 'const'):
+                        self.const(*pattern.values)
+                    elif pattern.match('label', ':', 'char'):
+                        self.char(*pattern.values)
+                    elif pattern.match('label', ':', 'string'):
+                        self.string(*pattern.values)
+                    else:
+                        self.error()
                 else:
-                    self.error(line)
+                    print(f'  {line}')
+                    if pattern.match('nop'):
+                        self.jump(Cond.JNV, 0)
+                    elif pattern.match('cond', 'label'):
+                        self.jump(*pattern.values)
+                    elif pattern.match('ld', 'reg', ',', '[', 'reg', ',', 'reg', ']'):
+                        self.load0(*pattern.values)
+                    elif pattern.match('ld', 'reg', ',', '[', 'reg', ']'):
+                        self.load1(*pattern.values, 0)
+                    elif pattern.match('ld', 'reg', ',', '[', 'reg', ',', 'const', ']'):
+                        self.load1(*pattern.values)
+                    elif pattern.match('ld', '[', 'reg', ',', 'reg', ']', ',', 'reg'):
+                        self.store0(*pattern.values)
+                    elif pattern.match('ld', '[', 'reg', ']', ',', 'reg'):
+                        self.store(*pattern.values)
+                    elif pattern.match('ld', '[', 'reg', ',', 'const', ']', ',', 'reg'):
+                        self.store1(*pattern.values)
+                    elif pattern.match('ld', 'reg', ',', 'const'):
+                        self.imm(*pattern.values)
+                    elif pattern.match('ld', 'reg', ',', 'char'):
+                        self.imm_char(*pattern.values)
+                    elif pattern.match('ld', 'reg', ',', '=', 'label'):
+                        self.imm(*pattern.values)
+                    elif pattern.match('op', 'reg'):
+                        self.inst1(*pattern.values, Reg.A)
+                    elif pattern.match('op', 'reg', ',', 'reg'):                    
+                        self.inst1(*pattern.values)
+                    elif pattern.match('op', 'reg', ',', 'const'):
+                        self.inst2(*pattern.values)                    
+                    elif pattern.match('op', 'reg', ',', 'reg', ',', 'reg'):
+                        self.inst3(*pattern.values)                    
+                    elif pattern.match('op', 'reg', ',', 'reg', ',', 'const'):
+                        self.inst4(*pattern.values)
+                    elif pattern.match('push', 'reg'):
+                        self.inst2(Op.SUB, Reg.SP, 1)
+                        self.store(Reg.SP, *pattern.values)
+                    elif pattern.match('push', '{', 'reg', '-', 'reg', '}'):
+                        start, end = pattern.values
+                        for reg in range(start, end+1):
+                            self.inst2(Op.SUB, Reg.SP, 1)
+                            self.store(Reg.SP, Reg(reg))
+                    elif pattern.match('push', 'lr', ',', '{', 'reg', '-', 'reg', '}'):
+                        lr, start, end = pattern.values
+                        self.inst2(Op.SUB, Reg.SP, 1)
+                        self.store(Reg.SP, lr)
+                        for reg in range(start, end+1):
+                            self.inst2(Op.SUB, Reg.SP, 1)
+                            self.store(Reg.SP, Reg(reg))
+                    elif pattern.match('pop', 'reg'):
+                        self.inst2(Op.ADD, Reg.SP, 1)
+                        self.load1(Reg(reg), Reg.SP , -1)
+                    elif pattern.match('pop', '{', 'reg', '-', 'reg', '}'):
+                        start, end = pattern.values
+                        for reg in reversed(range(start, end+1)):
+                            self.inst2(Op.ADD, Reg.SP, 1)
+                            self.load1(Reg(reg), Reg.SP , -1)
+                    elif pattern.match('pop', 'pc', ',', '{', 'reg', '-', 'reg', '}'):
+                        pc, start, end = pattern.values
+                        for reg in reversed(range(start, end+1)):
+                            self.inst2(Op.ADD, Reg.SP, 1)
+                            self.load1(Reg(reg), Reg.SP , -1)
+                        self.inst2(Op.ADD, Reg.SP, 1)
+                        self.load1(pc, Reg.SP, -1)
+                    elif pattern.match('jump', 'label'):
+                        self.imm(*pattern.values)
+                    elif pattern.match('call', 'label'):
+                        self.inst1(Op.MOV, Reg.LR, Reg.PC)
+                        self.inst2(Op.ADD, Reg.LR, 3)
+                        self.jump(Cond.JR, *pattern.values)
+                    elif pattern.match('ret'):
+                        self.inst1(Op.MOV, Reg.PC, Reg.LR)
+                    elif pattern.match('out', 'reg'):
+                        pass
+                    elif pattern.match('halt'):
+                        self.inst1(Op.MOV, Reg.PC, Reg.PC)
+                    else:
+                        self.error(line)
                     
         objects = []
         objects.extend(self.inst)
