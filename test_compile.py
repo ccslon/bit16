@@ -132,7 +132,7 @@ add3:
   ADD A, B
   LD B, [SP, 2]
   ADD A, B
-  JMP .L0
+  JR .L0
 .L0:
   ADD SP, 3
   RET
@@ -155,7 +155,7 @@ fact:
   CMP B, 0
   JNE .L1
   MOV B, 1
-  JMP .L0
+  JR .L0
   LD B, [SP, 0]
   LD C, [SP, 0]
   SUB C, 1
@@ -163,7 +163,7 @@ fact:
   CALL fact
   MOV C, A
   MUL B, C
-  JMP .L0
+  JR .L0
 .L0:
   MOV A, B
   ADD SP, 1
@@ -190,13 +190,13 @@ fib:
   CMP B, 1
   JNE .L2
   MOV B, 0
-  JMP .L0
+  JR .L0
 .L2:
   LD B, [SP, 0]
   CMP B, 2
   JNE .L3
   MOV B, 1
-  JMP .L0
+  JR .L0
 .L3:
   LD B, [SP, 0]
   SUB B, 1
@@ -209,7 +209,7 @@ fib:
   CALL fib
   MOV C, A
   ADD B, C
-  JMP .L0
+  JR .L0
 .L0:
   MOV A, B
   ADD SP, 1
@@ -246,10 +246,10 @@ sum:
   LD A, [SP, 2]
   ADD A, 1
   LD [SP, 2], A
-  JMP .L1
+  JR .L1
 .L2:
   LD A, [SP, 1]
-  JMP .L0
+  JR .L0
 .L0:
   ADD SP, 3
   POP B
@@ -273,7 +273,7 @@ get:
   LD B, [SP, 1]
   ADD A, B
   LD A, [A]
-  JMP .L0
+  JR .L0
 .L0:
   ADD SP, 2
   RET
@@ -312,7 +312,7 @@ get2:
   LD B, [SP, 2]
   ADD A, B
   LD A, [A]
-  JMP .L0
+  JR .L0
 .L0:
   ADD SP, 3
   RET
@@ -358,7 +358,7 @@ foo:
   CALL baz
   MOV D, A
   ADD C, D
-  JMP .L0
+  JR .L0
 .L0:
   MOV A, C
   ADD SP, 3
