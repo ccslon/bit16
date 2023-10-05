@@ -167,8 +167,7 @@ class Assembler:
                     elif self.match('jump', 'label'):
                         self.imm(*self.values())
                     elif self.match('call', 'label'):
-                        self.inst1(Op.MOV, Reg.LR, Reg.PC)
-                        self.inst2(Op.ADD, Reg.LR, 3)
+                        self.inst4(Op.ADD, Reg.LR, Reg.PC, 2)
                         self.jump(Cond.JR, *self.values())
                     elif self.match('ret'):
                         self.inst1(Op.MOV, Reg.PC, Reg.LR)
@@ -177,7 +176,7 @@ class Assembler:
                     elif self.match('halt'):
                         self.inst1(Op.MOV, Reg.PC, Reg.PC)
                     else:
-                        self.error(line)                    
+                        self.error()                    
         objects = []
         objects.extend(self.inst)
         objects.extend(self.data)
