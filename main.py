@@ -98,8 +98,64 @@ print:
   pop B, C, D
   ret
 '''
+bin2dec = '''
+out:
+    push B
+    ld B, x7fff
+    ld [B], A
+    pop B
+    ret
+print:
+    push lr, B
+    mov B, A
+print_loop:
+    LD A, [B]
+    cmp A, 0
+    jeq print_end
+    call out
+    add B, 1
+    jr print_loop
+print_end:
+    pop pc, B
+    
+    
 
 
+num: 1729
+ld A, =num
+ld A, [A]
+ld B, 10
+call divmod
+
+cmp A, 0
+
+heap: 0
+calloc:
+    push B, C
+    ld B, =heap
+    ld C, [B]
+    add C, A
+    ld [B], C
+    
+    
+
+
+divmod: ; A / B
+    push C
+    mov C, 0
+divmod_loop:
+    cmp A, B
+    jlt divmod_end
+    sub A, B
+    add C, 1
+    jr divmod_loop
+divmod_end:
+    mov B, A ; rem
+    mov A, C ; quot
+    pop C
+    ret
+    
+'''
 
 if __name__ == '__main__':
     assemble.assemble(string_test)
