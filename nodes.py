@@ -6,6 +6,7 @@ Created on Mon Jul  3 19:48:36 2023
 """
 from collections import UserList
 from bit16 import Reg, Op, Cond
+#TODO Add div and mod
 
 class Loop(UserList):
     def start(self):
@@ -25,6 +26,7 @@ class Env:
         self.structs = {}
         self.globals = SetList()
         self.locals = SetList()
+        self.strings = []
         self.functions = []
         self.if_jump_end = False
     def reset_scope(self):
@@ -54,7 +56,7 @@ class Traveler:
         self.asm.append(f'  {asm}')
         self.labels.clear()
     def glob(self, name, value):
-        self.asm.append(f'{name} {value}')
+        self.asm.append(f'{name}: {value}')
     def push(self, lr, *regs):
         regs = ((Reg.LR,) if lr else ()) + regs
         if regs:
@@ -73,6 +75,8 @@ class Traveler:
         self.add(f'LD {rd.name}, [{rb.name}'+(f', {offset5}' if offset5 is not None else '')+']')
     def store(self, rd, rb, offset5=None):
         self.add(f'LD [{rb.name}'+(f', {offset5}' if offset5 is not None else '')+f'], {rd.name}')
+    def imm(self, rd, value):
+        self.add(f'LD {rd.name}, {value}')
     def inst(self, is_const, op, rd, src):
         if is_const:
             self.add(f'{op.name} {rd.name}, {src}')
@@ -95,7 +99,7 @@ class Expr:
         self.compile(trav, n)
     def compare(self, trav, n, label):
         trav.inst(True, Op.CMP, self.compile(trav, n), 0)
-        trav.jump(Cond.JMP, f'.L{label}')
+        trav.jump(Cond.JR, f'.L{label}')
     def analyze(self, trav, n):
         pass
     def analyze_right(self, trav, n):
@@ -109,10 +113,15 @@ class Const(Expr):
     IS_CONST = True
     def __init__(self, value):
         if value == 'true':
-            value = 1
+            self.value = 1
         elif value in ['false','null']:
-            value = 0
-        self.value = int(value)
+            self.value = 0
+        elif value.startswith('x'):
+            self.value = int(value[1:], base=16)
+        elif value.startswith('b'):
+            self.value = int(value, base=16)
+        else:
+            self.value = int(value)
     def analyze(self, trav, n):
         trav.env.regs = max(trav.env.regs, n)
     def analyze_right(self, trav, n):
@@ -124,7 +133,26 @@ class Const(Expr):
         return self.value
     def __str__(self):
         return f"{self.__class__.__name__}({self.value})"
+
+class Char(Expr):
+    def __init__(self, value):
+        self.value = value    
+    def compile(self, trav, n):
+        trav.imm(Reg(n), self.value)
+        return Reg(n)
     
+class String(Expr):
+    def __init__(self, value):
+        self.value = value[1:-1]
+    def analyze(self, trav, n):
+        if self.value not in trav.env.strings:
+            trav.env.strings.append(self.value)
+            trav.glob(f'.S{trav.env.strings.index(self.value)}', f'"{self.value}\0"')
+    def load(self, trav, n):
+        trav.load_glob(Reg(n), f'.S{trav.env.strings.index(self.value)}')
+    def compile(self, trav, n):
+        return f'"{self.value}\0"'
+
 class Var(Expr):
     def __init__(self, name):
         self.name = name
@@ -174,10 +202,10 @@ class Pointer(Expr):
         self.unary.analyze(trav, n)
     def store(self, trav, n):
         self.unary.compile(trav, n+1)
-        trav.store(Reg(n), Reg(n+1), 0)
+        trav.store(Reg(n), Reg(n+1))
     def compile(self, trav, n):
         self.unary.compile(trav, n)
-        trav.load(Reg(n), Reg(n), 0)
+        trav.load(Reg(n), Reg(n))
         return Reg(n)
     def __str__(self):
         return f'{self.__class__.__name__}({self.unary})'
@@ -197,13 +225,23 @@ class Unary(Expr):
 
 class Binary(Expr):    
     OPS = {'+' :Op.ADD,
+           '++':Op.ADD,
+           '+=':Op.ADD,
            '-' :Op.SUB,
+           '--':Op.SUB,
+           '-=':Op.SUB,
            '*' :Op.MUL,
+           '*=':Op.MUL,
            '<<':Op.SHL,
+           '<<=':Op.SHL,
            '>>':Op.SHR,
+           '>>=':Op.SHR,
+           '^' :Op.XOR,
+           '^=':Op.XOR,
            '|' :Op.OR,
+           '|=':Op.OR,
            '&' :Op.AND,
-           '^' :Op.XOR}
+           '&=':Op.AND,}
     def __init__(self, op, left, right):
         self.op, self.left, self.right = self.OPS[op], left, right
     def analyze(self, trav, n):
@@ -237,7 +275,7 @@ class Compare(Binary):
         trav.inst(self.right.IS_CONST, Op.CMP, self.left.load(trav, n), self.right.compile(trav, n+1))
         trav.jump(self.INV[self.op], f'.L{sublabel}')
         trav.inst(True, Op.MOV, Reg(n), 1)
-        trav.jump(Cond.JMP, f'.L{label}')
+        trav.jump(Cond.JR, f'.L{label}')
         trav.labels.append(f'.L{sublabel}')
         trav.inst(True, Op.MOV, Reg(n), 0)
         trav.labels.append(f'.L{label}')        
@@ -322,7 +360,7 @@ class If(Expr):
         self.true.compile(trav, n)
         if self.false:
             if not (isinstance(self.true, Return) or (isinstance(self.true, Block) and self.true and isinstance(self.true[-1], Return))):
-                trav.jump(Cond.JMP, f'.L{label}')
+                trav.jump(Cond.JR, f'.L{label}')
                 trav.env.if_jump_end = True
             trav.labels.append(f'.L{sublabel}')
             self.false.branch(trav, n, label)
@@ -334,7 +372,7 @@ class If(Expr):
         self.true.compile(trav, n)
         if self.false:
             if not (isinstance(self.true, Return) or (isinstance(self.true, Block) and self.true and isinstance(self.true[-1], Return))):
-                trav.jump(Cond.JMP, f'.L{root}')
+                trav.jump(Cond.JR, f'.L{root}')
                 trav.env.if_jump_end = True
             trav.labels.append(f'.L{sublabel}')
             self.false.branch(trav, n, root)     
@@ -352,7 +390,7 @@ class While(Expr):
         trav.labels.append(f'.L{trav.env.loop.start()}')
         self.cond.compare(trav, n, trav.env.loop.end())
         self.state.compile(trav, n)
-        trav.jump(Cond.JMP, f'.L{trav.env.loop.start()}')
+        trav.jump(Cond.JR, f'.L{trav.env.loop.start()}')
         trav.labels.append(f'.L{trav.env.loop.end()}')
         trav.env.end_loop()
     def __str__(self):
@@ -373,7 +411,7 @@ class For(While):
         self.cond.compare(trav, n, trav.env.loop.end())
         self.state.compile(trav, n)
         self.step.compile(trav, n)
-        trav.jump(Cond.JMP, f'.L{trav.env.loop.start()}')
+        trav.jump(Cond.JR, f'.L{trav.env.loop.start()}')
         trav.labels.append(f'.L{trav.env.loop.end()}')
         trav.env.end_loop()
     def __str__(self):
@@ -381,11 +419,11 @@ class For(While):
 
 class Continue(Expr):
     def compile(self, trav, n):
-        trav.jump(Cond.JMP, f'.L{trav.env.loop.start()}')
+        trav.jump(Cond.JR, f'.L{trav.env.loop.start()}')
         
 class Break(Expr):
     def compile(self, trav, n):
-        trav.jump(Cond.JMP, f'.L{trav.env.loop.end()}')
+        trav.jump(Cond.JR, f'.L{trav.env.loop.end()}')
 
 class Return(Expr):
     def __init__(self):
@@ -397,7 +435,7 @@ class Return(Expr):
     def compile(self, trav, n):
         if self.expr:
             self.expr.load(trav, n)
-        trav.jump(Cond.JMP, f'.L{trav.env.func}')
+        trav.jump(Cond.JR, f'.L{trav.env.func}')
     def __str__(self):
         return f"{self.__class__.__name__}({self.expr})"
         
@@ -446,7 +484,7 @@ class Global(Assign):
     def declare(self, trav):
         trav.env.globals.add(self.left.name)
     def compile(self, trav):
-        trav.glob(self.laft.name, self.right.value)
+        trav.glob(self.left.name, self.right.compile(trav, 0))
 
 class Fields(Expr, UserList):
     def declare(self, trav):

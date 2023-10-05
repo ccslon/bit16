@@ -6,9 +6,11 @@ Created on Mon Jul  3 19:47:39 2023
 """
 
 import re
-from nodes import Var, Const, Unary, Binary, Compare, Call, Args, Func, Assign, If, Block, Program, Return, While, For, Break, Continue, Script, Struct, Params, Fields, Logic, Attr, Pointer, Address, Main, Global
+from nodes import Var, Const, Unary, Binary, Compare, Call, Args, Func, Assign, If, Block, Program, Return, While, For, Break, Continue, Script, Struct, Params, Fields, Logic, Attr, Pointer, Address, Main, Global, Char, String
 
-TOKENS = {'const': r"(\"[^\"]*\")|(\'[^\']*\')|(\d+(\.\d+)?)|(true)|(false)|(null)",
+TOKENS = {'const': r'(\d+)|(x[0-9a-f]+)|(b[01]+)|(true)|(false)|(null)',
+          'char': r"'\\?[^']'",
+          'string': r'"[^"]*"',
           'main': r'main',
           'if': r'if',
           'else': r'else',
@@ -21,6 +23,18 @@ TOKENS = {'const': r"(\"[^\"]*\")|(\'[^\']*\')|(\d+(\.\d+)?)|(true)|(false)|(nul
           'and': r'and',
           'or': r'or',
           'var': r'\w(\w|\d)*',
+          'dplus': r'\+\+',
+          'ddash': r'--',
+          'pluseq': r'\+=',
+          'dasheq': r'-=',
+          'stareq': r'\*=',
+          'slasheq': r'/=',
+          'percenteq': r'%=',
+          'lshifteq': r'<<=',
+          'rshifteq': r'>>=',
+          'careteq': r'\^=',
+          'pipeeq': r'\|=',
+          'ampeq': r'&=',
           'plus': r'\+',
           'dash':r'-',
           'star': r'\*',
@@ -31,6 +45,8 @@ TOKENS = {'const': r"(\"[^\"]*\")|(\'[^\']*\')|(\d+(\.\d+)?)|(true)|(false)|(nul
           'lshift': r'<<',
           'rshift': r'>>',
           'caret': '\^',
+          'pipe': '\|',
+          'amp': '&',
           'deq': r'==',
           'ge': r'>=',
           'le': r'<=',
@@ -39,8 +55,6 @@ TOKENS = {'const': r"(\"[^\"]*\")|(\'[^\']*\')|(\d+(\.\d+)?)|(true)|(false)|(nul
           'gt': r'>',
           'lt': r'<',
           'tilde': r'~',
-          'pipe': '\|',
-          'amp': '&',
           'lparen': r'\(',
           'rparen': r'\)',
           'lbrack': r'{',
@@ -59,10 +73,14 @@ class Parser:
     
     def primary(self):
         '''
-        PRIMARY -> const|'(' EXPR ')'|var ('(' ARGS ')'|{'[' EXPR ']'|'.' var})
+        PRIMARY -> const|char|string|'(' EXPR ')'|var ('(' ARGS ')'|{'[' EXPR ']'|'.' var})
         '''
         if self.peek('const'):
             primary = Const(next(self))
+        elif self.peek('char'):
+            primary = Char(next(self))
+        elif self.peek('string'):
+            primary = String(next(self))
         elif self.accept('('):
             primary = self.expr()
             self.expect(')')
@@ -186,7 +204,8 @@ class Parser:
     
     def assign(self):
         '''
-        ASSIGN -> LEFT '=' ASSIGN
+        ASSIGN -> LEFT ['+'|'-'|'*'|'/'|'%'|'<<'|'>>'|'^'|'|'|'&']'=' ASSIGN
+                 |LEFT ('++'|'--')
                  |LOGIC_OR
         '''
         assign = self.logic_or()
@@ -194,7 +213,18 @@ class Parser:
             if isinstance(assign, (Var, Script, Attr, Pointer)):
                 assign = Assign(assign, self.assign())
             else:
-                self.error()        
+                self.error()
+        elif self.peek('++','--'):
+            if isinstance(assign, (Var, Script, Attr, Pointer)):
+                assign = Assign(assign, Binary(next(self), assign, Const('1')))
+            else:
+                self.error()
+        elif self.peek('+=','-=','*=','/=','%=','<<=','>>=','^=','|=','&='):
+            print(type(assign))
+            if isinstance(assign, (Var, Script, Attr, Pointer)):
+                assign = Assign(assign, Binary(next(self), assign, self.assign()))
+            else:
+                self.error()
         return assign
     
     def expr(self):
@@ -208,7 +238,7 @@ class Parser:
         ARGS -> [EXPR {',' EXPR}]        
         '''
         args = Args()
-        if self.peek('const','var','(','-','+','not','~','@','#'):
+        if self.peek('const','char','string','var','(','-','+','not','~','@','#'):
             args.append(self.expr())
             while self.accept(','):
                 args.append(self.expr())
@@ -239,8 +269,14 @@ class Parser:
                         self.expect(']')
                     elif self.accept('.'):
                         left = Attr(left, self.expect('var'))
-                self.expect('=')
-                state = Assign(left, self.expr())
+                if self.accept('='):
+                    state = Assign(left, self.assign())
+                elif self.peek('++','--'):
+                    state = Assign(left, Binary(next(self), left, Const('1')))
+                elif self.peek('+=','-=','*=','/=','%=','<<=','>>=','^=','|=','&='):
+                    state = Assign(left, Binary(next(self), left, self.assign()))
+                else:
+                    self.error()
         elif self.accept('@'):
             left = Var(self.expect('var'))
             while self.peek('[','.'):
@@ -249,8 +285,15 @@ class Parser:
                     self.expect(']')
                 elif self.accept('.'):
                     left = Attr(left, self.expect('var'))
-            self.expect('=')
-            state = Assign(Pointer(left), self.expr())
+            if self.accept('='):
+                state = Assign(Pointer(left), self.assign())
+            elif self.peek('++','--'):
+                state = Assign(Pointer(left), Binary(next(self), Pointer(left), Const('1')))
+            elif self.peek('+=','-=','*=','/=','%=','<<=','>>=','^=','|=','&='):
+                state = Assign(Pointer(left), Binary(next(self), Pointer(left), self.assign()))
+            else:
+                self.error()
+            state = Assign(Pointer(left), self.assign())
         elif self.accept('if'):
             state = If(self.expr(), self.state())
             if self.accept('else'):
@@ -265,7 +308,7 @@ class Parser:
             state = For(init, cond, self.assign(), self.state())
         elif self.accept('return'):
             state = Return()
-            if self.peek('const','var','(','-','+','not','~','@'):
+            if self.peek('const','char','string','var','(','-','+','not','~','@'):
                 state.expr = self.expr()
         elif self.accept('break'):
             state = Break()
@@ -306,7 +349,7 @@ class Parser:
         while self.peek('var'):
             field = Var(next(self))
             if self.accept('='):
-                self.expect('const')
+                self.expect('const','char','string')
             fields.append(field)
     
     def program(self):
@@ -316,6 +359,7 @@ class Parser:
         // IMPORT -> 'from' var 'import' PARAMS
         STRUCT -> var '{' FIELDS '}'
         FUNC ->   var '(' PARAMS ')' '{' BLOCK '}'
+        GLOBAL - > var '=' (const|char|string)
         '''
         program = Program()
         while self.peek('var'):
@@ -330,7 +374,14 @@ class Parser:
                 program.append(Func(var, params, self.block()))
                 self.expect('}')
             elif self.accept('='):
-                program.append(Global(self.expect('const')))
+                if self.peek('const'):
+                    program.append(Global(var, Const(next(self))))
+                elif self.peek('char'):
+                    program.append(Global(var, Char(next(self))))
+                elif self.peek('string'):
+                    program.append(Global(var, String(next(self))))
+                else:
+                    self.error()
             else:
                 self.error()
         if self.accept('main'):
@@ -351,7 +402,14 @@ class Parser:
                 program.append(Func(var, params, self.block()))
                 self.expect('}')
             elif self.accept('='):
-                program.append(Global(self.expect('const')))
+                if self.peek('const'):
+                    program.append(Global(var, Const(next(self))))
+                elif self.peek('char'):
+                    program.append(Global(var, Char(next(self))))
+                elif self.peek('string'):
+                    program.append(Global(var, String(next(self))))
+                else:
+                    self.error()
             else:
                 self.error()
         return program
