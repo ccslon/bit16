@@ -49,7 +49,7 @@ class Cond(IntEnum):
 class Data:
     def __init__(self, value):
         assert -32768 <= value < 65536
-        self.str = f'{value:04x}'
+        self.str = f'x{value:04x}'
         self._dec = value,
         if value < 0:
             value = negative(value, 16)
