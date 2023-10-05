@@ -44,20 +44,22 @@ abs(n) {
 }
 '''
 div = '''
-div(n, d):
+div(n, d) {
     q = 0
     while n >= d {
-        n = n - d
-        q = q + 1
+        n -= d
+        q++
     }
     return q
+}
 '''
 mod = '''
-mod(n, d):
+mod(n, d) {
     while n >= d {
-        n = n - d
+        n -= d
     }
     return n
+}
 '''
 pow_ = '''
 pow(b, e) {
@@ -85,6 +87,55 @@ get2(g, i, j) {
     return g[i][j]
 }
 '''
+'''
+num = 1729
+main() {
+    n = num
+    while n > 0 {
+        r = mod(n)
+        n = div(n)
+        push_char('0' + r)
+        
+    }
+    
+    
+        
+}
+
+'''
+
+char_test = '''
+msg = 'H'
+out(char) {}
+main() {
+    mychar = 'e'
+    out('l')
+    out(msg)
+}
+'''
+
+string_test = '''
+OUT = x7fff
+put(chr) {
+    @OUT = chr
+}
+print(ptr) {
+    while @ptr != '\0' {
+        put(@ptr)
+        ptr = ptr + 1
+    }
+}
+main() {
+    print("Hello world!")
+}
+'''
+
+inplace = '''
+main() {
+    n = 0
+    n += 1
+}
+'''
 
 def compile(program):
     ast = parse.Parser().parse(program)
@@ -93,4 +144,4 @@ def compile(program):
     assemble.Linker.link(objects)
 
 if __name__ == '__main__':
-    compile(get2)
+    compile(div)
