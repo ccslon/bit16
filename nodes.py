@@ -127,7 +127,10 @@ class Const(Expr):
     def analyze_right(self, trav, n):
         pass
     def load(self, trav, n):
-        trav.inst(True, Op.MOV, Reg(n), self.value)
+        if -32 <= self.value < 64:
+            trav.inst(True, Op.MOV, Reg(n), self.value)
+        else:
+            trav.imm(Reg(n), self.value)
         return Reg(n)
     def compile(self, trav, n):
         return self.value

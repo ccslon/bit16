@@ -293,7 +293,6 @@ class Parser:
                 state = Assign(Pointer(left), Binary(next(self), Pointer(left), self.assign()))
             else:
                 self.error()
-            state = Assign(Pointer(left), self.assign())
         elif self.accept('if'):
             state = If(self.expr(), self.state())
             if self.accept('else'):

@@ -97,9 +97,6 @@ main() {
         push_char('0' + r)
         
     }
-    
-    
-        
 }
 
 '''
@@ -144,4 +141,4 @@ def compile(program):
     assemble.Linker.link(objects)
 
 if __name__ == '__main__':
-    compile(div)
+    compile(string_test)
