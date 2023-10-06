@@ -64,7 +64,7 @@
     <a name="appearance" val="logisim_evolution"/>
     <a name="circuit" val="main"/>
     <a name="circuitnamedboxfixedsize" val="true"/>
-    <a name="simulationFrequency" val="1.0"/>
+    <a name="simulationFrequency" val="64.0"/>
     <comp lib="0" loc="(1000,190)" name="Constant">
       <a name="value" val="0x0"/>
       <a name="width" val="16"/>
@@ -208,7 +208,7 @@
       <a name="facing" val="east"/>
       <a name="label" val="reset"/>
     </comp>
-    <comp lib="0" loc="(510,1360)" name="Tunnel">
+    <comp lib="0" loc="(510,1370)" name="Tunnel">
       <a name="facing" val="east"/>
       <a name="label" val="reset"/>
     </comp>
@@ -377,15 +377,17 @@
       <a name="table">0111111111111111 1
 </a>
     </comp>
-    <comp lib="1" loc="(520,1330)" name="AND Gate">
+    <comp lib="1" loc="(520,1340)" name="AND Gate">
       <a name="facing" val="south"/>
+      <a name="inputs" val="3"/>
+      <a name="negate1" val="true"/>
       <a name="size" val="30"/>
     </comp>
     <comp lib="1" loc="(530,680)" name="AND Gate">
       <a name="facing" val="south"/>
       <a name="size" val="30"/>
     </comp>
-    <comp lib="1" loc="(560,1350)" name="OR Gate">
+    <comp lib="1" loc="(560,1360)" name="OR Gate">
       <a name="size" val="30"/>
     </comp>
     <comp lib="1" loc="(570,650)" name="OR Gate">
@@ -962,21 +964,23 @@
     <wire from="(500,1290)" to="(510,1290)"/>
     <wire from="(500,640)" to="(500,1020)"/>
     <wire from="(500,640)" to="(650,640)"/>
-    <wire from="(510,1270)" to="(550,1270)"/>
-    <wire from="(510,1290)" to="(510,1300)"/>
+    <wire from="(510,1270)" to="(520,1270)"/>
+    <wire from="(510,1290)" to="(510,1310)"/>
     <wire from="(510,1290)" to="(560,1290)"/>
-    <wire from="(510,1360)" to="(530,1360)"/>
+    <wire from="(510,1370)" to="(530,1370)"/>
     <wire from="(510,630)" to="(510,800)"/>
     <wire from="(510,630)" to="(570,630)"/>
     <wire from="(510,800)" to="(510,1270)"/>
     <wire from="(510,800)" to="(550,800)"/>
-    <wire from="(520,1330)" to="(520,1340)"/>
-    <wire from="(520,1340)" to="(530,1340)"/>
+    <wire from="(520,1270)" to="(520,1300)"/>
+    <wire from="(520,1270)" to="(550,1270)"/>
+    <wire from="(520,1340)" to="(520,1350)"/>
+    <wire from="(520,1350)" to="(530,1350)"/>
     <wire from="(520,570)" to="(1210,570)"/>
     <wire from="(520,570)" to="(520,650)"/>
     <wire from="(520,720)" to="(520,1200)"/>
     <wire from="(520,720)" to="(550,720)"/>
-    <wire from="(530,1260)" to="(530,1300)"/>
+    <wire from="(530,1260)" to="(530,1310)"/>
     <wire from="(530,680)" to="(530,780)"/>
     <wire from="(530,780)" to="(550,780)"/>
     <wire from="(540,1170)" to="(540,1240)"/>
@@ -994,12 +998,12 @@
     <wire from="(550,720)" to="(550,740)"/>
     <wire from="(550,720)" to="(660,720)"/>
     <wire from="(560,1280)" to="(560,1290)"/>
-    <wire from="(560,1350)" to="(570,1350)"/>
+    <wire from="(560,1360)" to="(570,1360)"/>
     <wire from="(560,340)" to="(560,460)"/>
     <wire from="(560,340)" to="(570,340)"/>
     <wire from="(560,460)" to="(880,460)"/>
     <wire from="(560,680)" to="(560,690)"/>
-    <wire from="(570,1280)" to="(570,1350)"/>
+    <wire from="(570,1280)" to="(570,1360)"/>
     <wire from="(570,330)" to="(570,340)"/>
     <wire from="(570,630)" to="(570,650)"/>
     <wire from="(570,630)" to="(740,630)"/>
