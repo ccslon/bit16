@@ -67,6 +67,8 @@ class Data:
 
 class Char(Data):
     def __init__(self, char):
+        if char == '\\0':
+            char = '\0'
         assert 0 <= ord(char) < 128
         self.str = char
         self._dec = 0,ord(char)
