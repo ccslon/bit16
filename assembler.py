@@ -10,7 +10,7 @@ from bit16 import Reg, Op, Cond, Data, Char, Jump, Inst1, Inst2, Inst3, Inst4, L
 
 TOKENS = {'const': r'(-?\d+)|(x[0-9a-f]+)|(b[01]+)',
           'string': r'"[^"]*"',
-          'char': r"'[^']'",
+          'char': r"'\\?[^']'",
           'ld': r'ld',
           'nop': r'nop',
           'op': '|'.join(map(r'\b{}\b'.format, (op.name for op in Op))),
@@ -96,14 +96,14 @@ class Assembler:
         self.inst = []
         self.data = []
         self.labels = []
-        for line in map(str.strip, asm.strip().split('\n')):
+        for self.line_no, line in enumerate(map(str.strip, asm.strip().split('\n')), 1):
             if ';' in line:
                 line, comment = map(str.strip, line.split(';', 1))
             if line:
                 self.tokens = lex(line)
                 self.index = 0
                 if self.peek('label'):
-                    print(line)
+                    print(f'{self.line_no: >2}|{line}')
                     if self.match('label', ':'):
                         self.label(*self.values())
                     elif self.match('label', ':', 'const'):
@@ -115,7 +115,7 @@ class Assembler:
                     else:
                         self.error()
                 else:
-                    print(f'  {line}')
+                    print(f'{self.line_no: >2}|  {line}')
                     if self.match('nop'):
                         self.jump(Cond.JNV, 0)
                     elif self.match('cond', 'label'):
@@ -228,11 +228,11 @@ class Assembler:
     def expect(self, *symbols):
         if self.peek(*symbols):
             return next(self)
-        self.error()
+        self.error(expected=symbols)
         
-    def error(self, offset=0):
+    def error(self, expected=None, offset=0):
         etype, evalue = self.tokens[self.index-offset]
-        raise SyntaxError(f'Unexpected {etype} token "{evalue}" at {self.index}')
+        raise SyntaxError(f'Unexpected {etype} token "{evalue}" at token #{self.index} in line {self.line_no}')# + 'Expected {}'.format(' or '.join(map('"{}"'.format, expected))) if expected else '')
 
 class Linker:
     def link(objects):
@@ -259,6 +259,8 @@ class Linker:
         print('\n', ' '.join(contents))
         return contents
     
+assembler = Assembler()    
+
 def assemble(program):
-    objects = Assembler().assemble(program)
-    Linker.link(objects)
+    objects = assembler.assemble(program)
+    return Linker.link(objects)
