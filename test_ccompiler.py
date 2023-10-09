@@ -6,20 +6,10 @@ Created on Fri Sep  8 14:37:22 2023
 """
 
 from unittest import TestCase, main
-import parse
+import cparser
 
-MAIN = '''
-main() {
-}
-'''
 MAIN_ASM = '''
   HALT
-'''
-
-CONST = '''
-const() {
-    foo = 3
-}
 '''
 CONST_ASM = '''
 const:
@@ -30,13 +20,6 @@ const:
   ADD SP, 1
   POP A
   RET
-'''
-
-RCONST = '''
-rconst() {
-    foo = 3
-    bar = 2 - foo
-}
 '''
 RCONST_ASM = '''
 rconst:
@@ -51,14 +34,6 @@ rconst:
   ADD SP, 2
   POP A, B
   RET
-'''
-
-MULTI = '''
-multi() {
-    foo = 3
-    bar = 2 - foo
-    baz = bar + foo * 4
-}
 '''
 MULTI_ASM = '''
 multi:
@@ -78,15 +53,6 @@ multi:
   ADD SP, 3
   POP A, B
   RET
-'''
-
-PAREN = '''
-paren() {
-    foo = 3
-    bar = 2 - foo
-    baz = bar + foo * 4
-    bif = -(foo + bar) * (baz + 10)
-}
 '''
 PAREN_ASM = '''
 paren:
@@ -115,14 +81,8 @@ paren:
   POP A, B
   RET
 '''
-
-PARAMS = '''
-add3(foo, bar, baz) {
-    return foo + bar + baz
-}
-'''
 PARAMS_ASM = '''
-add3:
+params:
   SUB SP, 3
   LD [SP, 0], A
   LD [SP, 1], B
@@ -136,15 +96,6 @@ add3:
 .L0:
   ADD SP, 3
   RET
-'''
-
-FACT = '''
-fact(n) {
-    if n == 0 {
-        return 1
-    }
-    return n * fact(n-1)
-}
 '''
 FACT_ASM = '''
 fact:
@@ -168,18 +119,6 @@ fact:
   MOV A, B
   ADD SP, 1
   POP PC, B, C
-'''
-
-FIB = '''
-fib(n) {
-    if n == 1 {
-        return 0
-    } else if n == 2 {
-        return 1
-    } else {
-        return fib(n-1) + fib(n-2)
-    }
-}
 '''
 FIB_ASM = '''
 fib:
@@ -215,16 +154,6 @@ fib:
   ADD SP, 1
   POP PC, B, C
 '''
-
-SUM = '''
-sum(n) {
-    s = 0
-    for i = 0, i < n, i = i + 1 {
-        s = s + i
-    }
-    return s
-}
-'''
 SUM_ASM = '''
 sum:
   PUSH B
@@ -255,15 +184,6 @@ sum:
   POP B
   RET
 '''
-
-GETSET = '''
-get(g, i) {
-    return g[i]
-}
-set(g, i, t) {
-    g[i] = t
-}
-'''
 GETSET_ASM = '''
 get:
   SUB SP, 2
@@ -289,15 +209,6 @@ set:
   LD [B], A
   ADD SP, 3
   RET
-'''
-
-GETSET2 = '''
-get2(g, i, j) {
-    return g[i][j]
-}
-set2(g, i, j, t) {
-    g[i][j] = t
-}
 '''
 GETSET2_ASM = '''
 get2:
@@ -333,11 +244,6 @@ set2:
   ADD SP, 4
   RET
 '''
-CALLS = '''
-foo (x,y,z) {
-    return bar(x,y) + baz(y,z)
-}
-'''
 CALLS_ASM = '''
 foo:
   PUSH LR, D, E
@@ -367,49 +273,52 @@ foo:
 
 class TestCompiler(TestCase):
     
-    def code_eq_asm(self, CODE, ASM):
-        ast = parse.Parser().parse(CODE)
-        asm = ast.compile()
+    def code_eq_asm(self, FILE_NAME, ASM):
+        if FILE_NAME.endswith('.c'):
+            with open(r'tests/' + FILE_NAME) as in_file:
+                text = in_file.read()
+        ast = cparser.parse(text)
+        asm = ast.compile()        
         self.assertEqual(asm, ASM.strip('\n'))
     
     def test_init(self):
-        self.code_eq_asm('', '')
+        self.code_eq_asm('init.c', '')
         
     def test_main(self):
-        self.code_eq_asm(MAIN, MAIN_ASM)
+        self.code_eq_asm('main.c', MAIN_ASM)
         
     def test_const(self):
-        self.code_eq_asm(CONST, CONST_ASM)
+        self.code_eq_asm('const.c', CONST_ASM)
         
     def test_rconst(self):
-        self.code_eq_asm(RCONST, RCONST_ASM)
+        self.code_eq_asm('rconst.c', RCONST_ASM)
         
     def test_multi(self):
-        self.code_eq_asm(MULTI, MULTI_ASM)
+        self.code_eq_asm('multi.c', MULTI_ASM)
     
     def test_paren1(self):
-        self.code_eq_asm(PAREN, PAREN_ASM)
+        self.code_eq_asm('paren.c', PAREN_ASM)
         
     def test_params(self):
-        self.code_eq_asm(PARAMS, PARAMS_ASM)
+        self.code_eq_asm('params.c', PARAMS_ASM)
         
     def test_fact(self):
-        self.code_eq_asm(FACT, FACT_ASM)
+        self.code_eq_asm('fact.c', FACT_ASM)
         
     def test_fib(self):
-        self.code_eq_asm(FIB, FIB_ASM)
+        self.code_eq_asm('fib.c', FIB_ASM)
         
     def test_sum(self):
-        self.code_eq_asm(SUM, SUM_ASM)
+        self.code_eq_asm('sum.c', SUM_ASM)
         
     def test_getset(self):
-        self.code_eq_asm(GETSET, GETSET_ASM)
+        self.code_eq_asm('getset.c', GETSET_ASM)
         
     def test_getset2(self):
-        self.code_eq_asm(GETSET2, GETSET2_ASM)
+        self.code_eq_asm('getset2.c', GETSET2_ASM)
     
     def test_calls(self):
-        self.code_eq_asm(CALLS, CALLS_ASM)
+        self.code_eq_asm('calls.c', CALLS_ASM)
 
 if __name__ == '__main__':
     main()
