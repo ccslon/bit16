@@ -5,7 +5,7 @@ Created on Mon Aug 28 09:26:08 2023
 @author: ccslon
 """
 
-import assemble
+import assembler
 
 fact = '''
 mov A, 6
@@ -158,4 +158,4 @@ divmod_end:
 '''
 
 if __name__ == '__main__':
-    assemble.assemble(string_test)
+    assembler.assemble(string_test)
