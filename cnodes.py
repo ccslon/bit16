@@ -19,27 +19,59 @@ class SetList(UserList):
         if item not in self:
             self.append(item)    
 
+class Frame:
+    def __init__(self, old=None):
+        if old is None:
+            self.locals = {}
+            self.size = 0
+        else:
+            self.locals = old.locals.copy()
+            self.size = old.size
+    def index(self, name):
+        return self.locals[name]
+    def append(self, name, size):
+        self.locals[name] = self.size
+        self.size += size
+
+class Scope():
+    def __init__(self, old):
+        if old is None:
+            self.frame = Frame()
+            self.locals = {}
+        else:
+            self.frame = Frame(old.frame)
+            self.locals = old.locals.copy()
+    def decl(self, type_spec, name):
+        self.locals[name] = type_spec
+        self.frame.append(name, type_spec.size())
+    def resolve(self, name):
+        return self.frame.index(name)
+
 class Env:
     def __init__(self):
         self.labels = 0
         self.loop = Loop()
-        self.structs = {}
         self.globals = SetList()
-        self.locals = SetList()
-        self.better_locals = {}
         self.strings = []
         self.functions = []
         self.if_jump_end = False
-    def reset_scope(self):
+        self.scope = None
+        self.stack = []
+        self.structs = {}
+    def begin_func(self):        
         self.func = None
-        self.locals.clear()
-        self.frame = {}
-        self.fp = 0
         self.args = 0
         self.regs = 0
+        self.space = 0
         self.returns = False
         self.calls = False
-    def start_loop(self):
+    def begin_scope(self):
+        new = Scope(self.scope)
+        self.stack.append(self.scope)
+        self.scope = new
+    def end_scope(self):
+        self.scope = self.stack.pop() 
+    def begin_loop(self):
         self.loop.append((self.next_label(), self.next_label()))
     def end_loop(self):
         self.loop.pop()
@@ -47,6 +79,10 @@ class Env:
         label = self.labels
         self.labels += 1
         return label
+    def declare(self, decl):
+        self.scope.decl(decl.type_spec, decl.id.name)
+    def resolve(self, id_):
+        return self.scope.resolve(id_.name)
 
 class Traveler:
     def __init__(self):
@@ -61,7 +97,8 @@ class Traveler:
     def glob(self, name, value):
         self.asm.append(f'{name}: {value}')
     def push(self, lr, *regs):
-        regs = ((Reg.LR,) if lr else ()) + regs
+        if lr:
+            regs = (Reg.LR,) + regs
         if regs:
             self.add('PUSH '+', '.join(reg.name for reg in regs))
     def pop(self, pc, *regs):
@@ -80,28 +117,28 @@ class Traveler:
         self.add(f'LD [{rb.name}'+(f', {offset5}' if offset5 is not None else '')+f'], {rd.name}')
     def imm(self, rd, value):
         self.add(f'LD {rd.name}, {value}')
-    def inst(self, is_const, op, rd, src):
-        if is_const:
-            self.add(f'{op.name} {rd.name}, {src}')
+    def inst(self, op, rd, src):
+        if op in [Op.NOT, Op.NEG]:
+            self.add(f'{op.name} {rd.name}')
         else:
-            self.add(f'{op.name} {rd.name}, {src.name}')
+            if type(src) is Reg:
+                self.add(f'{op.name} {rd.name}, {src.name}')
+            else:
+                self.add(f'{op.name} {rd.name}, {src}')
     def inst4(self, op, rd, rs, rs2):
         self.add(f'{op.name} {rd.name}, {rs.name}, {rs2.name}')
-    def inst5(self, op, rd):
-        self.add(f'{op.name} {rd.name}')
     def jump(self, cond, target):
         self.add(f'{cond.name} {target}')
     def halt(self):
         self.add('HALT')
 
 class Expr:
-    IS_CONST = False
     def load(self, trav, n):
         return self.compile(trav, n)
     def branch(self, trav, n, _):
         self.compile(trav, n)
     def compare(self, trav, n, label):
-        trav.inst(True, Op.CMP, self.compile(trav, n), 0)
+        trav.inst(Op.CMP, self.compile(trav, n), 0)
         trav.jump(Cond.JR, f'.L{label}')
     def analyze(self, trav, n):
         pass
@@ -113,7 +150,6 @@ class Expr:
         return f'{self.__class__.__name__}()'
     
 class Const(Expr):
-    IS_CONST = True
     def __init__(self, value):
         if value == 'true':
             self.value = 1
@@ -122,21 +158,27 @@ class Const(Expr):
         elif value.startswith('0x'):
             self.value = int(value, base=16)
         elif value.startswith('0b'):
-            self.value = int(value, base=16)
+            self.value = int(value, base=2)
         else:
             self.value = int(value)
-        self.size = 1
+        self.size = lambda: 1
     def analyze(self, trav, n):
         trav.env.regs = max(trav.env.regs, n)
     def analyze_right(self, trav, n):
-        pass
+        if not (-32 <= self.value < 64):
+            self.analyze(trav, n)
     def load(self, trav, n):
         if -32 <= self.value < 64:
-            trav.inst(True, Op.MOV, Reg(n), self.value)
+            trav.inst(Op.MOV, Reg(n), self.value)
         else:
             trav.imm(Reg(n), self.value)
         return Reg(n)
     def compile(self, trav, n):
+        # if -32 <= self.value < 64:
+        #     return self.value
+        # else:
+        #     trav.imm(Reg(n), self.value)
+        # return Reg(n)
         return self.value
     def __str__(self):
         return f"{self.__class__.__name__}({self.value})"
@@ -144,7 +186,9 @@ class Const(Expr):
 class Char(Expr):
     def __init__(self, value):
         self.value = value
-        self.size = 1
+        self.size = lambda: 1
+    def analyze(self, trav, n):
+        trav.env.regs = max(trav.env.regs, n)
     def compile(self, trav, n):
         trav.imm(Reg(n), self.value)
         return Reg(n)
@@ -153,6 +197,7 @@ class String(Expr):
     def __init__(self, value):
         self.value = value[1:-1]
     def analyze(self, trav, n):
+        trav.env.regs = max(trav.env.regs, n)
         if self.value not in trav.env.strings:
             trav.env.strings.append(self.value)
             trav.glob(f'.S{trav.env.strings.index(self.value)}', f'"{self.value}\0"')
@@ -165,26 +210,25 @@ class Id(Expr):
     def __init__(self, name):
         self.name = name
     def analyze(self, trav, n):
-        if self.name not in trav.env.locals and self.name not in trav.env.globals:
-            trav.env.locals.append(self.name)
         trav.env.regs = max(trav.env.regs, n)
-    def declare(self):
-        return self.name
     def address(self, trav, n):
-        if self.name in trav.env.locals:
-            trav.inst4(Op.ADD, Reg(n), Reg.SP, trav.env.locals.index(self.name))
+        if self.name in trav.env.scope.locals:
+            trav.inst4(Op.ADD, Reg(n), Reg.SP, trav.env.resolve(self))
         elif self.name in trav.env.globals:
             trav.load_glob(Reg(n), self.name)
         return Reg(n)
     def store(self, trav, n):
-        if self.name in trav.env.locals:
-            trav.store(Reg(n), Reg.SP, trav.env.locals.index(self.name))
+        if self.name in trav.env.scope.locals:
+            trav.store(Reg(n), Reg.SP, trav.env.resolve(self))
         elif self.name in trav.env.globals:
             trav.load_glob(Reg(n+1), self.name)
             trav.store(Reg(n), Reg(n+1))
     def compile(self, trav, n):
-        if self.name in trav.env.locals:
-            trav.load(Reg(n), Reg.SP, trav.env.locals.index(self.name))
+        if self.name in trav.env.scope.locals:
+            if type(trav.env.scope.locals[self.name]) is Array:
+                return self.address(trav, n)
+            else:
+                trav.load(Reg(n), Reg.SP, trav.env.resolve(self))
         elif self.name in trav.env.globals:
             trav.load_glob(Reg(n), self.name)
             trav.load(Reg(n), Reg(n))
@@ -208,7 +252,6 @@ class Address(Expr):
 class Pointer(Expr):
     def __init__(self, to):
         self.to = to
-        self.size = 1
     def analyze(self, trav, n):
         self.to.analyze(trav, n)
     def store(self, trav, n):
@@ -230,7 +273,7 @@ class Unary(Expr):
     def analyze(self, trav, n):
         self.primary.analyze(trav, n)
     def compile(self, trav, n):
-        trav.inst5(self.sign, self.primary.compile(trav, n))
+        trav.inst(self.sign, self.primary.compile(trav, n), Reg.A)
         return Reg(n)
     def __str__(self):
         return f'{self.sign[0].upper() + self.sign[1:]}({self.primary})'
@@ -243,24 +286,34 @@ class Conditional(Expr):
     def __init__(self, logic_or, expr, cond):
         self.logic_or, self.expr, self.cond = logic_or, expr, cond
 
-class Type(Expr):
-    def __init__(self, name):
-        self.name, self.pointers = name, 0
+class Type(Expr): #TODO
+    def __init__(self, type_):
+        self.type = type_
+        self.size = lambda: 1
+        
+class PointerType(Type):
+    pass
+        
+class Array(Type):
+    def __init__(self, of, size):
+        self.of = of
+        self.size = lambda: self.of.size() * size.value
 
+class StructType(Type):
+    def __init__(self, name, size):
+        self.name, self.size = name, size
+        
 class Decl(Expr):
-    def __init__(self, type_spec, local):
-        self.type_spec, self.local = type_spec, local
+    def __init__(self, type_spec, id_):
+        self.type_spec, self.id = type_spec, id_
     def analyze(self, trav, n):
-        self.local.analyze(trav, n)
-        self.declare(trav)
-    def declare(self, trav):
-        trav.env.better_locals[self.local.name()] = self.type_spec
-        trav.env.frame[self.local.name()] = trav.env.fp
-        trav.env.fp += self.local
+        self.id.analyze(trav, n)
+        trav.env.space += self.type_spec.size()
     def store(self, trav, n):
-        self.local.store(trav, n)
+        self.compile(trav, n)
+        self.id.store(trav, n)
     def compile(self, trav, n):
-        pass #self.local.compile(trav, n)
+        trav.env.declare(self) #self.local.compile(trav, n)
 
 class Binary(Expr):    
     OPS = {'+' :Op.ADD,
@@ -287,7 +340,7 @@ class Binary(Expr):
         self.left.analyze(trav, n)
         self.right.analyze_right(trav, n+1)
     def compile(self, trav, n):
-        trav.inst(self.right.IS_CONST, self.op, self.left.load(trav, n), self.right.compile(trav, n+1))
+        trav.inst(self.op, self.left.load(trav, n), self.right.compile(trav, n+1))
         return Reg(n)
     def __str__(self):
         return f'{self.op[0].upper() + self.op[1:]}({self.left},{self.right})'
@@ -306,17 +359,17 @@ class Compare(Binary):
            'ge':Cond.JLT,
            'le':Cond.JGT}
     def compare(self, trav, n, label):
-        trav.inst(self.right.IS_CONST, Op.CMP, self.left.load(trav, n), self.right.compile(trav, n+1))
+        trav.inst(Op.CMP, self.left.load(trav, n), self.right.compile(trav, n+1))
         trav.jump(self.INV[self.op], f'.L{label}')
     def compile(self, trav, n):
         label = trav.env.next_label()
         sublabel = trav.env.next_label()
-        trav.inst(self.right.IS_CONST, Op.CMP, self.left.load(trav, n), self.right.compile(trav, n+1))
+        trav.inst(Op.CMP, self.left.load(trav, n), self.right.compile(trav, n+1))
         trav.jump(self.INV[self.op], f'.L{sublabel}')
-        trav.inst(True, Op.MOV, Reg(n), 1)
+        trav.inst(Op.MOV, Reg(n), 1)
         trav.jump(Cond.JR, f'.L{label}')
         trav.labels.append(f'.L{sublabel}')
-        trav.inst(True, Op.MOV, Reg(n), 0)
+        trav.inst(Op.MOV, Reg(n), 0)
         trav.labels.append(f'.L{label}')        
 
 class Logic(Binary):
@@ -326,19 +379,19 @@ class Logic(Binary):
         self.op, self.left, self.right = self.OPS[op], left, right
     def compare(self, trav, n, label):
         if self.op == Op.AND:
-            trav.inst(True, Op.CMP, self.left.compile(trav, n), 0)
+            trav.inst(Op.CMP, self.left.compile(trav, n), 0)
             trav.jump(Cond.JEQ, f'.L{label}')
-            trav.inst(True, Op.CMP, self.right.compile(trav, n), 0)
+            trav.inst(Op.CMP, self.right.compile(trav, n), 0)
             trav.jump(Cond.JEQ, f'.L{label}')
         elif self.op == Op.OR:
             sublabel = trav.env.next_label()
-            trav.inst(True, Op.CMP, self.left.compile(trav, n), 0)
+            trav.inst(Op.CMP, self.left.compile(trav, n), 0)
             trav.jump(Cond.JNE, f'.L{sublabel}')
-            trav.inst(True, Op.CMP, self.right.compile(trav, n), 0)
+            trav.inst(Op.CMP, self.right.compile(trav, n), 0)
             trav.jump(Cond.JEQ, f'.L{label}')
             trav.labels.append(f'.L{sublabel}')
     def compile(self, trav, n):
-        trav.inst(self.right.IS_CONST, self.op, self.left.load(trav, n), self.right.compile(trav, n+1))
+        trav.inst(self.op, self.left.load(trav, n), self.right.compile(trav, n+1))
 
 class Assign(Expr):
     def __init__(self, left, right):
@@ -362,7 +415,7 @@ class Args(Expr, UserList):
             arg.load(trav, i)
         if n > 0:
             for i, arg in enumerate(self):
-                trav.inst(False, Op.MOV, Reg(i), Reg(n+i))
+                trav.inst(Op.MOV, Reg(i), Reg(n+i))
     def __str__(self):
         return f'{self.__class__.__name__}({",".join(map(str,self))})'  
 
@@ -378,7 +431,7 @@ class Call(Expr):
         self.args.compile(trav, n)
         trav.call(self.id.name)
         if n > 0:
-            trav.inst(False, Op.MOV, Reg(n), Reg.A)
+            trav.inst(Op.MOV, Reg(n), Reg.A)
         return Reg(n)
     def __str__(self):
         return f'{self.__class__.__name__}({self.id},{self.args})'
@@ -425,7 +478,7 @@ class While(Expr):
         self.cond.analyze(trav, 1)
         self.state.analyze(trav, 1)
     def compile(self, trav, n):
-        trav.env.start_loop()
+        trav.env.begin_loop()
         trav.labels.append(f'.L{trav.env.loop.start()}')
         self.cond.compare(trav, n, trav.env.loop.end())
         self.state.compile(trav, n)
@@ -445,7 +498,7 @@ class For(While):
         self.step.analyze(trav, 1)
     def compile(self, trav, n):
         self.init.compile(trav, n)
-        trav.env.start_loop()
+        trav.env.begin_loop()
         trav.labels.append(f'.L{trav.env.loop.start()}')
         self.cond.compare(trav, n, trav.env.loop.end())
         self.state.compile(trav, n)
@@ -486,12 +539,10 @@ class Script(Expr):
         self.sub.analyze(trav, n+1)
     def analyze_store(self, trav, n):
         self.analyze(trav, n+1)
-    def declare(self):
-        return self.id.declare()
     def address(self, trav, n):
         self.id.compile(trav, n)
         self.sub.compile(trav, n+1)
-        trav.inst(False, Op.ADD, Reg(n), Reg(n+1))
+        trav.inst(Op.ADD, Reg(n), Reg(n+1))
     def store(self, trav, n):
         self.address(trav, n+1)
         trav.store(Reg(n), Reg(n+1))
@@ -515,7 +566,7 @@ class Attr(Expr):
         self.analyze(trav, n+1)
     def address(self, trav, n):
         self.id.compile(trav, n)
-        trav.inst(True, Op.ADD, Reg(n), trav.env.structs[self.attr])
+        trav.inst(Op.ADD, Reg(n), trav.env.structs[self.attr])
     def store(self, trav, n):
         self.address(trav, n+1)
         trav.store(Reg(n), Reg(n+1), 0)
@@ -541,7 +592,7 @@ class Fields(Expr, UserList):
 class Struct(Expr):
     def __init__(self, id_, fields):
         self.id, self.fields = id_, fields
-        self.size = len(fields)
+        self.size = lambda: len(fields)
     def declare(self, trav):
         self.fields.declare(trav)
     def compile(self, trav):
@@ -552,10 +603,11 @@ class Struct(Expr):
 class Params(Expr, UserList):
     def analyze(self, trav):
         for param in self:
-            trav.env.locals.add(param.local.name)
+            param.analyze(trav, 0)
     def compile(self, trav):
         for i, param in enumerate(self):
-            trav.store(Reg(i), Reg.SP, trav.env.locals.index(param.local.name))
+            param.compile(trav, 0)
+            trav.store(Reg(i), Reg.SP, trav.env.resolve(param.id))
     def __str__(self):
         return f'{self.__class__.__name__}({",".join(map(str,self))})'
 
@@ -564,8 +616,10 @@ class Block(Expr, UserList):
         for statement in self:
             statement.analyze(trav, n)
     def compile(self, trav, n):
+        trav.env.begin_scope()
         for statement in self:
             statement.compile(trav, trav.env.args)
+        trav.env.end_scope()
     def __str__(self):
         nl = ",\n"
         return f'{self.__class__.__name__}(\n{nl.join(map(str,self))}\n)'
@@ -576,7 +630,8 @@ class Func(Expr):
     def declare(self, trav):
         trav.env.functions.append(self)
     def compile(self, trav):
-        trav.env.reset_scope()
+        trav.env.begin_func()
+        trav.env.begin_scope()
         self.params.analyze(trav)
         self.block.analyze(trav, 1)
         if trav.env.returns:
@@ -585,19 +640,20 @@ class Func(Expr):
         #print(trav.env.args, trav.env.regs)
         push = list(map(Reg, range(max(len(self.params), trav.env.returns), trav.env.args + trav.env.regs)))
         trav.push(trav.env.calls, *push)
-        if trav.env.locals:
-            trav.inst(True, Op.SUB, Reg.SP, len(trav.env.locals))
+        if trav.env.space:
+            trav.inst(Op.SUB, Reg.SP, trav.env.space)
         self.params.compile(trav)
         self.block.compile(trav, trav.env.args)
         if trav.env.returns:
             trav.labels.append(f'.L{trav.env.func}')
             if trav.env.args > 0:
-                trav.inst(False, Op.MOV, Reg.A, Reg(trav.env.args))
-        if trav.env.locals:
-            trav.inst(True, Op.ADD, Reg.SP, len(trav.env.locals))
+                trav.inst(Op.MOV, Reg.A, Reg(trav.env.args))
+        if trav.env.space:
+            trav.inst(Op.ADD, Reg.SP, trav.env.space)
         trav.pop(trav.env.calls, *push)
         if not trav.env.calls:
             trav.ret()
+        trav.env.end_scope()
     def __str__(self):
         return f'{self.__class__.__name__}({self.id},{self.params},{self.block})'
 
@@ -607,14 +663,16 @@ class Main(Expr):
     def declare(self, trav):
         pass
     def compile(self, trav):
-        trav.env.reset_scope()
+        trav.env.begin_func()
+        trav.env.begin_scope()
         self.block.analyze(trav, 1)
-        if trav.env.locals:
-            trav.inst(True, Op.SUB, Reg.SP, len(trav.env.locals))
+        if trav.env.scope.locals:
+            trav.inst(Op.SUB, Reg.SP, trav.env.scope.frame.size)
         self.block.compile(trav, 0)
-        if trav.env.locals:
-            trav.inst(True, Op.ADD, Reg.SP, len(trav.env.locals))
+        if trav.env.scope.locals:
+            trav.inst(Op.ADD, Reg.SP, trav.env.scope.frame.size)
         trav.halt()
+        trav.env.end_scope()
 
 class Program(Expr, UserList):
     def compile(self):

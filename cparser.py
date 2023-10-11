@@ -6,14 +6,13 @@ Created on Mon Jul  3 19:47:39 2023
 """
 
 import re
-from cnodes import Type, Decl, Conditional, Cast, Arrow, Id, Const, Unary, Binary, Compare, Call, Args, Func, Assign, If, Block, Program, Return, While, For, Break, Continue, Script, Struct, Params, Fields, Logic, Attr, Pointer, Address, Main, Global, Char, String
+from cnodes import Decl, Array, StructType, PointerType, Type, Conditional, Cast, Arrow, Id, Const, Unary, Binary, Compare, Call, Args, Func, Assign, If, Block, Program, Return, While, For, Break, Continue, Script, Struct, Params, Fields, Logic, Attr, Pointer, Address, Main, Global, Char, String
 
 '''
 TODO
 [ ] Type checking
 [ ] '.' vs '->' checking
 [ ] Allocating arrays
-
 '''
 
 TOKENS = {'const': r'(0x[0-9a-f]+)|(0b[01]+)|(\d+)|(NULL)',
@@ -184,11 +183,11 @@ class Parser:
     
     def type_spec(self):
         if self.peek('type'):
-            type_spec = next(self),
+            type_spec = Type(next(self))
         elif self.accept('struct','union'):
-            type_spec = next(self), self.expect('id')
+            type_spec = StructType(self.expect('id'), 3) #TODO
         while self.accept('*'):
-            type_spec += '*',
+            type_spec = PointerType(type_spec)
         return type_spec
     
     def mul(self):
@@ -357,18 +356,20 @@ class Parser:
             self.expect(';')
             
         elif self.peek('type'):
-            type_spec = next(self),
+            type_spec = Type(next(self))
             while self.accept('*'):
-                type_spec += '*',
-            local = Id(self.expect('id'))
+                type_spec = PointerType(type_spec)
+            id_ = Id(self.expect('id'))
             while self.accept('['):
-                if not self.accept(']'):
-                    sub = self.expect('const')
-                    self.expect(']')
-                else:
-                    sub = None
-                local = Script(local, sub)
-            statement = Decl(type_spec, local)
+                type_spec = Array(type_spec, Const(self.expect('const')))
+                self.expect(']')
+                # if not self.accept(']'):
+                #     sub = self.expect('const')
+                #     self.expect(']')
+                # else:
+                #     sub = None
+                # local = Script(local, sub)
+            statement = Decl(type_spec, id_)
             if self.accept('='):
                 statement = Assign(statement, self.assign())
             self.expect(';')
@@ -476,14 +477,11 @@ class Parser:
         DECL -> TYPE_SPEC id {'[' [CONST] ']'} ['=' CONST] ';'
         '''
         type_spec = self.type_spec()
-        local = self.expect('id')
+        id_ = self.expect('id')
         while self.accept('['):
-            if not self.accept(']'):
-                local = Script(local, self.const())
-                self.expect(']')
-            else:
-                local = Script(local, None)
-        decl = Decl(type_spec, local)
+            type_spec = Array(type_spec, Const(self.expect('const')))
+            self.expect(']')
+        decl = Decl(type_spec, id_)
         if self.accept('='):
             decl = Assign(decl, self.const())
         self.expect(';')
