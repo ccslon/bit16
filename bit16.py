@@ -90,7 +90,10 @@ class Jump(Inst):
         self._bin = '000', f'{cond:03b}', f'{const10:010b}'
 class Inst1(Inst):
     def __init__(self, op, rd, rs):
-        self.str = f'{op.name} {rd.name}, {rs.name}'
+        if op in [Op.NOT, Op.NEG]:
+            self.str = f'{op.name} {rd.name}'
+        else:
+            self.str = f'{op.name} {rd.name}, {rs.name}'
         self._dec = 1,op,0,rs,rd
         self._bin = '001',f'{op:04b}','XXX',f'{rs:03b}',f'{rd:03b}'
 class Inst2(Inst):
