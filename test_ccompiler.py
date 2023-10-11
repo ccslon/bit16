@@ -270,6 +270,46 @@ foo:
   ADD SP, 3
   POP PC, D, E
 '''
+HELLO_ASM = '''
+.S0: "Hello world!\0"
+  LD B, =.S0
+  MOV A, B
+  CALL print
+  MOV B, A
+  HALT
+OUT: 32767
+put:
+  SUB SP, 1
+  LD [SP, 0], A
+  LD A, [SP, 0]
+  LD B, =OUT
+  LD B, [B]
+  LD [B], A
+  ADD SP, 1
+  RET
+print:
+  PUSH LR, B, C
+  SUB SP, 1
+  LD [SP, 0], A
+.L0:
+  LD B, [SP, 0]
+  LD B, [B]
+  LD C, '\\0'
+  CMP B, C
+  JEQ .L1
+  LD B, [SP, 0]
+  LD B, [B]
+  MOV A, B
+  CALL put
+  MOV B, A
+  LD B, [SP, 0]
+  ADD B, 1
+  LD [SP, 0], B
+  JR .L0
+.L1:
+  ADD SP, 1
+  POP PC, B, C
+'''
 
 class TestCompiler(TestCase):
     
@@ -278,7 +318,7 @@ class TestCompiler(TestCase):
             with open(r'tests/' + FILE_NAME) as in_file:
                 text = in_file.read()
         ast = cparser.parse(text)
-        asm = ast.compile()        
+        asm = ast.compile()
         self.assertEqual(asm, ASM.strip('\n'))
     
     def test_init(self):
@@ -319,6 +359,9 @@ class TestCompiler(TestCase):
     
     def test_calls(self):
         self.code_eq_asm('calls.c', CALLS_ASM)
+        
+    def test_hello(self):
+        self.code_eq_asm('hello.c', HELLO_ASM)
 
 if __name__ == '__main__':
     main()
