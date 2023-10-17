@@ -79,10 +79,16 @@ class Env:
         label = self.labels
         self.labels += 1
         return label
+    def address(self, name, n):
+        if name in self.scope.locals:
+            self.scope.locals
     def declare(self, decl):
         self.scope.decl(decl.type_spec, decl.id.name)
     def resolve(self, id_):
         return self.scope.resolve(id_.name)
+    def member(self, id_, member): #TODO
+        if id_.name in self.scope.locals:
+            return self.scope.locals[id_.name].id_.name
 
 class Traveler:
     def __init__(self):
@@ -102,7 +108,8 @@ class Traveler:
         if regs:
             self.add('PUSH '+', '.join(reg.name for reg in regs))
     def pop(self, pc, *regs):
-        regs = ((Reg.PC,) if pc else ()) + regs
+        if pc:
+            regs = (Reg.PC,) + regs
         if regs:
             self.add('POP '+', '.join(reg.name for reg in regs))
     def call(self, label):
@@ -111,10 +118,10 @@ class Traveler:
         self.add('RET')
     def load_glob(self, rd, name):
         self.add(f'LD {rd.name}, ={name}')
-    def load(self, rd, rb, offset5=None):
-        self.add(f'LD {rd.name}, [{rb.name}'+(f', {offset5}' if offset5 is not None else '')+']')
-    def store(self, rd, rb, offset5=None):
-        self.add(f'LD [{rb.name}'+(f', {offset5}' if offset5 is not None else '')+f'], {rd.name}')
+    def load(self, rd, rb, offset5=None, name=None):
+        self.add(f'LD {rd.name}, [{rb.name}'+(f', {offset5}' if offset5 is not None else '')+']'+(f' ; {name}' if name else ''))
+    def store(self, rd, rb, offset5=None, name=None):
+        self.add(f'LD [{rb.name}'+(f', {offset5}' if offset5 is not None else '')+f'], {rd.name}'+(f' ; {name}' if name else ''))
     def imm(self, rd, value):
         self.add(f'LD {rd.name}, {value}')
     def inst(self, op, rd, src):
@@ -124,9 +131,11 @@ class Traveler:
             if type(src) is Reg:
                 self.add(f'{op.name} {rd.name}, {src.name}')
             else:
-                self.add(f'{op.name} {rd.name}, {src}')
-    def inst4(self, op, rd, rs, rs2):
+                self.add(f'{op.name} {rd.name}, {src}')    
+    def inst3(self, op, rd, rs, rs2):
         self.add(f'{op.name} {rd.name}, {rs.name}, {rs2.name}')
+    def inst4(self, op, rd, rs, const4):
+        self.add(f'{op.name} {rd.name}, {rs.name}, {const4}')
     def jump(self, cond, target):
         self.add(f'{cond.name} {target}')
     def halt(self):
@@ -161,7 +170,6 @@ class Const(Expr):
             self.value = int(value, base=2)
         else:
             self.value = int(value)
-        self.size = lambda: 1
     def analyze(self, trav, n):
         trav.env.regs = max(trav.env.regs, n)
     def analyze_right(self, trav, n):
@@ -186,7 +194,6 @@ class Const(Expr):
 class Char(Expr):
     def __init__(self, value):
         self.value = value
-        self.size = lambda: 1
     def analyze(self, trav, n):
         trav.env.regs = max(trav.env.regs, n)
     def compile(self, trav, n):
@@ -213,22 +220,20 @@ class Id(Expr):
         trav.env.regs = max(trav.env.regs, n)
     def address(self, trav, n):
         if self.name in trav.env.scope.locals:
-            trav.inst4(Op.ADD, Reg(n), Reg.SP, trav.env.resolve(self))
+            trav.env.scope.locals[self.name].address(self, trav, n)
+            # trav.inst4(Op.ADD, Reg(n), Reg.SP, trav.env.resolve(self))
         elif self.name in trav.env.globals:
             trav.load_glob(Reg(n), self.name)
         return Reg(n)
     def store(self, trav, n):
         if self.name in trav.env.scope.locals:
-            trav.store(Reg(n), Reg.SP, trav.env.resolve(self))
+            trav.env.scope.locals[self.name].store(self, trav, n)
         elif self.name in trav.env.globals:
             trav.load_glob(Reg(n+1), self.name)
             trav.store(Reg(n), Reg(n+1))
     def compile(self, trav, n):
         if self.name in trav.env.scope.locals:
-            if type(trav.env.scope.locals[self.name]) is Array:
-                return self.address(trav, n)
-            else:
-                trav.load(Reg(n), Reg.SP, trav.env.resolve(self))
+            trav.env.scope.locals[self.name].compile(self, trav, n)
         elif self.name in trav.env.globals:
             trav.load_glob(Reg(n), self.name)
             trav.load(Reg(n), Reg(n))
@@ -290,7 +295,13 @@ class Type(Expr): #TODO
     def __init__(self, type_):
         self.type = type_
         self.size = lambda: 1
-        
+    def address(self, id_, trav, n):
+        trav.inst4(Op.ADD, Reg(n), Reg.SP, trav.env.resolve(id_))
+    def store(self, id_, trav, n):
+        trav.store(Reg(n), Reg.SP, trav.env.resolve(id_), id_.name)
+    def compile(self, id_, trav, n):
+        trav.load(Reg(n), Reg.SP, trav.env.resolve(id_), id_.name)
+            
 class PointerType(Type):
     pass
         
@@ -298,10 +309,18 @@ class Array(Type):
     def __init__(self, of, size):
         self.of = of
         self.size = lambda: self.of.size() * size.value
+    def address(self, id_, trav, n):
+        trav.inst4(Op.ADD, Reg(n), Reg.SP, trav.env.resolve(id_))
+    def compile(self, id_, trav, n):
+        self.address(id_, trav, n)
 
 class StructType(Type):
     def __init__(self, name, size):
         self.name, self.size = name, size
+    def address(self, id_, trav, n):
+        trav.inst4(Op.ADD, Reg(n), Reg.SP, trav.env.resolve(id_))
+    def compile(self, id_, trav, n):
+        self.address(id_, trav, n)
         
 class Decl(Expr):
     def __init__(self, type_spec, id_):
@@ -550,14 +569,12 @@ class Script(Expr):
         self.address(trav, n)
         trav.load(Reg(n), Reg(n))
         return Reg(n)
-    def __str__(self):
-        return f'{self.__class__.__name__}({self.id},{self.sub})'
 
-class Arrow(Expr):
+class Arrow(Expr): #TODO
     def __init__(self, id_, attr):
         self.id, self.attr = id_, attr
 
-class Attr(Expr):
+class Attr(Expr): #TODO
     def __init__(self, id_, attr):
         self.id, self.attr = id_, attr
     def analyze(self, trav, n):
@@ -573,8 +590,6 @@ class Attr(Expr):
     def compile(self, trav, n):
         self.address(trav, n)
         trav.load(Reg(n), Reg(n), 0)
-    def __str__(self):
-        return f'{self.__class__.__name__}({self.id},{self.attr})'
 
 class Global(Assign):
     def declare(self, trav):
@@ -582,23 +597,17 @@ class Global(Assign):
     def compile(self, trav):
         trav.glob(self.left.name, self.right.compile(trav, 0))
 
-class Fields(Expr, UserList):
+class Fields(Expr, UserList):    
     def declare(self, trav):
-        for i, field in enumerate(self):
-            trav.env.structs[field.name] = i   
-    def __str__(self):
-        return f'{self.__class__.__name__}({",".join(map(str,self))})'  
+        return {field.id.name:i for i, field in enumerate(self)} 
 
 class Struct(Expr):
-    def __init__(self, id_, fields):
+    def __init__(self, id_, fields=Fields()):
         self.id, self.fields = id_, fields
-        self.size = lambda: len(fields)
     def declare(self, trav):
-        self.fields.declare(trav)
+        trav.structs[self.id.name] = self.fields.declare(trav)
     def compile(self, trav):
         pass
-    def __str__(self):
-        return f'{self.__class__.__name__}({self.id},{self.fields})'
 
 class Params(Expr, UserList):
     def analyze(self, trav):
@@ -608,8 +617,6 @@ class Params(Expr, UserList):
         for i, param in enumerate(self):
             param.compile(trav, 0)
             trav.store(Reg(i), Reg.SP, trav.env.resolve(param.id))
-    def __str__(self):
-        return f'{self.__class__.__name__}({",".join(map(str,self))})'
 
 class Block(Expr, UserList):
     def analyze(self, trav, n):

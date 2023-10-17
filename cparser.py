@@ -186,6 +186,8 @@ class Parser:
             type_spec = Type(next(self))
         elif self.accept('struct','union'):
             type_spec = StructType(self.expect('id'), 3) #TODO
+        else:
+            self.error()
         while self.accept('*'):
             type_spec = PointerType(type_spec)
         return type_spec
@@ -363,12 +365,6 @@ class Parser:
             while self.accept('['):
                 type_spec = Array(type_spec, Const(self.expect('const')))
                 self.expect(']')
-                # if not self.accept(']'):
-                #     sub = self.expect('const')
-                #     self.expect(']')
-                # else:
-                #     sub = None
-                # local = Script(local, sub)
             statement = Decl(type_spec, id_)
             if self.accept('='):
                 statement = Assign(statement, self.assign())
@@ -474,7 +470,7 @@ class Parser:
     
     def decl(self):
         '''
-        DECL -> TYPE_SPEC id {'[' [CONST] ']'} ['=' CONST] ';'
+        DECL -> TYPE_SPEC id {'[' [const] ']'} ';'
         '''
         type_spec = self.type_spec()
         id_ = self.expect('id')
@@ -482,10 +478,18 @@ class Parser:
             type_spec = Array(type_spec, Const(self.expect('const')))
             self.expect(']')
         decl = Decl(type_spec, id_)
-        if self.accept('='):
-            decl = Assign(decl, self.const())
         self.expect(';')
         return decl
+    
+    def fields(self):
+        '''
+        FIELDS = {DECL}
+        '''
+        fields = Fields()
+        if self.accept('{'):    
+            while not self.accept('}'):
+                fields.append(self.decl())
+        return fields
  
     def program(self):
         program = Program()
@@ -527,9 +531,9 @@ class Parser:
                             self.error()
                     self.expect(';')
             elif self.accept('struct'):
-                self.expect('id')
+                type_spec = StructType(self.expect('id'))
                 while self.accept('*'):
-                    pass
+                    type_spec = PointerType(type_spec)
                 if self.peek('id'):
                     next(self)
                     if self.accept('('):
@@ -549,11 +553,9 @@ class Parser:
                             self.const()
                         self.expect(';')
                 else:
-                    if not self.accept(';'):
-                        self.expect('{')
-                        while not self.accept('}'):
-                            self.decl()
-                        self.expect(';')               
+                    assert type(type_spec) is not PointerType
+                    program.append(Struct(type_spec.id, self.fields()))
+                    self.expect(';')
             elif self.accept('union'):
                 self.expect('id')
                 while self.accept('*'):

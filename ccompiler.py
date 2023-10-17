@@ -24,4 +24,4 @@ def ccompile(file_name, sflag=False):
             out_file.write(' '.join(bit16))
 
 if __name__ == '__main__':
-    ccompile('hello.c')
+    ccompile('tests\\array.c')
