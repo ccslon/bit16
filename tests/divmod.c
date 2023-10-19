@@ -28,8 +28,6 @@ void printnum(int num) {
     } while (ans->div > 0);
 }
 
-
 void main() {
     struct DivMod* loc = 0x7eee;
-
 }

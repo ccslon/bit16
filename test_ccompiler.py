@@ -327,6 +327,23 @@ foo:
   RET
 '''
 
+STRUCTS_ASM = '''
+foo:
+  PUSH A, B
+  SUB SP, 4
+  ...
+  
+  LD A, =.S1
+  ADD B, SP, 0 ; cat
+  ADD B, B, 2  ; owner
+  ADD B, B, 0  ; name
+  LD [B], A
+  
+  ADD SP, 4
+  POP A, B
+  RET
+'''
+
 class TestCompiler(TestCase):
     
     def code_eq_asm(self, FILE_NAME, ASM):

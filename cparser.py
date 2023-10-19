@@ -6,7 +6,7 @@ Created on Mon Jul  3 19:47:39 2023
 """
 
 import re
-from cnodes import Decl, Array, StructType, PointerType, Type, Conditional, Cast, Arrow, Id, Const, Unary, Binary, Compare, Call, Args, Func, Assign, If, Block, Program, Return, While, For, Break, Continue, Script, Struct, Params, Fields, Logic, Attr, Pointer, Address, Main, Global, Char, String
+from cnodes import Decl, Array, StructType, PointerType, Type, Conditional, Cast, Arrow, Id, Const, Unary, Binary, Compare, Call, Args, Func, Assign, If, Block, Program, Return, While, For, Break, Continue, Script, Struct, Params, Fields, Logic, Dot, Pointer, Address, Main, Global, Char, String
 
 '''
 TODO
@@ -37,6 +37,7 @@ TOKENS = {'const': r'(0x[0-9a-f]+)|(0b[01]+)|(\d+)|(NULL)',
           'id': r'\w(\w|\d)*',
           'semi': r';',
           'colon': r':',
+          'arrow': r'->',
           'dplus': r'\+\+',
           'ddash': r'--',
           'pluseq': r'\+=',
@@ -61,7 +62,6 @@ TOKENS = {'const': r'(0x[0-9a-f]+)|(0b[01]+)|(\d+)|(NULL)',
           'damp': r'\&\&',
           'pipe': r'\|',
           'amp': r'\&',
-          'ptr_op': r'->',
           'deq': r'==',
           'ge': r'>=',
           'le': r'<=',
@@ -126,7 +126,7 @@ class Parser:
                     else:
                         postfix = Call(postfix, Args())
                 elif self.accept('.'):
-                    postfix = Attr(postfix, self.expect('id'))
+                    postfix = Dot(postfix, self.expect('id'))
                 elif self.accept('->'):
                     postfix = Arrow(postfix, self.expect('id'))
                 elif self.peek('++','--'):
@@ -185,7 +185,7 @@ class Parser:
         if self.peek('type'):
             type_spec = Type(next(self))
         elif self.accept('struct','union'):
-            type_spec = StructType(self.expect('id'), 3) #TODO
+            type_spec = StructType(self.expect('id'))
         else:
             self.error()
         while self.accept('*'):
@@ -301,12 +301,12 @@ class Parser:
         '''
         assign = self.cond()
         if self.accept('='):
-            if isinstance(assign, (Id, Script, Attr, Pointer)):
+            if isinstance(assign, (Id, Script, Dot, Pointer)):
                 assign = Assign(assign, self.assign())
             else:
                 self.error()
         elif self.peek('+=','-=','*=','/=','%=','<<=','>>=','^=','|=','&='):
-            if isinstance(assign, (Id, Script, Attr, Pointer)):
+            if isinstance(assign, (Id, Script, Dot, Pointer)):
                 assign = Assign(assign, Binary(next(self), assign, self.assign()))
             else:
                 self.error()
@@ -343,12 +343,12 @@ class Parser:
         elif self.peek('*','id','++','--'):
             statement = self.unary()
             if self.accept('='):
-                if isinstance(statement, (Id, Script, Attr, Pointer, Arrow)):
+                if isinstance(statement, (Id, Script, Dot, Pointer, Arrow)):
                     statement = Assign(statement, self.assign())
                 else:
                     self.error()
             elif self.peek('+=','-=','*=','/=','%=','<<=','>>=','^=','|=','&='):
-                if isinstance(statement, (Id, Script, Attr, Pointer, Arrow)):
+                if isinstance(statement, (Id, Script, Dot, Pointer, Arrow)):
                     statement = Assign(statement, Binary(next(self), statement, self.assign()))
                 else:
                     self.error()
@@ -371,12 +371,12 @@ class Parser:
             self.expect(';')
             
         elif self.accept('struct'):
-            self.expect('id')
+            type_spec = StructType(self.expect('id'))
             while self.accept('*'):
-                pass
-            self.expect('id')
-            if self.accept('='):
-                self.const() #TODO make struct specific 
+                type_spec = PointerType(type_spec)
+            statement = Decl(type_spec, Id(self.expect('id')))
+            # if self.accept('='):
+            #     self.const() #TODO make struct specific 
             self.expect(';')
             
         elif self.accept('union'):
@@ -473,7 +473,7 @@ class Parser:
         DECL -> TYPE_SPEC id {'[' [const] ']'} ';'
         '''
         type_spec = self.type_spec()
-        id_ = self.expect('id')
+        id_ = Id(self.expect('id'))
         while self.accept('['):
             type_spec = Array(type_spec, Const(self.expect('const')))
             self.expect(']')
@@ -554,7 +554,7 @@ class Parser:
                         self.expect(';')
                 else:
                     assert type(type_spec) is not PointerType
-                    program.append(Struct(type_spec.id, self.fields()))
+                    program.append(Struct(type_spec.name, self.fields()))
                     self.expect(';')
             elif self.accept('union'):
                 self.expect('id')

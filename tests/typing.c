@@ -8,13 +8,6 @@ void ints() {
     a = 0;
     int* aa = &a;
     int copy = a;
-
-    
-    
-    struct C c;
-    c.d = 2;
-    struct C* cc = &c.d;
-    struct C ccopy = c;
 }
 
 void arrays() {
