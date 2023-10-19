@@ -66,9 +66,11 @@ class Data:
         return self.str
 
 class Char(Data):
+    TRANS = {'\\0': '\0',
+             '\\t': '\t',
+             '\\n': '\n'}
     def __init__(self, char):
-        if char == '\\0':
-            char = '\0'
+        char = self.TRANS.get(char, char)
         assert 0 <= ord(char) < 128
         self.str = char
         self._dec = 0,ord(char)
