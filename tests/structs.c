@@ -9,7 +9,7 @@ struct Cat {
     struct Owner owner;
 };
 
-void foo() {
+void stack_cat() {
     struct Cat cat;
     struct Cat* c;
     c = &cat;
@@ -19,13 +19,21 @@ void foo() {
     cat.owner.email = "ccslon@gmail.com";
     int* ptr = &cat.age;
     char* cat_name = cat.name;
+    char* owner_name = cat.owner.name;
 
-    
     c->age = 5;
+
 }
 
-void bar() {
-    struct Cat* c;
-    c = 0xcccc;
-    c->age = 5;
+void ptr_cat(struct Cat* cat) {
+
+}
+
+void array_cat() {
+    struct Cat cats[3];
+    struct Cat* cat2;    
+    cat2 = &cats[2];
+    
+    int is[10];
+    is[4] = 111;
 }

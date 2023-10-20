@@ -1,5 +1,4 @@
 char* OUT = 0x7fff;
-
 void put(char c) {
     *OUT = c;
 }

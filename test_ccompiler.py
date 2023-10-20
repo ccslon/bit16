@@ -328,19 +328,30 @@ foo:
 '''
 
 STRUCTS_ASM = '''
+.S0: "Cloud\0"
+.S1: "Colin\0"
+.S2: "ccslon@gmail.com\0"
 foo:
-  PUSH A, B
-  SUB SP, 4
-  ...
-  
+  PUSH A
+  SUB SP, 8
+  ADD A, SP, 0
+  LD [SP, 4], A ; c
+  MOV A, 10
+  LD [SP, 1], A
+  LD A, =.S0
+  LD [SP, 0], A
   LD A, =.S1
-  ADD B, SP, 0 ; cat
-  ADD B, B, 2  ; owner
-  ADD B, B, 0  ; name
-  LD [B], A
-  
-  ADD SP, 4
-  POP A, B
+  LD [SP, 2], A
+  LD A, =.S2
+  LD [SP, 3], A
+  ADD A, SP, 1
+  LD [SP, 5], A ; ptr
+  LD A, [SP, 0]
+  LD [SP, 6], A ; cat_name
+  LD A, [SP, 2]
+  LD [SP, 7], A ; owner_name
+  ADD SP, 8
+  POP A
   RET
 '''
 
@@ -398,6 +409,9 @@ class TestCompiler(TestCase):
         
     def test_array(self):
         self.code_eq_asm('array.c', ARRAY_ASM)
+        
+    def test_structs(self):
+        self.code_eq_asm('structs.c', STRUCTS_ASM)
 
 if __name__ == '__main__':
     main()
