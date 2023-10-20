@@ -6,7 +6,7 @@ Created on Mon Jul  3 19:47:39 2023
 """
 
 import re
-from cnodes import Decl, Array, StructType, PointerType, Type, Conditional, Cast, Arrow, Id, Const, Unary, Binary, Compare, Call, Args, Func, Assign, If, Block, Program, Return, While, For, Break, Continue, Script, Struct, Params, Fields, Logic, Dot, Pointer, Address, Main, Global, Char, String
+from cnodes import Do, Decl, Array, StructType, PointerType, Type, Conditional, Cast, Arrow, Id, Const, Unary, Binary, Compare, Call, Args, Func, Assign, If, Block, Program, Return, While, For, Break, Continue, Script, Struct, Params, Fields, Logic, Dot, Pointer, Address, Main, Global, Char, String
 
 '''
 TODO
@@ -374,7 +374,11 @@ class Parser:
             type_spec = StructType(self.expect('id'))
             while self.accept('*'):
                 type_spec = PointerType(type_spec)
-            statement = Decl(type_spec, Id(self.expect('id')))
+            iden = Id(self.expect('id'))
+            while self.accept('['):
+                type_spec = Array(type_spec, Const(self.expect('const')))
+                self.expect(']')
+            statement = Decl(type_spec, iden)
             # if self.accept('='):
             #     self.const() #TODO make struct specific 
             self.expect(';')
@@ -415,11 +419,11 @@ class Parser:
             self.expect(')')
             statement = While(expr, self.statement())
             
-        elif self.accept('do'): #TODO
-            self.statement()
+        elif self.accept('do'):
+            statement = self.statement()
             self.expect('while')
             self.expect('(')
-            self.expr()
+            statement = Do(statement, self.expr())
             self.expect(')')
             self.expect(';')
             
@@ -535,14 +539,14 @@ class Parser:
                 while self.accept('*'):
                     type_spec = PointerType(type_spec)
                 if self.peek('id'):
-                    next(self)
+                    id_ = Id(next(self))
                     if self.accept('('):
                         if not self.accept(')'):
-                            self.parameters()
+                            params = self.params()
                             self.expect(')')
                         if not self.accept(';'):
                             self.expect('{')
-                            self.block()
+                            program.append(Func(type_spec, id_, params, self.block()))
                             self.expect('}')
                     else:
                         while self.accept('['):
@@ -577,7 +581,7 @@ class Parser:
     
     def parse(self, text):
         self.tokens = lex(text)
-        # for i, (t, v) in enumerate(self.tokens): print(i, t, v)
+        for i, (t, v) in enumerate(self.tokens): print(i, t, v)
         self.index = 0
         program = self.program()
         self.expect('end')

@@ -30,6 +30,8 @@ class Frame(UserDict):
         super().__setitem__(name, type_spec)
     def index(self, name):
         return self.indices[name]
+    def copy(self):
+        return self.size, self.indices.copy(), self.data.copy()
 
 class Scope(Frame):
     def __init__(self, old=None):
@@ -134,7 +136,10 @@ class Expr:
         self.compile(n)
     def compare(self, n, label):
         emit.inst(Op.CMP, self.compile(n), 0)
-        emit.jump(Cond.JR, f'.L{label}')
+        emit.jump(Cond.JEQ, f'.L{label}')
+    def compare_false(self, n, label):
+        emit.inst(Op.CMP, self.compile(n), 0)
+        emit.jump(Cond.JNE, f'.L{label}')
     def analyze(self, n):
         pass
     def analyze_right(self, n):
@@ -203,10 +208,11 @@ class Id(Expr):
     def address(self, n):        
         if self.name in env.scope:
             env.scope[self.name].address(n, self.name)
-            return self.name
         elif self.name in env.globals:
             emit.load_glob(Reg(n), self.name)
         return Reg(n)
+    def get_type(self):
+        return env.scope[self.name]
     def store(self, n):
         if self.name in env.scope:
             env.scope[self.name].store(n, self.name)
@@ -287,44 +293,48 @@ class Type(Expr):
         emit.load(Reg(n), Reg.SP, env.scope.index(name), name)
             
 class PointerType(Type):
-    pass
+    def __init__(self, to):
+        self.to = to
+        self.size = 1
+    def analyze(self):
+        self.to.analyze()
         
 class Array(Type):
-    def __init__(self, of, size):
+    def __init__(self, of, length):
         self.of = of
-        self.size = of.size * size.value
+        self.length = length.value
     def analyze(self):
         self.of.analyze()
-        # self.frame = Frame(self, self.size*self.of.frame.size) #TODO
+        self.size = self.length * self.of.size
     def address(self, n, name):
         emit.inst4(Op.ADD, Reg(n), Reg.SP, env.scope.index(name))
     def compile(self, n, name):
         self.address(n, name)
 
-class StructType(Type):
+class StructType(Type, Frame):
     def __init__(self, name):
         self.name = name
     def analyze(self):
-        self.struct = env.structs[self.name]
-        self.size = self.struct.size
-        # self.frame = env.structs[self.name]
+        self.size, self.indices, self.data = env.structs[self.name].copy()
     def address(self, n, name):
         emit.inst4(Op.ADD, Reg(n), Reg.SP, env.scope.index(name))
     def compile(self, n, name):
         self.address(n, name)
 
-class Fields(Expr, UserList):
-    def declare(self):
-        for field in self:
-            field.type_spec.analyze()
-            # frame[field.id.name] = field.type_spec.frame.copy()
 
-class Struct(Expr):
-    def __init__(self, id_, fields=Fields()):
-        self.name, self.fields = id_, fields
+class Fields(Expr, UserList):
+    pass
+
+class Struct(Expr, Frame):
+    def __init__(self, name, fields=Fields()):
+        self.name, self.fields = name, fields
+        self.size = 0
+        self.indices = {}
+        self.data = {}        
     def declare(self):
-        self.fields.declare()
-        self.size = sum(field.type_spec.size for field in self.fields)
+        for field in self.fields:
+            field.type_spec.analyze()
+            field.declare(self)
         env.structs[self.name] = self
     def compile(self):
         pass
@@ -344,8 +354,7 @@ class Decl(Expr):
         self.compile(n)
         self.id.store(n)
     def compile(self, n):
-        env.scope[self.id.name] = self.type_spec
-        # self.declare(env.scope) #self.local.compile(n)
+        self.declare(env.scope) #self.local.compile(n)
 
 class Binary(Expr):    
     OPS = {'+' :Op.ADD,
@@ -378,21 +387,27 @@ class Binary(Expr):
         return f'{self.op[0].upper() + self.op[1:]}({self.left},{self.right})'
 
 class Compare(Binary):
-    OPS = {'==':'eq',
-           '!=':'ne',
-           '>': 'gt',
-           '<': 'lt',
-           '>=':'ge',
-           '<=':'le'}
-    INV = {'eq':Cond.JNE,
-           'ne':Cond.JEQ,
-           'gt':Cond.JLE,
-           'lt':Cond.JGE,
-           'ge':Cond.JLT,
-           'le':Cond.JGT}
+    OPS = {'==':Cond.JEQ,
+           '!=':Cond.JNE,
+           '>': Cond.JGT,
+           '<': Cond.JLT,
+           '>=':Cond.JGE,
+           '<=':Cond.JLE}
+    INV = {'==':Cond.JNE,
+           '!=':Cond.JEQ,
+           '>': Cond.JLE,
+           '<': Cond.JGE,
+           '>=':Cond.JLT,
+           '<=':Cond.JGT}
+    def __init__(self, op, left, right):
+        super().__init__(op, left, right)
+        self.inv = self.INV[op]
     def compare(self, n, label):
         emit.inst(Op.CMP, self.left.load(n), self.right.compile(n+1))
-        emit.jump(self.INV[self.op], f'.L{label}')
+        emit.jump(self.inv, f'.L{label}')
+    def compare_false(self, n, label):
+        emit.inst(Op.CMP, self.left.load(n), self.right.compile(n+1))
+        emit.jump(self.op, f'.L{label}')
     def compile(self, n):
         label = env.next_label()
         sublabel = env.next_label()
@@ -519,7 +534,23 @@ class While(Expr):
         env.end_loop()
     def __str__(self):
         return f'{self.__class__.__name__}({self.cond},{self.state})'
-        
+
+class Do(Expr):
+    def __init__(self, state, cond):
+        self.state, self.cond = state, cond
+    def analyze(self, n):        
+        self.state.analyze(1)
+        self.cond.analyze(1)
+    def compile(self, n):
+        env.begin_loop()
+        emit.labels.append(f'.L{env.loop.start()}')        
+        self.state.compile(n)
+        self.cond.compare_false(n, env.loop.start())
+        emit.labels.append(f'.L{env.loop.end()}')
+        env.end_loop()
+    def __str__(self):
+        return f'{self.__class__.__name__}({self.cond},{self.state})'    
+
 class For(While):
     def __init__(self, init, cond, step, state):
         super().__init__(cond, state)
@@ -562,24 +593,51 @@ class Return(Expr):
         emit.jump(Cond.JR, f'.L{env.func}')
     def __str__(self):
         return f"{self.__class__.__name__}({self.expr})"
-        
+'''
+ld B, [SP, 12]  ; i
+mul B, 4        ; size of cat
+add B, 0        ; .index(name)
+ld [B], A
+
+Assign(Dot(Script(Id('cats'), Const(0)),'name'),String('Cloud'))
+
+sub.compile(n)
+Reg(n) * post.get_type().size
+Reg(n) + index(cats)
+
+
+
+
+A = "Cloud"
+B = i
+B = B * sizeof(cat)
+B = B + index(cats)
+B = B + index(name)
+SP[B] = A
+
+'''       
 class Script(Expr):
     def __init__(self, id, sub):
         self.id, self.sub = id, sub
-    def frame(self):
-        return self.id.frame()
+    def get_type(self):
+        return self.id.get_type()
     def analyze(self, n):
         self.id.analyze(n)
         self.sub.analyze(n+1)
     def analyze_store(self, n):
         self.analyze(n+1)
+    def dot(self, n):
+        self.sub.compile(n)
     def address(self, n):
         self.id.compile(n)
-        self.sub.compile(n+1)
+        self.sub.load(n+1)
+        if type(self.id.get_type()) is Array and self.id.get_type().of.size > 1:
+            emit.inst(Op.MUL, Reg(n+1), self.id.get_type().of.size)
         emit.inst(Op.ADD, Reg(n), Reg(n+1))
+        return Reg(n)
     def store(self, n):
         self.address(n+1)
-        emit.store(Reg(n), Reg(n+1))
+        emit.store(Reg(n), Reg(n+1))     
     def compile(self, n):
         self.address(n)
         emit.load(Reg(n), Reg(n))
@@ -588,37 +646,38 @@ class Script(Expr):
 class Arrow(Expr): #TODO
     def __init__(self, postfix, attr):
         self.postfix, self.attr = postfix, attr
-    def frame(self):
-        return self.postfix.frame()[self.attr]
+    def get_type(self):
+        return self.postfix.get_type().to[self.attr]
     def analyze(self, n):
         self.postfix.analyze(n)
     def analyze_store(self, n):
         self.analyze(n+1)
     def address(self, n):
-        emit.inst4(Op.ADD, Reg(n), Reg.SP, self.postfix.frame().address)
-    def store(self, n):
-        self.postfix.compile(n+1)
-        emit.store(Reg(n+1), Reg.SP, self.postfix.frame()[self.attr].address)
-    def compile(self, n):
         self.postfix.compile(n)
-        emit.load(Reg(n), Reg.SP, self.postfix.frame().address + self.postfix.frame()[self.attr].address)
+        emit.inst(Op.ADD, Reg(n), self.postfix.get_type().to.index(self.attr))
+        return Reg(n)
+    def store(self, n):
+        emit.store(Reg(n), self.postfix.compile(n+1), self.postfix.get_type().to.index(self.attr), self.attr)
+    def compile(self, n):        
+        emit.load(Reg(n), self.postfix.compile(n), self.postfix.get_type().to.index(self.attr), self.attr)
         return Reg(n)
 
 class Dot(Expr): #TODO
     def __init__(self, postfix, attr):
         self.postfix, self.attr = postfix, attr
-    def frame(self):
-        return self.postfix.frame()[self.attr]
+    def get_type(self):
+        return self.postfix.get_type()[self.attr]
     def analyze(self, n):
         self.postfix.analyze(n)
-    # def analyze_store(self, n):
-    #     self.analyze(n+1)
+    def analyze_store(self, n):
+        self.analyze(n+1)
     def address(self, n):
-        emit.inst4(Op.ADD, Reg(n), Reg.SP, self.postfix.frame().address + self.postfix.frame()[self.attr].address)
+        emit.inst(Op.ADD, self.postfix.compile(n), self.postfix.get_type().index(self.attr))
+        return Reg(n)
     def store(self, n):
-        emit.store(Reg(n), Reg.SP, self.postfix.frame().address + self.postfix.frame()[self.attr].address)
+        emit.store(Reg(n), self.postfix.address(n+1), self.postfix.get_type().index(self.attr), self.attr)
     def compile(self, n):        
-        emit.load(Reg(n), Reg.SP, self.postfix.frame().address + self.postfix.frame()[self.attr].address)
+        emit.load(Reg(n), self.postfix.address(n), self.postfix.get_type().index(self.attr), self.attr)
         return Reg(n)
 
 class Global(Assign):
@@ -626,22 +685,6 @@ class Global(Assign):
         env.globals.add(self.left.name)
     def compile(self):
         emit.glob(self.left.name, self.right.compile(0))
-
-# class Fields(Expr, UserList):
-#     def declare(self, frame):
-#         for field in self:
-#             field.type_spec.analyze()
-#             # frame[field.id.name] = field.type_spec.frame.copy()
-
-# class Struct(Expr):
-#     def __init__(self, id_, fields=Fields()):
-#         self.name, self.fields = id_, fields
-#     def declare(self):
-#         frame = Frame(StructType(self.name), 0)
-#         self.fields.declare(frame)
-#         env.structs[self.name] = frame
-#     def compile(self):
-#         pass
 
 class Params(Expr, UserList):
     def analyze(self):
