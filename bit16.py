@@ -66,13 +66,13 @@ class Data:
         return self.str
 
 class Char(Data):
-    TRANS = {'\\0': '\0',
+    ESCAPED = {'\\0': '\0',
              '\\t': '\t',
              '\\n': '\n'}
     def __init__(self, char):
-        char = self.TRANS.get(char, char)
-        assert 0 <= ord(char) < 128
         self.str = char
+        char = self.ESCAPED.get(char, char)
+        assert 0 <= ord(char) < 128
         self._dec = 0,ord(char)
         self._bin = 'XXXXXXXXX',f'{ord(char):07b}'
 
