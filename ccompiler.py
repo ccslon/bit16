@@ -26,4 +26,4 @@ def ccompile(file_name, sflag=False, oflag=True):
                 out_file.write(' '.join(bit16))
 
 if __name__ == '__main__':
-    ccompile('tests\\structs.c', sflag=True, oflag=False)
+    ccompile('tests\\array.c', sflag=True, oflag=False)

@@ -20,25 +20,24 @@ class SetList(UserList):
             self.append(item)    
 
 class Frame(UserDict):
-    def __init__(self, type_spec, size=1):
-        if type(type_spec) is int:
-            print('lol')
-        self.type_spec = type_spec
-        self.address = 0
-        self.size = size
+    def __init__(self):          
+        self.size = 0
+        self.indices = {}
         super().__init__()
-    def __setitem__(self, name, frame):
-        frame.address = self.size
-        self.size += frame.size
-        return super().__setitem__(name, frame)
+    def __setitem__(self, name, type_spec):
+        self.indices[name] = self.size
+        self.size += type_spec.size
+        super().__setitem__(name, type_spec)
+    def index(self, name):
+        return self.indices[name]
 
 class Scope(Frame):
     def __init__(self, old=None):
         if old is None:            
-            self.size = 0
-            self.data = {}
+            super().__init__()
         else:            
             self.size = old.size
+            self.indices = old.indices.copy()  
             self.data = old.data.copy()
 
 class Env:
@@ -52,7 +51,7 @@ class Env:
         self.scope = Scope()
         self.stack = []
         self.structs = {}
-    def begin_func(self):        
+    def begin_func(self):
         self.func = None
         self.args = 0
         self.regs = 0
@@ -201,27 +200,22 @@ class Id(Expr):
         self.name = name
     def analyze(self, n):
         env.regs = max(env.regs, n)
-    def frame(self):
-        return env.scope[self.name]
     def address(self, n):        
         if self.name in env.scope:
-            local = env.scope[self.name]
-            local.type_spec.address(n, local.address, self.name)
+            env.scope[self.name].address(n, self.name)
             return self.name
         elif self.name in env.globals:
             emit.load_glob(Reg(n), self.name)
         return Reg(n)
     def store(self, n):
         if self.name in env.scope:
-            local = env.scope[self.name]
-            local.type_spec.store(n, local.address, self.name)
+            env.scope[self.name].store(n, self.name)
         elif self.name in env.globals:
             emit.load_glob(Reg(n+1), self.name)
             emit.store(Reg(n), Reg(n+1))
     def compile(self, n):
         if self.name in env.scope:
-            local = env.scope[self.name]
-            local.type_spec.compile(n, local.address, self.name)
+            env.scope[self.name].compile(n, self.name)
         elif self.name in env.globals:
             emit.load_glob(Reg(n), self.name)
             emit.load(Reg(n), Reg(n))
@@ -282,58 +276,76 @@ class Conditional(Expr):
 class Type(Expr):
     def __init__(self, type_):
         self.type = type_
+        self.size = 1
     def analyze(self):
-        self.frame = Frame(self)
-    def address(self, n, offset, name=None):
-        emit.inst4(Op.ADD, Reg(n), Reg.SP, offset)
-    def store(self, n, offset, name=None):
-        emit.store(Reg(n), Reg.SP, offset, name)
-    def compile(self, n, offset, name=None):
-        emit.load(Reg(n), Reg.SP, offset, name)
+        pass #self.frame = Frame(self)
+    def address(self, n, name):
+        emit.inst4(Op.ADD, Reg(n), Reg.SP, env.scope.index(name))
+    def store(self, n, name):
+        emit.store(Reg(n), Reg.SP, env.scope.index(name), name)
+    def compile(self, n, name):
+        emit.load(Reg(n), Reg.SP, env.scope.index(name), name)
             
 class PointerType(Type):
-    def analyze(self):
-        self.type.analyze()
-        self.frame = self.type.frame
+    pass
         
 class Array(Type):
     def __init__(self, of, size):
         self.of = of
-        self.size = size.value
+        self.size = of.size * size.value
     def analyze(self):
         self.of.analyze()
-        self.frame = Frame(self, self.size*self.of.frame.size) #TODO
-    def address(self, n, offset, name=None):
-        emit.inst4(Op.ADD, Reg(n), Reg.SP, offset)
-    def compile(self, n, offset, name=None):
-        self.address(n, offset)
+        # self.frame = Frame(self, self.size*self.of.frame.size) #TODO
+    def address(self, n, name):
+        emit.inst4(Op.ADD, Reg(n), Reg.SP, env.scope.index(name))
+    def compile(self, n, name):
+        self.address(n, name)
 
 class StructType(Type):
     def __init__(self, name):
         self.name = name
     def analyze(self):
-        self.frame = env.structs[self.name]
-    def address(self, n, offset, name=None):
-        emit.inst4(Op.ADD, Reg(n), Reg.SP, offset)
-    def compile(self, n, offset, name=None):
-        self.address(n, offset)
-        
+        self.struct = env.structs[self.name]
+        self.size = self.struct.size
+        # self.frame = env.structs[self.name]
+    def address(self, n, name):
+        emit.inst4(Op.ADD, Reg(n), Reg.SP, env.scope.index(name))
+    def compile(self, n, name):
+        self.address(n, name)
+
+class Fields(Expr, UserList):
+    def declare(self):
+        for field in self:
+            field.type_spec.analyze()
+            # frame[field.id.name] = field.type_spec.frame.copy()
+
+class Struct(Expr):
+    def __init__(self, id_, fields=Fields()):
+        self.name, self.fields = id_, fields
+    def declare(self):
+        self.fields.declare()
+        self.size = sum(field.type_spec.size for field in self.fields)
+        env.structs[self.name] = self
+    def compile(self):
+        pass
+
 class Decl(Expr):
     def __init__(self, type_spec, id_):
         self.type_spec, self.id = type_spec, id_
     def declare(self, frame):
-        frame[self.id.name] = self.type_spec.frame
+        frame[self.id.name] = self.type_spec
     def analyze_store(self, n): #TODO should be analyze_store?
         self.analyze(n)
         self.id.analyze(n)
     def analyze(self, n):
         self.type_spec.analyze()
-        env.space += self.type_spec.frame.size
+        env.space += self.type_spec.size
     def store(self, n):
         self.compile(n)
         self.id.store(n)
     def compile(self, n):
-        self.declare(env.scope) #self.local.compile(n)
+        env.scope[self.id.name] = self.type_spec
+        # self.declare(env.scope) #self.local.compile(n)
 
 class Binary(Expr):    
     OPS = {'+' :Op.ADD,
@@ -615,21 +627,21 @@ class Global(Assign):
     def compile(self):
         emit.glob(self.left.name, self.right.compile(0))
 
-class Fields(Expr, UserList):
-    def declare(self, frame):
-        for field in self:
-            field.type_spec.analyze()
-            frame[field.id.name] = field.type_spec.frame
+# class Fields(Expr, UserList):
+#     def declare(self, frame):
+#         for field in self:
+#             field.type_spec.analyze()
+#             # frame[field.id.name] = field.type_spec.frame.copy()
 
-class Struct(Expr):
-    def __init__(self, id_, fields=Fields()):
-        self.name, self.fields = id_, fields
-    def declare(self):
-        frame = Frame(StructType(self.name), 0)
-        self.fields.declare(frame)
-        env.structs[self.name] = frame
-    def compile(self):
-        pass
+# class Struct(Expr):
+#     def __init__(self, id_, fields=Fields()):
+#         self.name, self.fields = id_, fields
+#     def declare(self):
+#         frame = Frame(StructType(self.name), 0)
+#         self.fields.declare(frame)
+#         env.structs[self.name] = frame
+#     def compile(self):
+#         pass
 
 class Params(Expr, UserList):
     def analyze(self):
@@ -638,7 +650,7 @@ class Params(Expr, UserList):
     def compile(self):
         for i, param in enumerate(self):
             param.compile(0)
-            emit.store(Reg(i), Reg.SP, env.scope[param.id.name].address)
+            emit.store(Reg(i), Reg.SP, env.scope.index(param.id.name))
 
 class Block(Expr, UserList):
     def analyze(self, n):

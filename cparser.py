@@ -577,7 +577,7 @@ class Parser:
     
     def parse(self, text):
         self.tokens = lex(text)
-        #for i, (t, v) in enumerate(self.tokens): print(i, t, v)
+        # for i, (t, v) in enumerate(self.tokens): print(i, t, v)
         self.index = 0
         program = self.program()
         self.expect('end')
