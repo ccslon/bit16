@@ -171,11 +171,6 @@ class Const(Expr):
             emit.imm(Reg(n), self.value)
         return Reg(n)
     def compile(self, n):
-        # if -32 <= self.value < 64:
-        #     return self.value
-        # else:
-        #     emit.imm(Reg(n), self.value)
-        # return Reg(n)
         return self.value
 
 class Char(Expr):
@@ -225,9 +220,7 @@ class Id(Expr):
         elif self.name in env.globals:
             emit.load_glob(Reg(n), self.name)
             emit.load(Reg(n), Reg(n))
-        return Reg(n)
-    def __str__(self):
-        return f"{self.__class__.__name__}('{self.name}')"    
+        return Reg(n)   
 
 class Address(Expr):
     def __init__(self, unary):
@@ -239,8 +232,6 @@ class Address(Expr):
     def compile(self, n):
         self.unary.address(n)
         return Reg(n)
-    def __str__(self):
-        return f'{self.__class__.__name__}({self.unary})'
 
 class Pointer(Expr):
     def __init__(self, to):
@@ -254,22 +245,17 @@ class Pointer(Expr):
         self.to.compile(n)
         emit.load(Reg(n), Reg(n))
         return Reg(n)
-    def __str__(self):
-        return f'{self.__class__.__name__}({self.to})'
 
 class Unary(Expr):
-    OPS = {'-':Op.NEG,
-           '!':Op.NOT, #TODO
+    OP = {'-':Op.NEG,
            '~':Op.NOT}
     def __init__(self, sign, primary):
-        self.sign, self.primary = self.OPS[sign], primary
+        self.sign, self.primary = self.OP[sign], primary
     def analyze(self, n):
         self.primary.analyze(n)
     def compile(self, n):
         emit.inst(self.sign, self.primary.compile(n), Reg.A)
         return Reg(n)
-    def __str__(self):
-        return f'{self.sign[0].upper() + self.sign[1:]}({self.primary})'
 
 class Cast(Expr):
     def __init__(self, target, cast):
@@ -344,7 +330,7 @@ class Decl(Expr):
         self.type_spec, self.id = type_spec, id_
     def declare(self, frame):
         frame[self.id.name] = self.type_spec
-    def analyze_store(self, n): #TODO should be analyze_store?
+    def analyze_store(self, n):
         self.analyze(n)
         self.id.analyze(n)
     def analyze(self, n):
@@ -354,45 +340,43 @@ class Decl(Expr):
         self.compile(n)
         self.id.store(n)
     def compile(self, n):
-        self.declare(env.scope) #self.local.compile(n)
+        self.declare(env.scope)
 
 class Binary(Expr):    
-    OPS = {'+' :Op.ADD,
-           '++':Op.ADD,
-           '+=':Op.ADD,
-           '-' :Op.SUB,
-           '--':Op.SUB,
-           '-=':Op.SUB,
-           '*' :Op.MUL,
-           '*=':Op.MUL,
-           '<<':Op.SHL,
-           '<<=':Op.SHL,
-           '>>':Op.SHR,
-           '>>=':Op.SHR,
-           '^' :Op.XOR,
-           '^=':Op.XOR,
-           '|' :Op.OR,
-           '|=':Op.OR,
-           '&' :Op.AND,
-           '&=':Op.AND,}
+    OP = {'+' :Op.ADD,
+          '++':Op.ADD,
+          '+=':Op.ADD,
+          '-' :Op.SUB,
+          '--':Op.SUB,
+          '-=':Op.SUB,
+          '*' :Op.MUL,
+          '*=':Op.MUL,
+          '<<':Op.SHL,
+          '<<=':Op.SHL,
+          '>>':Op.SHR,
+          '>>=':Op.SHR,
+          '^' :Op.XOR,
+          '^=':Op.XOR,
+          '|' :Op.OR,
+          '|=':Op.OR,
+          '&' :Op.AND,
+          '&=':Op.AND,}
     def __init__(self, op, left, right):
-        self.op, self.left, self.right = self.OPS[op], left, right
+        self.op, self.left, self.right = self.OP[op], left, right
     def analyze(self, n):
         self.left.analyze(n)
         self.right.analyze_right(n+1)
     def compile(self, n):
         emit.inst(self.op, self.left.load(n), self.right.compile(n+1))
         return Reg(n)
-    def __str__(self):
-        return f'{self.op[0].upper() + self.op[1:]}({self.left},{self.right})'
 
 class Compare(Binary):
-    OPS = {'==':Cond.JEQ,
-           '!=':Cond.JNE,
-           '>': Cond.JGT,
-           '<': Cond.JLT,
-           '>=':Cond.JGE,
-           '<=':Cond.JLE}
+    OP = {'==':Cond.JEQ,
+          '!=':Cond.JNE,
+          '>': Cond.JGT,
+          '<': Cond.JLT,
+          '>=':Cond.JGE,
+          '<=':Cond.JLE}
     INV = {'==':Cond.JNE,
            '!=':Cond.JEQ,
            '>': Cond.JLE,
@@ -412,7 +396,7 @@ class Compare(Binary):
         label = env.next_label()
         sublabel = env.next_label()
         emit.inst(Op.CMP, self.left.load(n), self.right.compile(n+1))
-        emit.jump(self.INV[self.op], f'.L{sublabel}')
+        emit.jump(self.inv, f'.L{sublabel}')
         emit.inst(Op.MOV, Reg(n), 1)
         emit.jump(Cond.JR, f'.L{label}')
         emit.labels.append(f'.L{sublabel}')
@@ -420,10 +404,10 @@ class Compare(Binary):
         emit.labels.append(f'.L{label}')        
 
 class Logic(Binary):
-    OPS = {'and':Op.AND,
-           'or':Op.OR}
+    OP = {'&&':Op.AND,
+          '||':Op.OR}
     def __init__(self, op, left, right):
-        self.op, self.left, self.right = self.OPS[op], left, right
+        self.op, self.left, self.right = self.OP[op], left, right
     def compare(self, n, label):
         if self.op == Op.AND:
             emit.inst(Op.CMP, self.left.compile(n), 0)
@@ -450,8 +434,6 @@ class Assign(Expr):
         self.right.load(n)
         self.left.store(n)
         return Reg(n)
-    def __str__(self):
-        return f'{self.__class__.__name__}({self.left},{self.right})'
 
 class Args(Expr, UserList):
     def analyze(self, n):        
@@ -462,9 +444,7 @@ class Args(Expr, UserList):
             arg.load(i)
         if n > 0:
             for i, arg in enumerate(self):
-                emit.inst(Op.MOV, Reg(i), Reg(n+i))
-    def __str__(self):
-        return f'{self.__class__.__name__}({",".join(map(str,self))})'  
+                emit.inst(Op.MOV, Reg(i), Reg(n+i)) 
 
 class Call(Expr):
     def __init__(self, id, args):
@@ -480,8 +460,6 @@ class Call(Expr):
         if n > 0:
             emit.inst(Op.MOV, Reg(n), Reg.A)
         return Reg(n)
-    def __str__(self):
-        return f'{self.__class__.__name__}({self.id},{self.args})'
     
 class If(Expr):
     def __init__(self, cond, state):
@@ -514,9 +492,7 @@ class If(Expr):
                 emit.jump(Cond.JR, f'.L{root}')
                 env.if_jump_end = True
             emit.labels.append(f'.L{sublabel}')
-            self.false.branch(n, root)     
-    def __str__(self):
-        return f'{self.__class__.__name__}({self.cond},{self.true},{self.false})'
+            self.false.branch(n, root)
 
 class While(Expr):
     def __init__(self, cond, state):
@@ -532,8 +508,6 @@ class While(Expr):
         emit.jump(Cond.JR, f'.L{env.loop.start()}')
         emit.labels.append(f'.L{env.loop.end()}')
         env.end_loop()
-    def __str__(self):
-        return f'{self.__class__.__name__}({self.cond},{self.state})'
 
 class Do(Expr):
     def __init__(self, state, cond):
@@ -548,8 +522,6 @@ class Do(Expr):
         self.cond.compare_false(n, env.loop.start())
         emit.labels.append(f'.L{env.loop.end()}')
         env.end_loop()
-    def __str__(self):
-        return f'{self.__class__.__name__}({self.cond},{self.state})'    
 
 class For(While):
     def __init__(self, init, cond, step, state):
@@ -569,8 +541,6 @@ class For(While):
         emit.jump(Cond.JR, f'.L{env.loop.start()}')
         emit.labels.append(f'.L{env.loop.end()}')
         env.end_loop()
-    def __str__(self):
-        return f'{self.__class__.__name__}({self.init},{self.cond},{self.step},{self.state})'
 
 class Continue(Expr):
     def compile(self, n):
@@ -591,31 +561,7 @@ class Return(Expr):
         if self.expr:
             self.expr.load(n)
         emit.jump(Cond.JR, f'.L{env.func}')
-    def __str__(self):
-        return f"{self.__class__.__name__}({self.expr})"
-'''
-ld B, [SP, 12]  ; i
-mul B, 4        ; size of cat
-add B, 0        ; .index(name)
-ld [B], A
-
-Assign(Dot(Script(Id('cats'), Const(0)),'name'),String('Cloud'))
-
-sub.compile(n)
-Reg(n) * post.get_type().size
-Reg(n) + index(cats)
-
-
-
-
-A = "Cloud"
-B = i
-B = B * sizeof(cat)
-B = B + index(cats)
-B = B + index(name)
-SP[B] = A
-
-'''       
+        
 class Script(Expr):
     def __init__(self, id, sub):
         self.id, self.sub = id, sub
@@ -643,7 +589,7 @@ class Script(Expr):
         emit.load(Reg(n), Reg(n))
         return Reg(n)
 
-class Arrow(Expr): #TODO
+class Arrow(Expr):
     def __init__(self, postfix, attr):
         self.postfix, self.attr = postfix, attr
     def get_type(self):
@@ -662,7 +608,7 @@ class Arrow(Expr): #TODO
         emit.load(Reg(n), self.postfix.compile(n), self.postfix.get_type().to.index(self.attr), self.attr)
         return Reg(n)
 
-class Dot(Expr): #TODO
+class Dot(Expr):
     def __init__(self, postfix, attr):
         self.postfix, self.attr = postfix, attr
     def get_type(self):
@@ -704,9 +650,6 @@ class Block(Expr, UserList):
         for statement in self:
             statement.compile(env.args)
         env.end_scope()
-    def __str__(self):
-        nl = ",\n"
-        return f'{self.__class__.__name__}(\n{nl.join(map(str,self))}\n)'
 
 class Func(Expr):
     def __init__(self, type_spec, id_, params, block):
@@ -721,7 +664,7 @@ class Func(Expr):
         if env.returns:
             env.func = env.next_label()
         emit.labels.append(self.id.name)
-        #print(env.args, env.regs)
+        # print(env.args, env.regs)
         push = list(map(Reg, range(max(len(self.params), env.returns), env.args + env.regs)))
         emit.push(env.calls, *push)
         if env.space:
@@ -738,8 +681,6 @@ class Func(Expr):
         if not env.calls:
             emit.ret()
         env.end_scope()
-    def __str__(self):
-        return f'{self.__class__.__name__}({self.id},{self.params},{self.block})'
 
 class Main(Expr):
     def __init__(self, block):
@@ -767,6 +708,3 @@ class Program(Expr, UserList):
         for decl in self:
             decl.compile()
         return '\n'.join(emit.asm)
-    def __str__(self):
-        nl = ",\n"
-        return f'{self.__class__.__name__}(\n{nl.join(map(str,self))}\n)'
