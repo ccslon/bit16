@@ -1,13 +1,5 @@
-char* OUT = 0x7fff;
-void put(char c) {
-    *OUT = c;
-}
-void print(char* str) {
-    while (*str != '\0') {
-        put(*str);
-        str++;
-    }
-}
+#include <stdio.h>
+
 void main() {
-    print("Hello world!");
+    puts("Hello world!\n");
 }
