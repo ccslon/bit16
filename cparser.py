@@ -12,7 +12,7 @@ from cnodes import Do, Decl, Array, StructType, PointerType, Type, Conditional, 
 TODO
 [ ] Type checking
 [ ] '.' vs '->' checking
-[ ] Allocating arrays
+[X] Allocating arrays
 '''
 
 TOKENS = {'const': r'(0x[0-9a-f]+)|(0b[01]+)|(\d+)|(NULL)',
@@ -34,6 +34,7 @@ TOKENS = {'const': r'(0x[0-9a-f]+)|(0b[01]+)|(\d+)|(NULL)',
           'return': r'return',
           'continue': r'continue',
           'break': r'break',
+          'include': r'include',
           'id': r'\w(\w|\d)*',
           'semi': r';',
           'colon': r':',
@@ -69,6 +70,7 @@ TOKENS = {'const': r'(0x[0-9a-f]+)|(0b[01]+)|(\d+)|(NULL)',
           'ne': r'!=',
           'gt': r'>',
           'lt': r'<',
+          'hash': r'#',
           'tilde': r'~',
           'lparen': r'\(',
           'rparen': r'\)',
@@ -154,8 +156,11 @@ class Parser:
             op = next(self)
             unary = self.unary()
             return Assign(unary, Binary(op, unary, Const('1')))
-        elif self.peek('+','-','~','!'):
+        elif self.peek('+','-','~',):
             return Unary(next(self), self.unary())
+        elif self.accept('!'):
+            unary = Call(Id('not'), Args([self.unary()]))
+            self.include('stdlib')
         elif self.accept('*'):
             return Pointer(self.unary())
         elif self.accept('&'):
@@ -169,7 +174,7 @@ class Parser:
         else:
             return self.postfix()
             
-    def cast(self):
+    def cast(self): #TODO
         '''
         CAST -> '(' TYPE_SPEC ')' CAST
                |UNARY
@@ -182,6 +187,9 @@ class Parser:
             return self.unary()
     
     def type_spec(self):
+        '''
+        TYPE_SPEC -> (type|(('struct'|'union') id)) {'*'}
+        '''
         if self.peek('type'):
             type_spec = Type(next(self))
         elif self.accept('struct','union'):
@@ -194,11 +202,15 @@ class Parser:
     
     def mul(self):
         '''
-        mul -> CAST {('*'|'/'|'%') CAST}
+        MUL -> UNARY {('*'|'/'|'%') UNARY}
         '''
         mul = self.unary()
         while self.peek('*','/','%'):
-            mul = Binary(next(self), mul, self.unary())
+            if self.peek('/','%'):
+                mul = Call(Id('div' if next(self) == '/' else 'mod'), Args([mul, self.unary()]))
+                self.include('stdlib')
+            else:
+                mul = Binary(next(self), mul, self.unary())
         return mul
     
     def add(self):
@@ -283,7 +295,7 @@ class Parser:
             logic_or = Logic(next(self), logic_or, self.logic_and())
         return logic_or
     
-    def cond(self):
+    def cond(self): #TODO
         '''
         COND -> LOGIC_OR ['?' EXPR ':' COND]
         '''
@@ -379,8 +391,8 @@ class Parser:
                 type_spec = Array(type_spec, Const(self.expect('const')))
                 self.expect(']')
             statement = Decl(type_spec, iden)
-            # if self.accept('='):
-            #     self.const() #TODO make struct specific 
+            if self.accept('='):
+                statement = Assign(statement, self.const()) #TODO make struct specific 
             self.expect(';')
             
         elif self.accept('union'):
@@ -497,7 +509,7 @@ class Parser:
  
     def program(self):
         program = Program()
-        while self.peek('type','struct','union'):
+        while self.peek('type','struct','union','#'):
             if self.peek('type'):
                 type_spec = next(self),
                 while self.accept('*'):
@@ -576,12 +588,36 @@ class Parser:
                 elif self.accept('{'):
                     while not self.accept('}'):
                         self.decl()
+            elif self.accept('#'):
+                if self.accept('include'):
+                    if self.accept('<'):
+                        lib = self.expect('id')
+                        self.expect('.')
+                        assert self.expect('id') == 'h'
+                        self.expect('>')
+                        self.include(lib)
+                    elif self.peek('string'):
+                        self.include_h(next(self))
+                    else:
+                        self.error()                        
         return program
     
+    def include_h(self, h):
+        if h not in self.included:
+            with open(h) as h_file:
+                self.tokens[-1:] = lex(h_file.read())
+            self.included.add(h)
+    
+    def include(self, lib):
+        if lib not in self.included:
+            with open(f'std\\{lib}.h') as lib_file:
+                self.tokens[-1:] = lex(lib_file.read())
+            self.included.add(lib)
     
     def parse(self, text):
+        self.included = set()
         self.tokens = lex(text)
-        for i, (t, v) in enumerate(self.tokens): print(i, t, v)
+        # for i, (t, v) in enumerate(self.tokens): print(i, t, v)
         self.index = 0
         program = self.program()
         self.expect('end')
@@ -594,7 +630,7 @@ class Parser:
         
     def peek(self, *symbols):
         type_, value = self.tokens[self.index]
-        return type_ in symbols or value in symbols
+        return type_ in symbols or (not value.isalnum() and value in symbols)
     
     def accept(self, *symbols):
         if self.peek(*symbols):
