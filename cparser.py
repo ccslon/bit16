@@ -6,7 +6,7 @@ Created on Mon Jul  3 19:47:39 2023
 """
 
 import re
-from cnodes import Const, Do, Decl, Array, StructType, PointerType, Type, Conditional, Cast, Arrow, Id, Num, Unary, Binary, Compare, Call, Args, Func, Assign, If, Block, Program, Return, While, For, Break, Continue, Script, Struct, Params, Fields, Logic, Dot, Pointer, Address, Main, Global, Char, String
+from cnodes import Const, Do, Decl, Array, Struct, Pointer, Type, Conditional, Cast, Arrow, Id, Num, Unary, Binary, Compare, Call, Args, FuncDecl, Assign, If, Block, Program, Return, While, For, Break, Continue, Script, StructDecl, Params, Fields, Logic, Dot, Deref, AddrOf, Main, Global, Char, String
 
 '''
 TODO
@@ -15,80 +15,112 @@ TODO
 [X] Allocating arrays
 '''
 
-TOKENS = {'num': r'(0x[0-9a-f]+)|(0b[01]+)|(\d+)|(NULL)',
-          'char': r"'\\?[^']'",
-          'string': r'"[^"]*"',
-          'const': r'const',
-          'type' : r'(void)|(int)|(char)',
-          'sign': r'(signed)|(unsigned)',
-          'struct': r'struct',
-          'union': r'union',
-          'enum': r'enum',
-          'if': r'if',
-          'else': r'else',
-          'while': r'while',
-          'for': r'for',
-          'do': r'do',
-          'case': r'case',
-          'default': r'default',
-          'switch': r'switch',
-          'return': r'return',
-          'continue': r'continue',
-          'break': r'break',
-          'include': r'include',
-          'id': r'\w(\w|\d)*',
-          'semi': r';',
-          'colon': r':',
-          'arrow': r'->',
-          'dplus': r'\+\+',
-          'ddash': r'--',
-          'pluseq': r'\+=',
-          'dasheq': r'-=',
-          'stareq': r'\*=',
-          'slasheq': r'/=',
-          'percenteq': r'%=',
-          'lshifteq': r'<<=',
-          'rshifteq': r'>>=',
-          'careteq': r'\^=',
-          'pipeeq': r'\|=',
-          'ampeq': r'&=',
-          'plus': r'\+',
-          'dash':r'-',
-          'star': r'\*',
-          'slash': r'/',
-          'percent': r'%',
-          'lshift': r'<<',
-          'rshift': r'>>',
-          'caret': '\^',
-          'dpipe': r'\|\|',
-          'damp': r'\&\&',
-          'pipe': r'\|',
-          'amp': r'\&',
-          'deq': r'==',
-          'ge': r'>=',
-          'le': r'<=',
-          'eq': r'=',
-          'ne': r'!=',
-          'gt': r'>',
-          'lt': r'<',
-          'hash': r'#',
-          'tilde': r'~',
-          'lparen': r'\(',
-          'rparen': r'\)',
-          'lbrack': r'{',
-          'rbrack': r'}',
-          'lbrace': r'\[',
-          'rbrace': r'\]',
-          'comma': r',',
-          'dot': r'\.',
-          'error': r'\S+'}
+class MetaLexer(type):
+    def __init__( self, name, bases, attrs ):
+        self.action = {}
+        regex = []        
+        flag = attrs['flag'] if 'flag' in attrs else 0 #re.NOFLAG
+        for attr in attrs:
+            if attr.startswith('RE_'):
+                name = attr[3:]
+                if callable(attrs[attr]):
+                    pattern = attrs[attr].__doc__
+                    self.action[name] = attrs[attr]
+                else:
+                    pattern = attrs[attr]
+                    self.action[name] = lambda self, match: match
+                regex.append((name, pattern))
+        self.regex = re.compile('|'.join(rf'(?P<{name}>{pattern})' for name, pattern in regex), flag)
 
-RE = re.compile('|'.join(rf'(?P<{token}>{pattern})' for token, pattern in TOKENS.items()), re.M)
+class LexerBase(metaclass=MetaLexer):
+    def lex(self, text):
+        return [(match.lastgroup, result, self.line_no) for match in self.regex.finditer(text) if (result := self.action[match.lastgroup](self, match.group())) is not None] + [('end','',self.line_no)]
 
-def lex(text):    
-    return [(match.lastgroup, match.group()) for match in RE.finditer(text)] + [('end', '')]
+class CLexer(LexerBase):    
+    def __init__(self):
+        self.line_no = 1
+    
+    RE_num = r'(0x[0-9a-f]+)|(0b[01]+)|(\d+)|(NULL)'
+    RE_char = r"'\\?[^']'"
+    RE_string = r'"[^"]*"'
+    RE_include = r'include'
+    RE_const = r'const'
+    RE_type = r'(void)|(int)|(char)'
+    RE_union = r'union'
+    RE_enum = r'enum'
+    RE_if = r'if'
+    RE_else = r'else'
+    RE_while = r'while'
+    RE_for = r'for'
+    RE_do = r'do'
+    RE_switch = r'switch'
+    RE_case = r'case'
+    RE_default = r'default'
+    RE_continue = r'continue'
+    RE_break = r'break'
+    RE_return = r'return'
+    RE_id = r'\w(\w|\d)*'
+    def RE_comment(self, match):
+        r'/\*(?:(?!/\*).|\n)*\*/'
+        self.line_no += match.count('\n')
+    def RE_line_comment(self, match):
+        r'//[^\n]*\n'
+        self.line_no += 1
+    def RE_new_line(self, match):
+        r'\n'
+        self.line_no += 1
+    RE_semi = r';'
+    RE_comma = r','
+    RE_dot = r'\.'    
+    RE_lparen = r'\('
+    RE_rparen = r'\)'
+    RE_lbrack = r'{'
+    RE_rbrack = r'}'
+    RE_lbrace = r'\['
+    RE_rbrace = r'\]'
+    RE_hash = r'#'
+    RE_colon = r':'
+    RE_arrow = r'->'
+    RE_dplus = r'\+\+'
+    RE_ddash = r'--'
+    RE_pluseq = r'\+='
+    RE_dasheq = r'-='
+    RE_stareq = r'\*='
+    RE_slasheq = r'/='
+    RE_percenteq = r'%='
+    RE_lshifteq = r'<<='
+    RE_rshifteq = r'>>='
+    RE_careteq = r'\^='
+    RE_pipeeq = r'\|='
+    RE_ampeq = r'&='
+    RE_plus =  r'\+'
+    RE_dash = r'-'
+    RE_star = r'\*'
+    RE_slash = r'/'
+    RE_percent = r'%'
+    RE_lshift = r'<<'
+    RE_rshift = r'>>'
+    RE_caret = r'\^'
+    RE_dpipe = r'\|\|'
+    RE_damp = '\&\&'
+    RE_pip = r'\|'
+    RE_amp = r'\&'
+    RE_deq = r'=='
+    RE_ne = r'!='
+    RE_ge = r'>='
+    RE_le = r'<='
+    RE_eq = r'='
+    RE_gt = r'>'
+    RE_lt = r'<'    
+    RE_exp = r'!'
+    RE_tilde = r'~'
+    def RE_error(self, match):
+        r'\S'
+        raise SyntaxError(f'line {self.line_no}: Invalid symbol "{match}"')
 
-class Parser:    
+lexer = CLexer()
+
+class CParser:    
     def primary(self):
         '''
         PRIMARY -> id|Num|char|string|'(' EXPR ')'
@@ -105,7 +137,7 @@ class Parser:
             primary = self.expr()
             self.expect(')')
         else:
-            self.error()
+            self.error('PRIMARY EXPRESSION')
         return primary
     
     def postfix(self):
@@ -117,17 +149,11 @@ class Parser:
             assert type(postfix) is Id
             while self.peek('[','(','.','->','++','--'):
                 if self.accept('['):
-                    if not self.accept(']'):
-                        postfix = Script(postfix, self.expr())
-                        self.expect(']')
-                    else:
-                        postfix = Script(postfix, None)
+                    postfix = Script(postfix, self.expr())
+                    self.expect(']')
                 elif self.accept('('):
-                    if not self.accept(')'):
-                        postfix = Call(postfix, self.args())
-                        self.expect(')')
-                    else:
-                        postfix = Call(postfix, Args())
+                    postfix = Call(postfix, self.args())
+                    self.expect(')')
                 elif self.accept('.'):
                     postfix = Dot(postfix, self.expect('id'))
                 elif self.accept('->'):
@@ -140,16 +166,18 @@ class Parser:
         '''
         ARGS -> ASSIGN {',' ASSIGN}
         '''
-        args = Args([self.assign()])
-        while self.accept(','):
+        args = Args()
+        if not self.peek(')'):
             args.append(self.assign())
+            while self.accept(','):
+                args.append(self.assign())
         return args
     
     def unary(self):
         '''
         UNARY -> POSTFIX
                 |('++'|'--') UNARY
-                |('+'|'-'|'~'|'!'|'*'|'&') CAST
+                |('-'|'~'|'!'|'*'|'&') CAST
                 |'sizeof' UNARY
                 |'sizeof' '(' TYPE_SPEC ')'
         '''
@@ -157,16 +185,16 @@ class Parser:
             op = next(self)
             unary = self.unary()
             return Assign(unary, Binary(op, unary, Num('1')))
-        elif self.peek('+','-','~',):
+        elif self.peek('-','~',):
             return Unary(next(self), self.unary())
         elif self.accept('!'):
             unary = Call(Id('not'), Args([self.unary()]))
             self.include('stdlib')
         elif self.accept('*'):
-            return Pointer(self.unary())
+            return Deref(self.unary())
         elif self.accept('&'):
-            return Address(self.unary())
-        elif self.accept('sizeof'):
+            return AddrOf(self.unary())
+        elif self.accept('sizeof'): #TODO
             if self.accept('('):
                 self.type_spec()
                 self.expect(')')
@@ -194,11 +222,11 @@ class Parser:
         if self.peek('type'):
             type_spec = Type(next(self))
         elif self.accept('struct','union'):
-            type_spec = StructType(self.expect('id'))
+            type_spec = Struct(self.expect('id'))
         else:
-            self.error()
+            self.error('TYPE SPECIFIER')
         while self.accept('*'):
-            type_spec = PointerType(type_spec)
+            type_spec = Pointer(type_spec)
         return type_spec
     
     def type_qual(self):
@@ -304,7 +332,7 @@ class Parser:
             logic_or = Logic(next(self), logic_or, self.logic_and())
         return logic_or
     
-    def cond(self): #TODO
+    def cond(self):
         '''
         COND -> LOGIC_OR ['?' EXPR ':' COND]
         '''
@@ -322,10 +350,10 @@ class Parser:
         '''
         assign = self.cond()
         if self.accept('='):
-            assert isinstance(assign, (Id, Script, Dot, Pointer, Arrow))
+            assert isinstance(assign, (Id, Script, Dot, Deref, Arrow))
             assign = Assign(assign, self.assign())
         elif self.peek('+=','-=','*=','/=','%=','<<=','>>=','^=','|=','&='):
-            assert isinstance(assign, (Id, Script, Dot, Pointer, Arrow))
+            assert isinstance(assign, (Id, Script, Dot, Deref, Arrow))
             assign = Assign(assign, Binary(next(self), assign, self.assign()))
         return assign
     
@@ -494,8 +522,8 @@ class Parser:
         while self.peek('type','struct','union','const'):
             type_qual = self.type_qual()
             if self.accept('{'):
-                assert type(type_qual) not in [PointerType, Const]
-                program.append(Struct(type_qual.name, self.fields()))
+                assert type(type_qual) not in [Pointer, Const]
+                program.append(StructDecl(type_qual.name, self.fields()))
                 self.expect('}')
                 self.expect(';')
             else:
@@ -509,7 +537,7 @@ class Parser:
                     if iden.name == 'main':
                         program.insert(0, Main(block))
                     else:
-                        program.append(Func(type_qual, iden, params, block))
+                        program.append(FuncDecl(type_qual, iden, params, block))
                 else:
                     while self.accept('['):
                         type_qual = Array(type_qual, Num(self.expect('num')))
@@ -524,18 +552,18 @@ class Parser:
     def include_h(self, h):
         if h not in self.included:
             with open(h) as h_file:
-                self.tokens[-1:] = lex(h_file.read())
+                self.tokens[-1:] = lexer.lex(h_file.read())
             self.included.add(h)
     
     def include(self, lib):
         if lib not in self.included:
             with open(f'std\\{lib}.h') as lib_file:
-                self.tokens[-1:] = lex(lib_file.read())
+                self.tokens[-1:] = lexer.lex(lib_file.read())
             self.included.add(lib)
     
     def parse(self, text):
         self.included = set()
-        self.tokens = lex(text)
+        self.tokens = lexer.lex(text)
         # for i, (t, v) in enumerate(self.tokens): print(i, t, v)
         self.index = 0
         program = self.program()
@@ -543,28 +571,28 @@ class Parser:
         return program
         
     def __next__(self):
-        _, value = self.tokens[self.index]
+        _, value, _ = self.tokens[self.index]
         self.index += 1
         return value
         
     def peek(self, *symbols):
-        type_, value = self.tokens[self.index]
+        type_, value, _ = self.tokens[self.index]
         return type_ in symbols or (not value.isalnum() and value in symbols)
     
     def accept(self, *symbols):
         if self.peek(*symbols):
             return next(self)
     
-    def expect(self, *symbols):
-        if self.peek(*symbols):
+    def expect(self, symbol):
+        if self.peek(symbol):
             return next(self)
-        self.error()
+        self.error(symbol)
         
-    def error(self):
-        etype, evalue = self.tokens[self.index]
-        raise SyntaxError(f'Unexpected {etype} token "{evalue}" at {self.index}')
+    def error(self, expected=None):
+        etype, evalue, eline_no = self.tokens[self.index]
+        raise SyntaxError(f'Line {eline_no}: Unexpected {etype} token "{evalue}".'+ (f' Expected "{expected}"' if expected is not None else ''))
         
-parser = Parser()
+parser = CParser()
 
 def parse(text):
     return parser.parse(text)
