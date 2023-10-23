@@ -6,7 +6,7 @@ Created on Fri Aug 25 10:49:03 2023
 """
 
 import re
-from bit16 import Reg, Op, Cond, Data, Char, Jump, Inst1, Inst2, Inst3, Inst4, Load0, Load1, Imm
+from bit16 import Reg, Op, Cond, Data, Char, Jump, Inst1, Inst2, Inst3, Inst4, Load0, Load1, Imm, ESCAPE
 
 TOKENS = {'const': r'(-?\d+)|(x[0-9a-f]+)|(b[01]+)',
           'string': r'"[^"]*"',
@@ -20,6 +20,7 @@ TOKENS = {'const': r'(-?\d+)|(x[0-9a-f]+)|(b[01]+)',
           'call': r'call',
           'ret': r'ret',
           'halt': r'halt',
+          'space': r'space',
           'reg': r'|'.join(map(r'\b{}\b'.format, (reg.name for reg in Reg))),
           'label': r'\.?[a-z](\w|\d)*',
           'equal': r'=',
@@ -46,11 +47,18 @@ class Assembler:
         self.new_data(value)
     def char(self, label, char):
         self.label(label)
+        char = ESCAPE.get(char, char)
         self.new_char(char)
     def string(self, label, string):
         self.label(label)
+        for escape in ESCAPE:
+            string = string.replace(escape, ESCAPE[escape])
         for char in string:
             self.new_char(char)
+    def space(self, label, size):
+        self.label(label)
+        for _ in range(size):
+            self.new_data(0)
     def jump(self, cond, label):
         self.new_inst(Jump, cond, label)
     def load0(self, rd, rb, ro):
@@ -92,6 +100,7 @@ class Assembler:
     def new_char(self, char):
         self.data.append((self.labels, Char, (char,)))
         self.labels = []
+        
     def assemble(self, asm):        
         self.inst = []
         self.data = []
@@ -112,6 +121,8 @@ class Assembler:
                         self.char(*self.values())
                     elif self.match('label', ':', 'string'):
                         self.string(*self.values())
+                    elif self.match('label', ':', 'space', 'const'):
+                        self.space(*self.values())
                     else:
                         self.error()
                 else:

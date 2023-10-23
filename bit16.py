@@ -46,6 +46,17 @@ class Cond(IntEnum):
     JLE = 6
     JR = 7
     
+ESCAPE = {
+    '\\0': '\0',   
+    '\\t': '\t',
+    '\\n': '\n',
+}
+INV_ESCAPE = {
+    '\0': '\\0',
+    '\t': '\\t',
+    '\n': '\\n',
+}
+    
 class Data:
     def __init__(self, value):
         assert -32768 <= value < 65536
@@ -66,12 +77,9 @@ class Data:
         return self.str
 
 class Char(Data):
-    ESCAPED = {'\\0': '\0',
-             '\\t': '\t',
-             '\\n': '\n'}
     def __init__(self, char):
-        self.str = char
-        char = self.ESCAPED.get(char, char)
+        self.str = INV_ESCAPE.get(char, char)
+        char = ESCAPE.get(char, char)
         assert 0 <= ord(char) < 128
         self._dec = 0,ord(char)
         self._bin = 'XXXXXXXXX',f'{ord(char):07b}'
