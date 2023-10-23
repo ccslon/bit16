@@ -1,9 +1,9 @@
-int OUT = 0x7fff;
+const char* OUT = 0x7fff;
 
 void put(char c) {
     *OUT = c;
 }
-void print(char *str) {
+void print(const char* str) {
     while (*str != '\0') {
         put(*str);
         str++;

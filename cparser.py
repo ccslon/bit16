@@ -6,7 +6,7 @@ Created on Mon Jul  3 19:47:39 2023
 """
 
 import re
-from cnodes import Do, Decl, Array, StructType, PointerType, Type, Conditional, Cast, Arrow, Id, Const, Unary, Binary, Compare, Call, Args, Func, Assign, If, Block, Program, Return, While, For, Break, Continue, Script, Struct, Params, Fields, Logic, Dot, Pointer, Address, Main, Global, Char, String
+from cnodes import Const, Do, Decl, Array, StructType, PointerType, Type, Conditional, Cast, Arrow, Id, Num, Unary, Binary, Compare, Call, Args, Func, Assign, If, Block, Program, Return, While, For, Break, Continue, Script, Struct, Params, Fields, Logic, Dot, Pointer, Address, Main, Global, Char, String
 
 '''
 TODO
@@ -15,9 +15,10 @@ TODO
 [X] Allocating arrays
 '''
 
-TOKENS = {'const': r'(0x[0-9a-f]+)|(0b[01]+)|(\d+)|(NULL)',
+TOKENS = {'num': r'(0x[0-9a-f]+)|(0b[01]+)|(\d+)|(NULL)',
           'char': r"'\\?[^']'",
           'string': r'"[^"]*"',
+          'const': r'const',
           'type' : r'(void)|(int)|(char)',
           'sign': r'(signed)|(unsigned)',
           'struct': r'struct',
@@ -90,12 +91,12 @@ def lex(text):
 class Parser:    
     def primary(self):
         '''
-        PRIMARY -> id|const|char|string|'(' EXPR ')'
+        PRIMARY -> id|Num|char|string|'(' EXPR ')'
         '''
         if self.peek('id'):
             return Id(next(self))
-        elif self.peek('const'):
-            return Const(next(self))
+        elif self.peek('num'):
+            return Num(next(self))
         elif self.peek('char'):
             return Char(next(self))
         elif self.peek('string'):
@@ -132,7 +133,7 @@ class Parser:
                 elif self.accept('->'):
                     postfix = Arrow(postfix, self.expect('id'))
                 elif self.peek('++','--'):
-                    postfix = Assign(postfix, Binary(next(self), postfix, Const('1')))
+                    postfix = Assign(postfix, Binary(next(self), postfix, Num('1')))
         return postfix
     
     def args(self):
@@ -155,7 +156,7 @@ class Parser:
         if self.peek('++','--'):
             op = next(self)
             unary = self.unary()
-            return Assign(unary, Binary(op, unary, Const('1')))
+            return Assign(unary, Binary(op, unary, Num('1')))
         elif self.peek('+','-','~',):
             return Unary(next(self), self.unary())
         elif self.accept('!'):
@@ -199,6 +200,14 @@ class Parser:
         while self.accept('*'):
             type_spec = PointerType(type_spec)
         return type_spec
+    
+    def type_qual(self):
+        '''
+        TYPE_QUAL -> 'const' TYPE_SPEC
+        '''
+        if self.accept('const'):
+            return Const(self.type_spec())
+        return self.type_spec()
     
     def mul(self):
         '''
@@ -313,15 +322,11 @@ class Parser:
         '''
         assign = self.cond()
         if self.accept('='):
-            if isinstance(assign, (Id, Script, Dot, Pointer)):
-                assign = Assign(assign, self.assign())
-            else:
-                self.error()
+            assert isinstance(assign, (Id, Script, Dot, Pointer, Arrow))
+            assign = Assign(assign, self.assign())
         elif self.peek('+=','-=','*=','/=','%=','<<=','>>=','^=','|=','&='):
-            if isinstance(assign, (Id, Script, Dot, Pointer)):
-                assign = Assign(assign, Binary(next(self), assign, self.assign()))
-            else:
-                self.error()
+            assert isinstance(assign, (Id, Script, Dot, Pointer, Arrow))
+            assign = Assign(assign, Binary(next(self), assign, self.assign()))
         return assign
     
     def expr(self):
@@ -332,7 +337,7 @@ class Parser:
         # while self.accept(','):
         #     self.assign()
     
-    def const(self):
+    def const_expr(self):
         return self.cond()
   
     def statement(self):
@@ -351,59 +356,7 @@ class Parser:
         if self.accept('{'):
             statement = self.block()
             self.expect('}')
-            
-        elif self.peek('*','id','++','--'):
-            statement = self.unary()
-            if self.accept('='):
-                if isinstance(statement, (Id, Script, Dot, Pointer, Arrow)):
-                    statement = Assign(statement, self.assign())
-                else:
-                    self.error()
-            elif self.peek('+=','-=','*=','/=','%=','<<=','>>=','^=','|=','&='):
-                if isinstance(statement, (Id, Script, Dot, Pointer, Arrow)):
-                    statement = Assign(statement, Binary(next(self), statement, self.assign()))
-                else:
-                    self.error()
-            else:
-                if not isinstance(statement, (Call, Assign)):
-                    self.error()
-            self.expect(';')
-            
-        elif self.peek('type'):
-            type_spec = Type(next(self))
-            while self.accept('*'):
-                type_spec = PointerType(type_spec)
-            id_ = Id(self.expect('id'))
-            while self.accept('['):
-                type_spec = Array(type_spec, Const(self.expect('const')))
-                self.expect(']')
-            statement = Decl(type_spec, id_)
-            if self.accept('='):
-                statement = Assign(statement, self.assign())
-            self.expect(';')
-            
-        elif self.accept('struct'):
-            type_spec = StructType(self.expect('id'))
-            while self.accept('*'):
-                type_spec = PointerType(type_spec)
-            iden = Id(self.expect('id'))
-            while self.accept('['):
-                type_spec = Array(type_spec, Const(self.expect('const')))
-                self.expect(']')
-            statement = Decl(type_spec, iden)
-            if self.accept('='):
-                statement = Assign(statement, self.const()) #TODO make struct specific 
-            self.expect(';')
-            
-        elif self.accept('union'):
-            self.expect('id')
-            while self.accept('*'):
-                pass
-            self.expect('id')
-            if self.accept('='):
-                self.const() #TODO make union specific 
-            self.expect(';')
-            
+                       
         elif self.accept('if'):
             self.expect('(')
             expr = self.expr()
@@ -413,7 +366,7 @@ class Parser:
                 statement.false = self.statement()
             
         elif self.accept('case'): #TODO
-            self.const()
+            self.Num()
             self.expect(':')
             self.statement()
         elif self.accept('default'):
@@ -462,145 +415,111 @@ class Parser:
             if not self.accept(';'):
                 statement.expr = self.expr()
                 self.expect(';')
-                
-        return statement
+        else:
+            statement = self.assign()
+            assert isinstance(statement, (Assign, Call))
+            self.expect(';')
+        return statement    
 
     def block(self):
         '''
-        BLOCK -> {STATE}
+        BLOCK -> {DECL} {STATE} [BLOCK]
         '''
-        block = Block()
-        while self.peek('{','*','id','++','--','type','struct','union','if','switch','while','do','for','return','break','continue'):
+        block = Block()        
+        while self.peek('const','type','struct','union'):
+            block.append(self.init())
+        while self.peek('{','*','id','++','--','if','switch','while','do','for','return','break','continue'):
             block.append(self.statement())
+        if not self.peek('}'):
+            block.extend(self.block())
         return block
  
     def params(self):
         '''
-        PARAMS -> TYPE_SPEC id {',' TYPE_SPEC id}
+        PARAMS -> [DECL {',' DECL}]
         '''
         params = Params()
-        params.append(Decl(self.type_spec(), Id(self.expect('id'))))
-        while self.accept(','):
-            params.append(Decl(self.type_spec(), Id(self.expect('id'))))
+        if self.peek('const','type','struct','union'):    
+            params.append(self.decl())
+            while self.accept(','):
+                params.append(self.decl())
         return params
+    
+    def init(self):
+        '''
+        INIT -> DECL ['=' EXPR] ';'
+        '''
+        init = self.decl()
+        if self.accept('='):
+            init = Assign(init, self.expr())
+        self.expect(';')
+        return init
     
     def decl(self):
         '''
-        DECL -> TYPE_SPEC id {'[' [const] ']'} ';'
+        DECL -> TYPE_QUAL id {'[' [num] ']'}
         '''
-        type_spec = self.type_spec()
-        id_ = Id(self.expect('id'))
+        type_qual = self.type_qual()
+        iden = Id(self.expect('id'))
         while self.accept('['):
-            type_spec = Array(type_spec, Const(self.expect('const')))
+            type_qual = Array(type_qual, Num(self.expect('num')))
             self.expect(']')
-        decl = Decl(type_spec, id_)
-        self.expect(';')
-        return decl
+        return Decl(type_qual, iden)
     
     def fields(self):
         '''
-        FIELDS = {DECL}
+        FIELDS = '{' {DECL ';'} '}'
         '''
         fields = Fields()
         if self.accept('{'):    
             while not self.accept('}'):
                 fields.append(self.decl())
+                self.expect(';')
         return fields
  
     def program(self):
         program = Program()
-        while self.peek('type','struct','union','#'):
-            if self.peek('type'):
-                type_spec = next(self),
-                while self.accept('*'):
-                    type_spec += '*',
-                id_ = Id(self.expect('id'))
+        while self.accept('#'):
+            if self.accept('include'):
+                if self.accept('<'):
+                    lib = self.expect('id')
+                    self.expect('.')
+                    assert self.expect('id') == 'h'
+                    self.expect('>')
+                    self.include(lib)
+                elif self.peek('string'):
+                    self.include_h(next(self))
+                else:
+                    self.error()
+        while self.peek('type','struct','union','const'):
+            type_qual = self.type_qual()
+            if self.accept('{'):
+                assert type(type_qual) not in [PointerType, Const]
+                program.append(Struct(type_qual.name, self.fields()))
+                self.expect('}')
+                self.expect(';')
+            else:
+                iden = Id(self.expect('id'))
                 if self.accept('('):
-                    if not self.accept(')'):
-                        params = self.params()
-                        self.expect(')')
-                    else:
-                        params = Params()
-                    if not self.accept(';'):
-                        self.expect('{')
-                        block = self.block()
-                        self.expect('}')
-                    else:
-                        block = Block()
-                    if id_.name == 'main':
+                    params = self.params()
+                    self.expect(')')
+                    self.expect('{')
+                    block = self.block()
+                    self.expect('}')
+                    if iden.name == 'main':
                         program.insert(0, Main(block))
                     else:
-                        program.append(Func(type_spec, id_, params, block))
+                        program.append(Func(type_qual, iden, params, block))
                 else:
                     while self.accept('['):
-                        if not self.accept(']'):
-                            self.const()
-                            self.expect(']')
-                    if self.accept('='): #TODO Allow uninitialized globals i.e. No '=' e.g. "int error;"
-                        if self.peek('const'):
-                            program.append(Global(id_, Const(next(self))))
-                        elif self.peek('char'):
-                            program.append(Global(id_, Char(next(self))))
-                        elif self.peek('string'):
-                            program.append(Global(id_, String(next(self))))
-                        else:
-                            self.error()
+                        type_qual = Array(type_qual, Num(self.expect('num')))
+                        self.expect(']')
+                    init = Decl(type_qual, iden)
+                    if self.accept('='):
+                        init = Global(init, self.const_expr())
                     self.expect(';')
-            elif self.accept('struct'):
-                type_spec = StructType(self.expect('id'))
-                while self.accept('*'):
-                    type_spec = PointerType(type_spec)
-                if self.peek('id'):
-                    id_ = Id(next(self))
-                    if self.accept('('):
-                        if not self.accept(')'):
-                            params = self.params()
-                            self.expect(')')
-                        if not self.accept(';'):
-                            self.expect('{')
-                            program.append(Func(type_spec, id_, params, self.block()))
-                            self.expect('}')
-                    else:
-                        while self.accept('['):
-                            if not self.accept(']'):
-                                self.const()
-                                self.expect(']')
-                        if self.accept('='):
-                            self.const()
-                        self.expect(';')
-                else:
-                    assert type(type_spec) is not PointerType
-                    program.append(Struct(type_spec.name, self.fields()))
-                    self.expect(';')
-            elif self.accept('union'):
-                self.expect('id')
-                while self.accept('*'):
-                    pass
-                self.expect('id')
-                if self.accept('('):
-                    if not self.accept(')'):
-                        self.parameters()
-                        self.expect(')')
-                    if not self.accept(';'):
-                        self.expect('{')
-                        self.block()
-                        self.expect('}')
-                elif self.accept('{'):
-                    while not self.accept('}'):
-                        self.decl()
-            elif self.accept('#'):
-                if self.accept('include'):
-                    if self.accept('<'):
-                        lib = self.expect('id')
-                        self.expect('.')
-                        assert self.expect('id') == 'h'
-                        self.expect('>')
-                        self.include(lib)
-                    elif self.peek('string'):
-                        self.include_h(next(self))
-                    else:
-                        self.error()                        
-        return program
+                    program.append(init)                     
+        return program        
     
     def include_h(self, h):
         if h not in self.included:

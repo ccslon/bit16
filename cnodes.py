@@ -5,7 +5,7 @@ Created on Mon Jul  3 19:48:36 2023
 @author: Colin
 """
 from collections import UserList, UserDict
-from bit16 import Reg, Op, Cond
+from bit16 import Reg, Op, Cond, ESCAPE
 #TODO Add div and mod
 
 class Loop(UserList):
@@ -120,8 +120,8 @@ class Emitter:
                 self.add(f'{op.name} {rd.name}, {src}')    
     def inst3(self, op, rd, rs, rs2):
         self.add(f'{op.name} {rd.name}, {rs.name}, {rs2.name}')
-    def inst4(self, op, rd, rs, const4):
-        self.add(f'{op.name} {rd.name}, {rs.name}, {const4}')
+    def inst4(self, op, rd, rs, Num4):
+        self.add(f'{op.name} {rd.name}, {rs.name}, {Num4}')
     def jump(self, cond, target):
         self.add(f'{cond.name} {target}')
     def halt(self):
@@ -147,7 +147,7 @@ class Expr:
     def analyze_store(self, n):
         self.analyze(n)
     
-class Const(Expr):
+class Num(Expr):
     def __init__(self, value):
         if value == 'true':
             self.value = 1
@@ -208,6 +208,12 @@ class Id(Expr):
         return Reg(n)
     def get_type(self):
         return env.scope[self.name]
+    def init_store(self, n):
+        if self.name in env.scope:
+            env.scope[self.name].init_store(n, self.name)
+        elif self.name in env.globals:
+            emit.load_glob(Reg(n+1), self.name)
+            emit.store(Reg(n), Reg(n+1))
     def store(self, n):
         if self.name in env.scope:
             env.scope[self.name].store(n, self.name)
@@ -261,29 +267,47 @@ class Cast(Expr):
     def __init__(self, target, cast):
         self.target, self.cast = target, cast
 
-class Conditional(Expr):
+class Conditional(Expr): #TODO
     def __init__(self, logic_or, expr, cond):
         self.logic_or, self.expr, self.cond = logic_or, expr, cond
 
 class Type(Expr):
     def __init__(self, type_):
         self.type = type_
-        self.size = 1
     def analyze(self):
-        pass #self.frame = Frame(self)
+        self.size = 1
     def address(self, n, name):
         emit.inst4(Op.ADD, Reg(n), Reg.SP, env.scope.index(name))
+    def init_store(self, n, name):
+        self.store(n, name)
     def store(self, n, name):
         emit.store(Reg(n), Reg.SP, env.scope.index(name), name)
     def compile(self, n, name):
         emit.load(Reg(n), Reg.SP, env.scope.index(name), name)
-            
+        
+class Const(Expr):
+    def __init__(self, type_):
+        self.type = type_
+    def analyze(self):
+        self.type.analyze()
+        self.size = self.type.size
+    def address(self, n, name):
+        self.type.address(n, name)
+    def init_store(self, n, name):
+        self.type.store(n, name)
+    def store(self, n, name):
+        self.type.const_store(n, name)
+    def compile(self, n, name):
+        self.type.compile(n, name)
+        
 class PointerType(Type):
     def __init__(self, to):
         self.to = to
         self.size = 1
     def analyze(self):
         self.to.analyze()
+    def const_store(self, n, name):
+        self.to.store(n, name)
         
 class Array(Type):
     def __init__(self, of, length):
@@ -336,9 +360,9 @@ class Decl(Expr):
     def analyze(self, n):
         self.type_spec.analyze()
         env.space += self.type_spec.size
-    def store(self, n):
+    def store(self, n):        
         self.compile(n)
-        self.id.store(n)
+        self.id.init_store(n)
     def compile(self, n):
         self.declare(env.scope)
 
@@ -628,9 +652,9 @@ class Dot(Expr):
 
 class Global(Assign):
     def declare(self):
-        env.globals.add(self.left.name)
+        env.globals.add(self.left.id.name)
     def compile(self):
-        emit.glob(self.left.name, self.right.compile(0))
+        emit.glob(self.left.id.name, self.right.compile(0))
 
 class Params(Expr, UserList):
     def analyze(self):

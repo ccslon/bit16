@@ -1,3 +1,3 @@
-void const() {
-    int foo = 3;
+void foo() {
+    const int foo = 3;
 }
