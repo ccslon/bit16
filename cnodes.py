@@ -472,7 +472,8 @@ class Compare(Binary):
         emit.jump(Cond.JR, f'.L{label}')
         emit.labels.append(f'.L{sublabel}')
         emit.inst(Op.MOV, Reg(n), 0)
-        emit.labels.append(f'.L{label}')        
+        emit.labels.append(f'.L{label}')
+        return Reg(n)
 
 class Logic(Binary):
     OP = {'&&':Op.AND,
@@ -494,6 +495,7 @@ class Logic(Binary):
             emit.labels.append(f'.L{sublabel}')
     def compile(self, n):
         emit.inst(self.op, self.left.load(n), self.right.compile(n+1))
+        return Reg(n)
 
 class Assign(Expr):
     def __init__(self, left, right):
@@ -555,6 +557,10 @@ class If(Expr):
                 env.if_jump_end = True
             emit.labels.append(f'.L{sublabel}')
             self.false.branch(n, label)
+            if env.if_jump_end:
+                emit.labels.append(f'.L{label}')
+        else:
+            emit.labels.append(f'.L{label}')
         if env.if_jump_end:
             emit.labels.append(f'.L{label}')
     def branch(self, n, root):
@@ -582,6 +588,40 @@ class While(Expr):
         emit.jump(Cond.JR, f'.L{env.loop.start()}')
         emit.labels.append(f'.L{env.loop.end()}')
         env.end_loop()
+
+class Case(Expr):
+    def __init__(self, const, statement):
+        self.const, self.statement, self.default = const, statement, None
+    def analyze(self, n):
+        self.const.analyze(n)
+        self.statement.analyze(n)
+
+class Switch(Expr):
+    def __init__(self, test):
+        self.test, self.cases, self.default = test, [], None
+    def analyze(self, n):
+        self.test.analyze(n)
+        for case in self.cases:
+            case.analyze(n)
+        if self.default:
+            self.default.analyze(n)
+    def compile(self, n):
+        env.begin_loop()
+        self.test.compile(n)
+        labels = []
+        for case in self.cases:
+            labels.append(env.next_label())
+            emit.inst(Op.CMP, Reg(n), case.const.compile(n))
+            emit.jump(Cond.JEQ, f'.L{labels[-1]}')
+        emit.jump(Cond.JR, f'.L{env.loop.end()}')
+        for i, case in enumerate(self.cases):
+            emit.labels.append(f'.L{labels[i]}')
+            case.statement.compile(n)
+        emit.labels.append(f'.L{env.loop.end()}')
+        if self.default:
+            self.default.compile(n)            
+        env.end_loop()
+
 
 class Do(Expr):
     def __init__(self, state, cond):

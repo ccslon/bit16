@@ -6,13 +6,16 @@ Created on Mon Jul  3 19:47:39 2023
 """
 
 import re
-from cnodes import Const, Do, Decl, Array, Struct, Pointer, Type, Conditional, Cast, Arrow, Id, Num, Unary, Binary, Compare, Call, Args, FuncDecl, Assign, If, Block, Program, Return, While, For, Break, Continue, Script, StructDecl, Params, Fields, Logic, Dot, Deref, AddrOf, Main, Global, Char, String
+from cnodes import Switch, Case, Const, Do, Decl, Array, Struct, Pointer, Type, Conditional, Cast, Arrow, Id, Num, Unary, Binary, Compare, Call, Args, FuncDecl, Assign, If, Block, Program, Return, While, For, Break, Continue, Script, StructDecl, Params, Fields, Logic, Dot, Deref, AddrOf, Main, Global, Char, String
 
 '''
 TODO
 [ ] Type checking
 [ ] '.' vs '->' checking
 [X] Allocating arrays
+[ ] Globals overhaul including global structs and arrays
+[ ] Init lists e.g. strunct FILE stdout = {0x7f00, 0, 0};
+[ ] Proper ++int and int++
 '''
 
 class MetaLexer(type):
@@ -46,6 +49,7 @@ class CLexer(LexerBase):
     RE_include = r'include'
     RE_const = r'const'
     RE_type = r'(void)|(int)|(char)'
+    RE_struct = r'struct'
     RE_union = r'union'
     RE_enum = r'enum'
     RE_if = r'if'
@@ -370,15 +374,13 @@ class CParser:
   
     def statement(self):
         '''
-        STATE -> CALL
-                |ASSIGN
-                |IF
+        STATE -> '{' BLOCK '}'
+                |SELECT
                 |LOOP
                 |JUMP
-                |'{' BLOCK '}'
-        CALL -> id '(' ARGS ')' ';'
-        IF -> 'if' '(' EXPR ')' STATE ['else' STATE]
-        LOOP -> 'while' '(' EXPR ')' STATE|'for' '(' EXPR ';' EXPR ';' EXPR ')' STATE
+                |ASSIGN ';'
+        SELECT -> 'if' '(' EXPR ')' STATE ['else' STATE]|'switch' '(' EXPR ')' '{' {'case' CONST_EXPR ':' STATEMENT} ['default' ':' STATEMENT] '}'
+        LOOP -> 'while' '(' EXPR ')' STATE|'for' '(' EXPR ';' EXPR ';' EXPR ')' STATE|'do' STATEMENT 'while' '(' EXPR ')' ';'
         JUMP -> 'return' [EXPR] ';' |'break' ';' |'continue' ';'
         '''
         if self.accept('{'):
@@ -393,18 +395,20 @@ class CParser:
             if self.accept('else'):
                 statement.false = self.statement()
             
-        elif self.accept('case'): #TODO
-            self.Num()
-            self.expect(':')
-            self.statement()
-        elif self.accept('default'):
-            self.expect(':')
-            self.statement()        
-        elif self.accept('switch'):
+        elif self.accept('switch'): #BIG TODO
             self.expect('(')
-            self.expr()
+            test = self.expr()
             self.expect(')')
-            self.statement()
+            self.expect('{')
+            statement = Switch(test)
+            while self.accept('case'):
+                const = self.const_expr()
+                self.expect(':')
+                statement.cases.append(Case(const, self.statement()))
+            if self.accept('default'):
+                self.expect(':')
+                statement.default = self.statement()
+            self.expect('}')
             
         elif self.accept('while'):
             self.expect('(')
@@ -458,7 +462,7 @@ class CParser:
             block.append(self.init())
         while self.peek('{','*','id','++','--','if','switch','while','do','for','return','break','continue'):
             block.append(self.statement())
-        if not self.peek('}'):
+        if not self.peek('}') or len(block) > 0:
             block.extend(self.block())
         return block
  
@@ -507,46 +511,52 @@ class CParser:
  
     def program(self):
         program = Program()
-        while self.accept('#'):
-            if self.accept('include'):
-                if self.accept('<'):
-                    lib = self.expect('id')
-                    self.expect('.')
-                    assert self.expect('id') == 'h'
-                    self.expect('>')
-                    self.include(lib)
-                elif self.peek('string'):
-                    self.include_h(next(self))
+        while self.peek('#','type','struct','union','const'):
+            if self.accept('#'):
+                if self.accept('include'):
+                    if self.accept('<'):
+                        lib = self.expect('id')
+                        self.expect('.')
+                        assert self.expect('id') == 'h'
+                        self.expect('>')
+                        self.include(lib)
+                    elif self.peek('string'):
+                        self.include_h(next(self))
+                    else:
+                        self.error()
                 else:
                     self.error()
-        while self.peek('type','struct','union','const'):
-            type_qual = self.type_qual()
-            if self.accept('{'):
-                assert type(type_qual) not in [Pointer, Const]
-                program.append(StructDecl(type_qual.name, self.fields()))
-                self.expect('}')
-                self.expect(';')
             else:
-                iden = Id(self.expect('id'))
-                if self.accept('('):
-                    params = self.params()
-                    self.expect(')')
-                    self.expect('{')
-                    block = self.block()
-                    self.expect('}')
-                    if iden.name == 'main':
-                        program.insert(0, Main(block))
-                    else:
-                        program.append(FuncDecl(type_qual, iden, params, block))
-                else:
-                    while self.accept('['):
-                        type_qual = Array(type_qual, Num(self.expect('num')))
-                        self.expect(']')
-                    init = Decl(type_qual, iden)
-                    if self.accept('='):
-                        init = Global(init, self.const_expr())
+                type_qual = self.type_qual()
+                if self.accept('{'):
+                    assert type(type_qual) is Struct
+                    fields = Fields()
+                    while not self.accept('}'):
+                        fields.append(self.decl())
+                        self.expect(';')
                     self.expect(';')
-                    program.append(init)                     
+                    program.append(StructDecl(type_qual.name, fields))
+                else:
+                    iden = Id(self.expect('id'))
+                    if self.accept('('):
+                        params = self.params()
+                        self.expect(')')
+                        self.expect('{')
+                        block = self.block()
+                        self.expect('}')
+                        if iden.name == 'main':
+                            program.insert(0, Main(block))
+                        else:
+                            program.append(FuncDecl(type_qual, iden, params, block))
+                    else:
+                        while self.accept('['):
+                            type_qual = Array(type_qual, Num(self.expect('num')))
+                            self.expect(']')
+                        init = Decl(type_qual, iden)
+                        if self.accept('='):
+                            init = Global(init, self.const_expr())
+                        self.expect(';')
+                        program.append(init)
         return program        
     
     def include_h(self, h):
