@@ -107,6 +107,7 @@ fact:
   JNE .L1
   MOV B, 1
   JR .L0
+.L1:
   LD B, [SP, 0] ; n
   LD C, [SP, 0] ; n
   SUB C, 1
@@ -271,7 +272,7 @@ foo:
   POP PC, D, E
 '''
 HELLO_ASM = '''
-.S0: "Hello world!\n\0"
+.S0: "Hello world!\\0"
   LD B, =.S0
   MOV A, B
   CALL puts
@@ -310,6 +311,10 @@ puts:
   LD [SP, 0], B ; str
   JR .L2
 .L3:
+  LD B, '\\n'
+  MOV A, B
+  CALL putchar
+  MOV B, A
   MOV B, 0
   JR .L1
 .L1:
