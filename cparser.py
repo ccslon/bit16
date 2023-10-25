@@ -6,16 +6,18 @@ Created on Mon Jul  3 19:47:39 2023
 """
 
 import re
-from cnodes import Switch, Case, Const, Do, Decl, Array, Struct, Pointer, Type, Conditional, Cast, Arrow, Id, Num, Unary, Binary, Compare, Call, Args, FuncDecl, Assign, If, Block, Program, Return, While, For, Break, Continue, Script, StructDecl, Params, Fields, Logic, Dot, Deref, AddrOf, Main, Global, Char, String
+from cnodes import GlobDecl, Post, Pre, Switch, Case, Const, Do, Decl, Array, Struct, Pointer, Type, Conditional, Cast, Arrow, Id, Num, Unary, Binary, Compare, Call, Args, FuncDecl, Assign, If, Block, Program, Return, While, For, Break, Continue, Script, StructDecl, Params, Fields, Logic, Dot, Deref, AddrOf, Main, Global, Char, String
 
 '''
 TODO
 [ ] Type checking
 [ ] '.' vs '->' checking
 [X] Allocating arrays
-[ ] Globals overhaul including global structs and arrays
-[ ] Init lists e.g. strunct FILE stdout = {0x7f00, 0, 0};
-[ ] Proper ++int and int++
+[X] Globals overhaul including global structs and arrays
+[ ] Init lists e.g. struct FILE stdout = {0x7f00, 0, 0};
+[X] Proper ++int and int++
+[ ] Unions
+[ ] Enums
 '''
 
 class MetaLexer(type):
@@ -163,7 +165,7 @@ class CParser:
                 elif self.accept('->'):
                     postfix = Arrow(postfix, self.expect('id'))
                 elif self.peek('++','--'):
-                    postfix = Assign(postfix, Binary(next(self), postfix, Num('1')))
+                    postfix = Post(next(self), postfix)
         return postfix
     
     def args(self):
@@ -186,14 +188,13 @@ class CParser:
                 |'sizeof' '(' TYPE_SPEC ')'
         '''
         if self.peek('++','--'):
-            op = next(self)
-            unary = self.unary()
-            return Assign(unary, Binary(op, unary, Num('1')))
+            return Pre(next(self), self.unary())
         elif self.peek('-','~',):
             return Unary(next(self), self.unary())
         elif self.accept('!'):
             unary = Call(Id('not'), Args([self.unary()]))
             self.include('stdlib')
+            return unary
         elif self.accept('*'):
             return Deref(self.unary())
         elif self.accept('&'):
@@ -449,7 +450,7 @@ class CParser:
                 self.expect(';')
         else:
             statement = self.assign()
-            assert isinstance(statement, (Assign, Call))
+            assert isinstance(statement, (Assign, Call, Pre, Post))
             self.expect(';')
         return statement    
 
@@ -552,7 +553,7 @@ class CParser:
                         while self.accept('['):
                             type_qual = Array(type_qual, Num(self.expect('num')))
                             self.expect(']')
-                        init = Decl(type_qual, iden)
+                        init = GlobDecl(type_qual, iden)
                         if self.accept('='):
                             init = Global(init, self.const_expr())
                         self.expect(';')

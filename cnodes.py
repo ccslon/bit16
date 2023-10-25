@@ -13,10 +13,10 @@ class Loop(UserList):
     def end(self):
         return self[-1][1]
 
-class SetList(UserList):
-    def add(self, item):
-        if item not in self:
-            self.append(item)    
+# class SetList(UserList):
+#     def add(self, item):
+#         if item not in self:
+#             self.append(item)    
 
 class Frame(UserDict):
     def __init__(self):          
@@ -45,7 +45,7 @@ class Env:
     def clear(self):
         self.labels = 0
         self.loop = Loop()
-        self.globals = SetList()
+        self.globals = {}
         self.strings = []
         self.functions = []
         self.if_jump_end = False
@@ -85,6 +85,8 @@ class Emitter:
             self.asm.append(f'{label}:')
         self.asm.append(f'  {asm}')
         self.labels.clear()
+    def space(self, name, size):
+        self.asm.append(f'{name}: space {size}')
     def glob(self, name, value):
         self.asm.append(f'{name}: {value}')
     def push(self, lr, *regs):
@@ -212,7 +214,10 @@ class Id(Expr):
             emit.load_glob(Reg(n), self.name)
         return Reg(n)
     def type(self):
-        return env.scope[self.name]
+        if self.name in env.scope:
+            return env.scope[self.name]
+        elif self.name in env.globals:
+            return Pointer(env.globals[self.name])
     def init_store(self, n):
         if self.name in env.scope:
             self.type().init_store(n, self.name)
@@ -267,7 +272,6 @@ class Unary(Expr):
     def __init__(self, sign, primary):
         self.sign, self.primary = self.OP[sign], primary
     def type(self):
-        #TODO assert
         return self.primary.type()
     def analyze(self, n):
         self.primary.analyze(n)
@@ -275,11 +279,41 @@ class Unary(Expr):
         emit.inst(self.sign, self.primary.compile(n), Reg.A)
         return Reg(n)
 
+class Post(Expr):
+    OPS = {'++':Op.ADD,
+           '--':Op.SUB}
+    def __init__(self, op, postfix):
+        self.op, self.postfix = self.OPS[op], postfix
+    def type(self):
+        return self.postfix.type()
+    def analyze(self, n):
+        self.postfix.analyze_store(n+1)
+    def compile(self, n):
+        self.postfix.compile(n)
+        emit.inst4(self.op, Reg(n+1), Reg(n), 1)
+        self.postfix.store(n+1)
+        return Reg(n)
+
+class Pre(Expr):
+    OPS = {'++':Op.ADD,
+           '--':Op.SUB}
+    def __init__(self, op, unary):
+        self.op, self.unary = self.OPS[op], unary
+    def type(self):
+        return self.unary.type()
+    def analyze(self, n):
+        self.unary.analyze_store(n)
+    def compile(self, n):
+        self.unary.compile(n)
+        emit.inst(self.op, Reg(n), 1)
+        self.unary.store(n)
+        return Reg(n)
+
 class Cast(Expr):
     def __init__(self, target, cast):
         self.target, self.cast = target, cast
 
-class Conditional(Expr): #TODO Test
+class Conditional(Expr):
     def __init__(self, cond, true, false):
         self.cond, self.true, self.false = cond, true, false
         assert self.true.type() == self.false.type()
@@ -410,6 +444,13 @@ class Decl(Expr):
     def compile(self, n):
         self.declare(env.scope)
 
+class GlobDecl(Decl):
+    def declare(self):
+        env.globals[self.id.name] = self.type_spec
+        self.type_spec.analyze()
+    def compile(self):
+        emit.space(self.id.name, self.type_spec.size)
+    
 class Binary(Expr):    
     OP = {'+' :Op.ADD,
           '++':Op.ADD,
@@ -501,7 +542,6 @@ class Assign(Expr):
     def __init__(self, left, right):
         self.left, self.right = left, right
     def type(self):
-        assert self.left.type() == self.right.type()
         return self.left.type()
     def analyze(self, n):
         self.right.analyze(n)
@@ -510,6 +550,17 @@ class Assign(Expr):
         self.right.load(n)
         self.left.store(n)
         return Reg(n)
+
+class Global(Assign):
+    def type(self):
+        return self.left.type()
+    def declare(self):
+        self.left.declare()
+    def compile(self):
+        if self.left.type_spec.size > 1:
+            emit.space(self.left.id.name, self.left.type_spec.size)
+        else:
+            emit.glob(self.left.id.name, self.right.compile(0))
 
 class Args(Expr, UserList):
     def analyze(self, n):        
@@ -743,12 +794,6 @@ class Dot(Expr):
     def compile(self, n):        
         emit.load(Reg(n), self.postfix.address(n), self.postfix.type().index(self.attr), self.attr)
         return Reg(n)
-
-class Global(Assign):
-    def declare(self):
-        env.globals.add(self.left.id.name)
-    def compile(self):
-        emit.glob(self.left.id.name, self.right.compile(0))
 
 class Params(Expr, UserList):
     def analyze(self):
