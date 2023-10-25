@@ -13,11 +13,6 @@ class Loop(UserList):
     def end(self):
         return self[-1][1]
 
-# class SetList(UserList):
-#     def add(self, item):
-#         if item not in self:
-#             self.append(item)    
-
 class Frame(UserDict):
     def __init__(self):          
         self.size = 0
@@ -31,6 +26,7 @@ class Frame(UserDict):
         return self.indices[name]
     def copy(self):
         return self.size, self.indices.copy(), self.data.copy()
+    
 
 class Scope(Frame):
     def __init__(self, old=None):
@@ -121,8 +117,8 @@ class Emitter:
                 self.add(f'{op.name} {rd.name}, {src}')    
     def inst3(self, op, rd, rs, rs2):
         self.add(f'{op.name} {rd.name}, {rs.name}, {rs2.name}')
-    def inst4(self, op, rd, rs, Num4):
-        self.add(f'{op.name} {rd.name}, {rs.name}, {Num4}')
+    def inst4(self, op, rd, rs, const4):
+        self.add(f'{op.name} {rd.name}, {rs.name}, {const4}')
     def jump(self, cond, target):
         self.add(f'{cond.name} {target}')
     def halt(self):
@@ -344,7 +340,10 @@ class Type(Expr):
     def address(self, n, name):
         emit.inst4(Op.ADD, Reg(n), Reg.SP, env.scope.index(name))
     def init_store(self, n, name):
-        self.store(n, name)
+        self.store(n, name)     
+    def list_store(self, n, root, item, name):
+        item.load(n+1)
+        emit.store(Reg(n+1), Reg(n), root, name)
     def store(self, n, name):
         emit.store(Reg(n), Reg.SP, env.scope.index(name), name)
     def compile(self, n, name):
@@ -402,7 +401,11 @@ class Struct(Type, Frame):
     def analyze(self):
         self.size, self.indices, self.data = env.structs[self.name].copy()
     def address(self, n, name):
-        emit.inst4(Op.ADD, Reg(n), Reg.SP, env.scope.index(name))
+        emit.inst4(Op.ADD, Reg(n), Reg.SP, env.scope.index(name))    
+    def list_store(self, n, root, item, name):
+        emit.inst4(Op.ADD, Reg(n+1), Reg(n), root)
+        for i, name in enumerate(self):
+            self[name].list_store(n+1, self.index(name), item[i], name)
     def compile(self, n, name):
         self.address(n, name)
     def __eq__(self, other):
@@ -422,6 +425,7 @@ class StructDecl(Expr, Frame):
             field.type_spec.analyze()
             field.declare(self)
         env.structs[self.name] = self
+    
     def compile(self):
         pass
 
@@ -438,6 +442,7 @@ class Decl(Expr):
     def analyze(self, n):
         self.type_spec.analyze()
         env.space += self.type_spec.size
+    # def address(self)
     def store(self, n):        
         self.compile(n)
         self.id.init_store(n)
@@ -551,6 +556,37 @@ class Assign(Expr):
         self.left.store(n)
         return Reg(n)
 
+class ListAssign(Assign): #TODO
+    def analyze(self, n):
+        self.left.analyze_store(n)
+        for i, name in enumerate(self.left.type_spec):
+            self.right[i].analyze(n+1)
+    def compile(self, n):        
+        self.left.compile(n)
+        self.left.id.address(n)
+        for i, name in enumerate(self.left.type_spec):
+            self.left.type_spec[name].list_store(n, self.left.type_spec.index(name), self.right[i], name)
+            
+'''
+def __init__(self, postfix, attr):
+    self.postfix, self.attr = postfix, attr
+def type(self):
+    return self.postfix.type()[self.attr]
+def analyze(self, n):
+    self.postfix.analyze(n)
+def analyze_store(self, n):
+    self.analyze(n+1)
+def address(self, n):
+    emit.inst(Op.ADD, self.postfix.compile(n), self.postfix.type().index(self.attr))
+    return Reg(n)
+def store(self, n):
+    emit.store(Reg(n), self.postfix.address(n+1), self.postfix.type().index(self.attr), self.attr)
+def compile(self, n):        
+    emit.load(Reg(n), self.postfix.address(n), self.postfix.type().index(self.attr), self.attr)
+    return Reg(n)
+'''
+            
+
 class Global(Assign):
     def type(self):
         return self.left.type()
@@ -563,7 +599,7 @@ class Global(Assign):
             emit.glob(self.left.id.name, self.right.compile(0))
 
 class Args(Expr, UserList):
-    def analyze(self, n):        
+    def analyze(self, n):
         for i, arg in enumerate(self, n):
             arg.analyze(i)
     def compile(self, n):
@@ -572,6 +608,11 @@ class Args(Expr, UserList):
         if n > 0:
             for i, arg in enumerate(self):
                 emit.inst(Op.MOV, Reg(i), Reg(n+i)) 
+
+class List(Expr, UserList):
+    def analyze(self, n):
+        for item in self:
+            item.analyze(n+1)
 
 class Call(Expr):
     def __init__(self, id, args):

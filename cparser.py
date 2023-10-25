@@ -6,7 +6,7 @@ Created on Mon Jul  3 19:47:39 2023
 """
 
 import re
-from cnodes import GlobDecl, Post, Pre, Switch, Case, Const, Do, Decl, Array, Struct, Pointer, Type, Conditional, Cast, Arrow, Id, Num, Unary, Binary, Compare, Call, Args, FuncDecl, Assign, If, Block, Program, Return, While, For, Break, Continue, Script, StructDecl, Params, Fields, Logic, Dot, Deref, AddrOf, Main, Global, Char, String
+from cnodes import ListAssign, List, GlobDecl, Post, Pre, Switch, Case, Const, Do, Decl, Array, Struct, Pointer, Type, Conditional, Cast, Arrow, Id, Num, Unary, Binary, Compare, Call, Args, FuncDecl, Assign, If, Block, Program, Return, While, For, Break, Continue, Script, StructDecl, Params, Fields, Logic, Dot, Deref, AddrOf, Main, Global, Char, String
 
 '''
 TODO
@@ -18,10 +18,12 @@ TODO
 [X] Proper ++int and int++
 [ ] Unions
 [ ] Enums
+[ ] peek2
+[ ] labels and goto
 '''
 
 class MetaLexer(type):
-    def __init__( self, name, bases, attrs ):
+    def __init__(self, name, bases, attrs):
         self.action = {}
         regex = []        
         flag = attrs['flag'] if 'flag' in attrs else 0 #re.NOFLAG
@@ -371,8 +373,25 @@ class CParser:
         #     self.assign()
     
     def const_expr(self):
-        return self.cond()
+        '''
+        CONST -> EXPR
+        '''
+        return self.expr()
   
+    def init_list(self):
+        '''
+        INIT_LIST -> CONST|'{' INIT_LIST {',' INIT_LIST} '}'
+        '''
+        if self.accept('{'):
+            init = List()
+            init.append(self.init_list())
+            while self.accept(','):                
+                init.append(self.init_list())
+            self.expect('}')
+            return init
+        else:
+            return self.const_expr()
+             
     def statement(self):
         '''
         STATE -> '{' BLOCK '}'
@@ -484,7 +503,10 @@ class CParser:
         '''
         init = self.decl()
         if self.accept('='):
-            init = Assign(init, self.expr())
+            if self.peek('{'):
+                init = ListAssign(init, self.init_list())
+            else:
+                init = Assign(init, self.expr())
         self.expect(';')
         return init
     
@@ -529,7 +551,7 @@ class CParser:
                     self.error()
             else:
                 type_qual = self.type_qual()
-                if self.accept('{'):
+                if self.accept('{'):                        #Struct
                     assert type(type_qual) is Struct
                     fields = Fields()
                     while not self.accept('}'):
@@ -539,7 +561,7 @@ class CParser:
                     program.append(StructDecl(type_qual.name, fields))
                 else:
                     iden = Id(self.expect('id'))
-                    if self.accept('('):
+                    if self.accept('('):                    #Function
                         params = self.params()
                         self.expect(')')
                         self.expect('{')
@@ -549,13 +571,13 @@ class CParser:
                             program.insert(0, Main(block))
                         else:
                             program.append(FuncDecl(type_qual, iden, params, block))
-                    else:
+                    else:                                   #Global
                         while self.accept('['):
                             type_qual = Array(type_qual, Num(self.expect('num')))
                             self.expect(']')
                         init = GlobDecl(type_qual, iden)
                         if self.accept('='):
-                            init = Global(init, self.const_expr())
+                            init = Global(init, self.init_list())
                         self.expect(';')
                         program.append(init)
         return program        
