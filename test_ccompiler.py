@@ -174,8 +174,8 @@ sum:
   ADD A, B
   LD [SP, 1], A ; s
   LD A, [SP, 2] ; i
-  ADD A, 1
-  LD [SP, 2], A ; i
+  ADD B, A, 1
+  LD [SP, 2], B ; i
   JR .L1
 .L2:
   LD A, [SP, 1] ; s
@@ -307,8 +307,8 @@ puts:
   CALL putchar
   MOV B, A
   LD B, [SP, 0] ; str
-  ADD B, 1
-  LD [SP, 0], B ; str
+  ADD C, B, 1
+  LD [SP, 0], C ; str
   JR .L2
 .L3:
   LD B, '\\n'
@@ -340,31 +340,45 @@ foo:
 '''
 
 STRUCTS_ASM = '''
-.S0: "Cloud\0"
-.S1: "Colin\0"
-.S2: "ccslon@gmail.com\0"
-foo:
-  PUSH A
-  SUB SP, 8
-  ADD A, SP, 0
-  LD [SP, 4], A ; c
+.S0: "Cloud\\0"
+.S1: "Colin\\0"
+.S2: "ccslon@gmail.com\\0"
+stack_cat:
+  PUSH A, B
+  SUB SP, 4
   MOV A, 10
-  LD [SP, 1], A
+  ADD B, SP, 0
+  LD [B, 1], A ; age
   LD A, =.S0
-  LD [SP, 0], A
+  ADD B, SP, 0
+  LD [B, 0], A ; name
   LD A, =.S1
-  LD [SP, 2], A
+  ADD B, SP, 0
+  ADD B, 2
+  LD [B, 0], A ; name
   LD A, =.S2
-  LD [SP, 3], A
-  ADD A, SP, 1
-  LD [SP, 5], A ; ptr
-  LD A, [SP, 0]
-  LD [SP, 6], A ; cat_name
-  LD A, [SP, 2]
-  LD [SP, 7], A ; owner_name
-  ADD SP, 8
-  POP A
+  ADD B, SP, 0
+  ADD B, 2
+  LD [B, 1], A ; email
+  ADD SP, 4
+  POP A, B
   RET
+'''
+GLOB_STRUCT_ASM = '''
+  LD A, 32512
+  LD B, =stdout
+  LD B, [B]
+  LD [B, 0], A ; buffer
+  MOV A, 0
+  LD B, =stdout
+  LD B, [B]
+  LD [B, 1], A ; read
+  MOV A, 0
+  LD B, =stdout
+  LD B, [B]
+  LD [B, 2], A ; write
+  HALT
+stdout: space 3
 '''
 
 class TestCompiler(TestCase):
@@ -423,8 +437,11 @@ class TestCompiler(TestCase):
     def test_array(self):
         self.code_eq_asm('array.c', ARRAY_ASM)
         
-    # def test_structs(self):
-    #     self.code_eq_asm('structs.c', STRUCTS_ASM)
+    def test_structs(self):
+        self.code_eq_asm('structs.c', STRUCTS_ASM)
+        
+    def test_glob_struct(self):
+        self.code_eq_asm('globs.c',GLOB_STRUCT_ASM)
 
 if __name__ == '__main__':
     main()
