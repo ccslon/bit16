@@ -569,7 +569,7 @@ class Assign(Expr):
         self.left.store(n)
         return Reg(n)
 
-class ListAssign(Assign): #TODO
+class ListAssign(Assign):
     def analyze(self, n):
         self.left.analyze_store(n)
         for i, item in enumerate(self.right):
@@ -580,26 +580,6 @@ class ListAssign(Assign): #TODO
         for i, item in enumerate(self.right):
             item.load(n+1)
             emit.store(Reg(n+1), Reg(n), i)
-            
-'''
-def __init__(self, postfix, attr):
-    self.postfix, self.attr = postfix, attr
-def type(self):
-    return self.postfix.type()[self.attr]
-def analyze(self, n):
-    self.postfix.analyze(n)
-def analyze_store(self, n):
-    self.analyze(n+1)
-def address(self, n):
-    emit.inst(Op.ADD, self.postfix.compile(n), self.postfix.type().index(self.attr))
-    return Reg(n)
-def store(self, n):
-    emit.store(Reg(n), self.postfix.address(n+1), self.postfix.type().index(self.attr), self.attr)
-def compile(self, n):        
-    emit.load(Reg(n), self.postfix.address(n), self.postfix.type().index(self.attr), self.attr)
-    return Reg(n)
-'''
-            
 
 class Global(Assign):
     def type(self):
@@ -611,6 +591,16 @@ class Global(Assign):
             emit.space(self.left.id.name, self.left.type_spec.size)
         else:
             emit.glob(self.left.id.name, self.right.compile(0))
+            
+class GlobalList(Global):
+    def type(self):
+        return self.left.type()
+    def declare(self):
+        self.left.declare()
+    def compile(self):
+        pass #TODO
+        # emit.label.append(self.left.id.name)
+        # for i in self.
 
 class Args(Expr, UserList):
     def analyze(self, n):

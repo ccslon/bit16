@@ -1,3 +1,8 @@
+struct FILE {
+    void* buffer;
+    
+}
+
 const char* STDOUT = 0x7fff;
 int putchar(char c) {
     *STDOUT = c;

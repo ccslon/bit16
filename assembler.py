@@ -100,6 +100,9 @@ class Assembler:
     def new_char(self, char):
         self.data.append((self.labels, Char, (char,)))
         self.labels = []
+    def new_string(self, string): #TODO
+        for char in string:
+            self.new_char(char)
         
     def assemble(self, asm):        
         self.inst = []
@@ -111,7 +114,14 @@ class Assembler:
             if line:
                 self.tokens = lex(line)
                 self.index = 0
-                if self.peek('label'):
+                
+                if self.peek('const'):
+                    self.new_data(*self.values())
+                elif self.peek('char'):
+                    self.new_char(*self.values())
+                elif self.peek('string'):
+                    pass
+                elif self.peek('label'):
                     print(f'{self.line_no: >2}|{line}')
                     if self.match('label', ':'):
                         self.label(*self.values())
