@@ -156,6 +156,27 @@ divmod_end:
     ret
     
 '''
+global_struct = '''
+stdout:
+    x7f00
+    0
+    0
+.S0: "Cloud\\0"
+.S1: "Colin\\0"
+.S2: "ccs@email.com"
+cloud:
+    .S0
+    10
+    .S1
+    .S2
+ld A, =cloud
+ld B, [A, 1]
+add B, 1
+LD [A, 1], B
+halt
+    
+'''
+
 
 if __name__ == '__main__':
-    assembler.assemble(string_test)
+    assembler.assemble(global_struct)

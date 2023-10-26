@@ -115,12 +115,12 @@ class Assembler:
                 self.tokens = lex(line)
                 self.index = 0
                 
-                if self.peek('const'):
+                if self.match('const'):
                     self.new_data(*self.values())
-                elif self.peek('char'):
+                elif self.match('char'):
                     self.new_char(*self.values())
-                elif self.peek('string'):
-                    pass
+                elif self.match('label'):
+                    self.new_data(*self.values())
                 elif self.peek('label'):
                     print(f'{self.line_no: >2}|{line}')
                     if self.match('label', ':'):
