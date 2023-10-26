@@ -52,7 +52,7 @@ class CLexer(LexerBase):
     RE_string = r'"[^"]*"'
     RE_include = r'include'
     RE_const = r'const'
-    RE_type = r'(void)|(int)|(char)'
+    RE_type = r'\b((void)|(int)|(char))\b'
     RE_struct = r'struct'
     RE_union = r'union'
     RE_enum = r'enum'
@@ -382,15 +382,19 @@ class CParser:
         '''
         INIT_LIST -> CONST|'{' INIT_LIST {',' INIT_LIST} '}'
         '''
-        if self.accept('{'):
-            init = List()
-            init.append(self.init_list())
-            while self.accept(','):                
-                init.append(self.init_list())
+        init = List()
+        if self.accept('{'):    
+            init.extend(self.init_list())
             self.expect('}')
-            return init
         else:
-            return self.const_expr()
+            init.append(self.const_expr())
+        while self.accept(','):
+            if self.accept('{'):
+                init.extend(self.init_list())
+                self.expect('}')
+            else:
+                init.append(self.const_expr())
+        return init
              
     def statement(self):
         '''
@@ -503,8 +507,9 @@ class CParser:
         '''
         init = self.decl()
         if self.accept('='):
-            if self.peek('{'):
+            if self.accept('{'):
                 init = ListAssign(init, self.init_list())
+                self.expect('}')
             else:
                 init = Assign(init, self.expr())
         self.expect(';')

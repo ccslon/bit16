@@ -21,9 +21,15 @@ class Frame(UserDict):
     def __setitem__(self, name, type_spec):
         self.indices[name] = self.size
         self.size += type_spec.size
-        super().__setitem__(name, type_spec)
-    def index(self, name):
-        return self.indices[name]
+        super().__setitem__(name, type_spec)        
+    def __getitem__(self, item):
+        if type(item) is int:
+            item = list(self.keys())[item]
+        return super().__getitem__(item)
+    def index(self, item):
+        if type(item) is int:
+            item = list(self.keys())[item]
+        return self.indices[item]
     def copy(self):
         return self.size, self.indices.copy(), self.data.copy()
     
@@ -341,7 +347,7 @@ class Type(Expr):
         emit.inst4(Op.ADD, Reg(n), Reg.SP, env.scope.index(name))
     def init_store(self, n, name):
         self.store(n, name)     
-    def list_store(self, n, root, item, name):
+    def list_store(self, n, root, item, name=None):
         item.load(n+1)
         emit.store(Reg(n+1), Reg(n), root, name)
     def store(self, n, name):
@@ -385,11 +391,17 @@ class Array(Type):
     def __init__(self, of, length):
         self.of = of
         self.length = length.value
+    def __getitem__(self, item):
+        return self.of
     def analyze(self):
         self.of.analyze()
         self.size = self.length * self.of.size
     def address(self, n, name):
         emit.inst4(Op.ADD, Reg(n), Reg.SP, env.scope.index(name))
+    def list_store(self, n, root, item, name=None):
+        emit.inst4(Op.ADD, Reg(n+1), Reg(n), root)
+        for i in range(len(item)):
+            self.of.list_store(n+1, i*self.of.size, item[i])
     def compile(self, n, name):
         self.address(n, name)
     def __eq__(self, other):
@@ -401,11 +413,12 @@ class Struct(Type, Frame):
     def analyze(self):
         self.size, self.indices, self.data = env.structs[self.name].copy()
     def address(self, n, name):
-        emit.inst4(Op.ADD, Reg(n), Reg.SP, env.scope.index(name))    
-    def list_store(self, n, root, item, name):
+        emit.inst4(Op.ADD, Reg(n), Reg.SP, env.scope.index(name))
+        
+    def list_store(self, n, root, item, name=None):
         emit.inst4(Op.ADD, Reg(n+1), Reg(n), root)
-        for i, name in enumerate(self):
-            self[name].list_store(n+1, self.index(name), item[i], name)
+        for i in range(len(item)):
+            self[i].list_store(n+1, self.index(i), item[i], name)
     def compile(self, n, name):
         self.address(n, name)
     def __eq__(self, other):
@@ -559,13 +572,17 @@ class Assign(Expr):
 class ListAssign(Assign): #TODO
     def analyze(self, n):
         self.left.analyze_store(n)
-        for i, name in enumerate(self.left.type_spec):
-            self.right[i].analyze(n+1)
+        for i, item in enumerate(self.right):
+            item.analyze(n+1)
     def compile(self, n):        
         self.left.compile(n)
         self.left.id.address(n)
-        for i, name in enumerate(self.left.type_spec):
-            self.left.type_spec[name].list_store(n, self.left.type_spec.index(name), self.right[i], name)
+        for i, item in enumerate(self.right):
+            item.load(n)
+            emit.store(Reg(n+1), Reg(n), i)
+            # self.left.type_spec[i].list_store(n, self.left.type_spec.index(i), item)
+        # for i, name in enumerate(self.left.type_spec):
+        #     self.left.type_spec[name].list_store(n, self.left.type_spec.index(name), self.right[i], name)
             
 '''
 def __init__(self, postfix, attr):
