@@ -17,9 +17,9 @@ void stack_cat() {
     cat.owner.email = "ccslon@gmail.com";
 }
 
-void init_cat() {
+void init_cat(char* name) {
     struct Owner owner = {"Colin", "ccs@email.com"};
-    struct Cat cat = {"Cloud",10,{"Colin", "ccs@email.com"}};
+    struct Cat cat = {name,10,{"Colin", "ccs@email.com"}};
 }
 
 void ints() {

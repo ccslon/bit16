@@ -578,11 +578,8 @@ class ListAssign(Assign): #TODO
         self.left.compile(n)
         self.left.id.address(n)
         for i, item in enumerate(self.right):
-            item.load(n)
+            item.load(n+1)
             emit.store(Reg(n+1), Reg(n), i)
-            # self.left.type_spec[i].list_store(n, self.left.type_spec.index(i), item)
-        # for i, name in enumerate(self.left.type_spec):
-        #     self.left.type_spec[name].list_store(n, self.left.type_spec.index(name), self.right[i], name)
             
 '''
 def __init__(self, postfix, attr):
