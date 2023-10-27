@@ -107,6 +107,8 @@ class Emitter:
         self.add('RET')
     def load_glob(self, rd, name):
         self.add(f'LD {rd.name}, ={name}')
+    def data(self, value):
+        self.add(str(value))
     def load(self, rd, rb, offset5=None, name=None):
         self.add(f'LD {rd.name}, [{rb.name}'+(f', {offset5}' if offset5 is not None else '')+']'+(f' ; {name}' if name else ''))
     def store(self, rd, rb, offset5=None, name=None):
@@ -177,6 +179,8 @@ class Num(Expr):
         return Reg(n)
     def compile(self, n):
         return self.value
+    def glob(self):
+        return self.value
 
 class Char(Expr):
     def __init__(self, value):
@@ -188,6 +192,8 @@ class Char(Expr):
     def compile(self, n):
         emit.imm(Reg(n), self.value)
         return Reg(n)
+    def glob(self):
+        return self.vale
     
 class String(Expr):
     def __init__(self, value):
@@ -203,6 +209,8 @@ class String(Expr):
         emit.load_glob(Reg(n), f'.S{env.strings.index(self.value)}')
     def compile(self, n):
         return f'"{self.value}\\0"'
+    def glob(self):
+        return f'.S{env.strings.index(self.value)}'
 
 class Id(Expr):
     def __init__(self, name):
@@ -218,8 +226,7 @@ class Id(Expr):
     def type(self):
         if self.name in env.scope:
             return env.scope[self.name]
-        elif self.name in env.globals:
-            return Pointer(env.globals[self.name])
+        return Pointer(env.globals[self.name])
     def init_store(self, n):
         if self.name in env.scope:
             self.type().init_store(n, self.name)
@@ -598,9 +605,9 @@ class GlobalList(Global):
     def declare(self):
         self.left.declare()
     def compile(self):
-        pass #TODO
-        # emit.label.append(self.left.id.name)
-        # for i in self.
+        emit.labels.append(self.left.id.name)
+        for item in self.right:
+            emit.data(item.glob())
 
 class Args(Expr, UserList):
     def analyze(self, n):
@@ -786,8 +793,6 @@ class Script(Expr):
         self.sub.analyze(n+1)
     def analyze_store(self, n):
         self.analyze(n+1)
-    def dot(self, n):
-        self.sub.compile(n)
     def address(self, n):
         self.id.compile(n)
         self.sub.load(n+1)
@@ -812,9 +817,8 @@ class Arrow(Expr):
         self.postfix.analyze(n)
     def analyze_store(self, n):
         self.analyze(n+1)
-    def address(self, n):
-        self.postfix.compile(n)
-        emit.inst(Op.ADD, Reg(n), self.postfix.type().to.index(self.attr))
+    def address(self, n):        
+        emit.inst(Op.ADD, self.postfix.compile(n), self.postfix.type().to.index(self.attr))
         return Reg(n)
     def store(self, n):
         emit.store(Reg(n), self.postfix.compile(n+1), self.postfix.type().to.index(self.attr), self.attr)

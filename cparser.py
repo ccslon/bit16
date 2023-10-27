@@ -6,7 +6,7 @@ Created on Mon Jul  3 19:47:39 2023
 """
 
 import re
-from cnodes import ListAssign, List, GlobDecl, Post, Pre, Switch, Case, Const, Do, Decl, Array, Struct, Pointer, Type, Conditional, Cast, Arrow, Id, Num, Unary, Binary, Compare, Call, Args, FuncDecl, Assign, If, Block, Program, Return, While, For, Break, Continue, Script, StructDecl, Params, Fields, Logic, Dot, Deref, AddrOf, Main, Global, Char, String
+from cnodes import GlobalList, ListAssign, List, GlobDecl, Post, Pre, Switch, Case, Const, Do, Decl, Array, Struct, Pointer, Type, Conditional, Cast, Arrow, Id, Num, Unary, Binary, Compare, Call, Args, FuncDecl, Assign, If, Block, Program, Return, While, For, Break, Continue, Script, StructDecl, Params, Fields, Logic, Dot, Deref, AddrOf, Main, Global, Char, String
 
 '''
 TODO
@@ -582,7 +582,11 @@ class CParser:
                             self.expect(']')
                         init = GlobDecl(type_qual, iden)
                         if self.accept('='):
-                            init = Global(init, self.init_list())
+                            if self.accept('{'):
+                                init = GlobalList(init, self.init_list())
+                                self.expect('}')
+                            else:
+                                init = Global(init, self.expr())                            
                         self.expect(';')
                         program.append(init)
         return program        
