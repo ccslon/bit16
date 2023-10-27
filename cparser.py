@@ -6,22 +6,22 @@ Created on Mon Jul  3 19:47:39 2023
 """
 
 import re
-from cnodes import GlobalList, ListAssign, List, GlobDecl, Post, Pre, Switch, Case, Const, Do, Decl, Array, Struct, Pointer, Type, Conditional, Cast, Arrow, Id, Num, Unary, Binary, Compare, Call, Args, FuncDecl, Assign, If, Block, Program, Return, While, For, Break, Continue, Script, StructDecl, Params, Fields, Logic, Dot, Deref, AddrOf, Main, Global, Char, String
+from cnodes import Label, Goto, GlobalList, ListAssign, List, GlobDecl, Post, Pre, Switch, Case, Const, Do, Decl, Array, Struct, Pointer, Type, Conditional, Cast, Arrow, Id, Num, Unary, Binary, Compare, Call, Args, FuncDecl, Assign, If, Block, Program, Return, While, For, Break, Continue, Script, StructDecl, Params, Fields, Logic, Dot, Deref, AddrOf, Main, Global, Char, String
 
 '''
 TODO
 [ ] Type checking
 [ ] '.' vs '->' checking
+[ ] Cast
 [X] Allocating arrays
 [X] Globals overhaul including global structs and arrays
-[ ] Init lists e.g. struct FILE stdout = {0x7f00, 0, 0};
+[X] Init lists e.g. struct FILE stdout = {0x7f00, 0, 0};
 [X] Proper ++int and int++
 [ ] Unions
 [ ] Enums
-[ ] peek2
-[ ] labels and goto
+[X] peek2
+[X] labels and goto
 '''
-
 class MetaLexer(type):
     def __init__(self, name, bases, attrs):
         self.action = {}
@@ -64,6 +64,7 @@ class CLexer(LexerBase):
     RE_switch = r'switch'
     RE_case = r'case'
     RE_default = r'default'
+    RE_goto = r'\b(goto)\b'
     RE_continue = r'continue'
     RE_break = r'break'
     RE_return = r'return'
@@ -405,7 +406,7 @@ class CParser:
                 |ASSIGN ';'
         SELECT -> 'if' '(' EXPR ')' STATE ['else' STATE]|'switch' '(' EXPR ')' '{' {'case' CONST_EXPR ':' STATEMENT} ['default' ':' STATEMENT] '}'
         LOOP -> 'while' '(' EXPR ')' STATE|'for' '(' EXPR ';' EXPR ';' EXPR ')' STATE|'do' STATEMENT 'while' '(' EXPR ')' ';'
-        JUMP -> 'return' [EXPR] ';' |'break' ';' |'continue' ';'
+        JUMP -> 'goto' ';'|'return' [EXPR] ';' |'break' ';' |'continue' ';'
         '''
         if self.accept('{'):
             statement = self.block()
@@ -457,6 +458,10 @@ class CParser:
             step = self.expr()
             self.expect(')')
             statement = For(init, cond, step, self.statement())
+        
+        elif self.accept('goto'):
+            statement = Goto(self.expect('id'))
+            self.expect(';')        
             
         elif self.accept('continue'):
             statement = Continue()
@@ -471,6 +476,9 @@ class CParser:
             if not self.accept(';'):
                 statement.expr = self.expr()
                 self.expect(';')
+        elif self.peek2('id',':'):
+            statement = Label(next(self))
+            next(self)
         else:
             statement = self.assign()
             assert isinstance(statement, (Assign, Call, Pre, Post))
@@ -484,7 +492,7 @@ class CParser:
         block = Block()        
         while self.peek('const','type','struct','union'):
             block.append(self.init())
-        while self.peek('{','*','id','++','--','if','switch','while','do','for','return','break','continue'):
+        while self.peek('{','*','id','++','--','if','switch','while','do','for','goto','return','break','continue'):
             block.append(self.statement())
         if not self.peek('}') or len(block) > 0:
             block.extend(self.block())
@@ -617,9 +625,13 @@ class CParser:
         self.index += 1
         return value
         
-    def peek(self, *symbols):
-        type_, value, _ = self.tokens[self.index]
+    def peek(self, *symbols, offset=0):
+        type_, value, _ = self.tokens[self.index+offset]
         return type_ in symbols or (not value.isalnum() and value in symbols)
+    
+    def peek2(self, sym1, sym2):
+        if self.index < len(self.tokens) - 1:            
+            return self.peek(sym1) and self.peek(sym2, offset=1)
     
     def accept(self, *symbols):
         if self.peek(*symbols):

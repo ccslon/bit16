@@ -32,7 +32,6 @@ class Frame(UserDict):
         return self.indices[item]
     def copy(self):
         return self.size, self.indices.copy(), self.data.copy()
-    
 
 class Scope(Frame):
     def __init__(self, old=None):
@@ -154,9 +153,7 @@ class Expr:
     
 class Num(Expr):
     def __init__(self, value):
-        if value == 'true':
-            self.value = 1
-        elif value in ['false','null']:
+        if value == 'NULL':
             self.value = 0
         elif value.startswith('0x'):
             self.value = int(value, base=16)
@@ -220,19 +217,18 @@ class Id(Expr):
     def address(self, n):        
         if self.name in env.scope:
             env.scope[self.name].address(n, self.name)
-        elif self.name in env.globals:
-            emit.load_glob(Reg(n), self.name)
+        else:
+            env.globals[self.name].glob_addr(n, self.name)
         return Reg(n)
     def type(self):
         if self.name in env.scope:
             return env.scope[self.name]
-        return Pointer(env.globals[self.name])
+        return env.globals[self.name]
     def init_store(self, n):
-        if self.name in env.scope:
-            self.type().init_store(n, self.name)
-        elif self.name in env.globals:
-            emit.load_glob(Reg(n+1), self.name)
-            emit.store(Reg(n), Reg(n+1))
+        env.scope[self.name].init_store(n, self.name)
+        # elif self.name in env.globals:
+        #     emit.load_glob(Reg(n+1), self.name)
+        #     emit.store(Reg(n), Reg(n+1))
     def store(self, n):
         if self.name in env.scope:
             self.type().store(n, self.name)
@@ -242,9 +238,8 @@ class Id(Expr):
     def compile(self, n):
         if self.name in env.scope:
             self.type().compile(n, self.name)
-        elif self.name in env.globals:
-            emit.load_glob(Reg(n), self.name)
-            emit.load(Reg(n), Reg(n))
+        else:
+            env.globals[self.name].glob(n, self.name)
         return Reg(n)   
 
 class AddrOf(Expr):
@@ -359,6 +354,11 @@ class Type(Expr):
         emit.store(Reg(n+1), Reg(n), root, name)
     def store(self, n, name):
         emit.store(Reg(n), Reg.SP, env.scope.index(name), name)
+    def glob(self, n, name):
+        emit.load_glob(Reg(n), name)    
+        emit.load(Reg(n), Reg(n), name)
+    def glob_addr(self, n, name):
+        emit.load_glob(Reg(n), name)
     def compile(self, n, name):
         emit.load(Reg(n), Reg.SP, env.scope.index(name), name)
     def __eq__(self, other):
@@ -376,6 +376,8 @@ class Const(Expr):
         self.type.store(n, name)
     def store(self, n, name):
         self.type.const_store(n, name)
+    def glob(self, n, name):
+        self.type(n, name)
     def compile(self, n, name):
         self.type.compile(n, name)
     def __eq__(self, other):
@@ -385,6 +387,7 @@ class Const(Expr):
 class Pointer(Type):
     def __init__(self, to):
         self.to = to
+        self.of = to
         self.size = 1
     def analyze(self):
         self.to.analyze()
@@ -409,6 +412,8 @@ class Array(Type):
         emit.inst4(Op.ADD, Reg(n+1), Reg(n), root)
         for i in range(len(item)):
             self.of.list_store(n+1, i*self.of.size, item[i])
+    def glob(self, n, name):
+        self.glob_addr(n, name)
     def compile(self, n, name):
         self.address(n, name)
     def __eq__(self, other):
@@ -420,12 +425,13 @@ class Struct(Type, Frame):
     def analyze(self):
         self.size, self.indices, self.data = env.structs[self.name].copy()
     def address(self, n, name):
-        emit.inst4(Op.ADD, Reg(n), Reg.SP, env.scope.index(name))
-        
+        emit.inst4(Op.ADD, Reg(n), Reg.SP, env.scope.index(name))        
     def list_store(self, n, root, item, name=None):
         emit.inst4(Op.ADD, Reg(n+1), Reg(n), root)
         for i in range(len(item)):
             self[i].list_store(n+1, self.index(i), item[i], name)
+    def glob(self, n, name):
+        self.glob_addr(n, name)
     def compile(self, n, name):
         self.address(n, name)
     def __eq__(self, other):
@@ -594,10 +600,7 @@ class Global(Assign):
     def declare(self):
         self.left.declare()
     def compile(self):
-        if self.left.type_spec.size > 1:
-            emit.space(self.left.id.name, self.left.type_spec.size)
-        else:
-            emit.glob(self.left.id.name, self.right.compile(0))
+        emit.glob(self.left.id.name, self.right.compile(0))
             
 class GlobalList(Global):
     def type(self):
@@ -639,7 +642,19 @@ class Call(Expr):
         if n > 0:
             emit.inst(Op.MOV, Reg(n), Reg.A)
         return Reg(n)
-    
+
+class Goto(Expr):
+    def __init__(self, target):
+        self.target = target
+    def compile(self, n):
+        emit.jump(Cond.JR, self.target)
+        
+class Label(Expr):
+    def __init__(self, target):
+        self.target = target
+    def compile(self, n):
+        emit.labels.append(self.target)
+
 class If(Expr):
     def __init__(self, cond, state):
         self.cond, self.true, self.false = cond, state, None
@@ -784,20 +799,20 @@ class Return(Expr):
         emit.jump(Cond.JR, f'.L{env.func}')
         
 class Script(Expr):
-    def __init__(self, id, sub):
-        self.id, self.sub = id, sub
+    def __init__(self, postfix, sub):
+        self.postfix, self.sub = postfix, sub
     def type(self):
-        return self.id.type()
+        return self.postfix.type().of
     def analyze(self, n):
-        self.id.analyze(n)
+        self.postfix.analyze(n)
         self.sub.analyze(n+1)
     def analyze_store(self, n):
         self.analyze(n+1)
     def address(self, n):
-        self.id.compile(n)
+        self.postfix.compile(n)
         self.sub.load(n+1)
-        if type(self.id.type()) is Array and self.id.type().of.size > 1:
-            emit.inst(Op.MUL, Reg(n+1), self.id.type().of.size)
+        if type(self.postfix.type()) is Array and self.postfix.type().of.size > 1:
+            emit.inst(Op.MUL, Reg(n+1), self.postfix.type().of.size)
         emit.inst(Op.ADD, Reg(n), Reg(n+1))
         return Reg(n)
     def store(self, n):
