@@ -15,6 +15,8 @@ void stack_cat() {
     cat.name = "Cloud";
     cat.owner.name = "Colin";
     cat.owner.email = "ccslon@gmail.com";
+    int age = cat.age;
+    char* name = cat.owner.name;
 }
 
 void init_cat(char* name) {
@@ -22,7 +24,8 @@ void init_cat(char* name) {
     struct Cat cat = {name,10,{"Colin", "ccs@email.com"}};
 }
 
-void ints() {
-    int is[3] = {1,2,3};
+void array() {    
     struct Owner owners[2] = {{"Colin", "ccs@email.com"}, {"Nick", "nickel@email.com"}};
+    char* name = owners[0].name;
+    owners[1].name = "Nicole";
 }

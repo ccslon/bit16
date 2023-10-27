@@ -326,7 +326,7 @@ puts:
 ARRAY_ASM = '''
 foo:
   PUSH A, B, C
-  SUB SP, 6
+  SUB SP, 9
   MOV A, 2
   LD [SP, 5], A ; i
   MOV A, 2
@@ -334,7 +334,14 @@ foo:
   LD C, [SP, 5] ; i
   ADD B, C
   LD [B], A
-  ADD SP, 6
+  ADD A, SP, 6
+  MOV B, 1
+  LD [A, 0], B
+  MOV B, 2
+  LD [A, 1], B
+  MOV B, 3
+  LD [A, 2], B
+  ADD SP, 9
   POP A, B, C
   RET
 '''
@@ -345,7 +352,7 @@ STRUCTS_ASM = '''
 .S2: "ccslon@gmail.com\\0"
 stack_cat:
   PUSH A, B
-  SUB SP, 4
+  SUB SP, 6
   MOV A, 10
   ADD B, SP, 0
   LD [B, 1], A ; age
@@ -360,27 +367,112 @@ stack_cat:
   ADD B, SP, 0
   ADD B, 2
   LD [B, 1], A ; email
-  ADD SP, 4
+  ADD A, SP, 0
+  LD A, [A, 1] ; age
+  LD [SP, 4], A ; age
+  ADD A, SP, 0
+  ADD A, 2
+  LD A, [A, 0] ; name
+  LD [SP, 5], A ; name
+  ADD SP, 6
   POP A, B
+  RET
+.S3: "ccs@email.com\\0"
+init_cat:
+  PUSH B
+  SUB SP, 7
+  LD [SP, 0], A
+  ADD A, SP, 1
+  LD B, =.S1
+  LD [A, 0], B
+  LD B, =.S3
+  LD [A, 1], B
+  ADD A, SP, 3
+  LD B, [SP, 0] ; name
+  LD [A, 0], B
+  MOV B, 10
+  LD [A, 1], B
+  LD B, =.S1
+  LD [A, 2], B
+  LD B, =.S3
+  LD [A, 3], B
+  ADD SP, 7
+  POP B
+  RET
+.S4: "Nick\\0"
+.S5: "nickel@email.com\\0"
+.S6: "Nicole\\0"
+array:
+  PUSH A, B, C
+  SUB SP, 5
+  ADD A, SP, 0
+  LD B, =.S1
+  LD [A, 0], B
+  LD B, =.S3
+  LD [A, 1], B
+  LD B, =.S4
+  LD [A, 2], B
+  LD B, =.S5
+  LD [A, 3], B
+  ADD A, SP, 0
+  MOV B, 0
+  MUL B, 2
+  ADD A, B
+  LD A, [A, 0] ; name
+  LD [SP, 4], A ; name
+  LD A, =.S6
+  ADD B, SP, 0
+  MOV C, 1
+  MUL C, 2
+  ADD B, C
+  LD [B, 0], A ; name
+  ADD SP, 5
+  POP A, B, C
   RET
 '''
 GLOB_STRUCT_ASM = '''
+  SUB SP, 1
   LD A, 32512
   LD B, =stdout
-  LD B, [B]
   LD [B, 0], A ; buffer
   MOV A, 0
   LD B, =stdout
-  LD B, [B]
   LD [B, 1], A ; read
   MOV A, 0
   LD B, =stdout
-  LD B, [B]
   LD [B, 2], A ; write
+  LD A, =stdin
+  LD A, [A, 1] ; read
+  LD [SP, 0], A ; head
+  ADD SP, 1
   HALT
 stdout: space 3
+stdin:
+  32256
+  0
+  0
 '''
-
+GOTO_ASM = '''
+foo:
+  SUB SP, 1
+  LD [SP, 0], A
+  LD A, [SP, 0] ; bar
+  CMP A, 3
+  JLE .L1
+  MOV A, 3
+  LD [SP, 0], A ; bar
+  JR baz
+.L1:
+  LD A, [SP, 0] ; bar
+  MUL A, 3
+  LD [SP, 0], A ; bar
+baz:
+  LD A, [SP, 0] ; bar
+  JR .L0
+.L0:
+  ADD SP, 1
+  RET
+'''
 class TestCompiler(TestCase):
     
     def code_eq_asm(self, FILE_NAME, ASM):
@@ -438,10 +530,14 @@ class TestCompiler(TestCase):
         self.code_eq_asm('array.c', ARRAY_ASM)
         
     def test_structs(self):
+        self.maxDiff = None
         self.code_eq_asm('structs.c', STRUCTS_ASM)
         
     def test_glob_struct(self):
-        self.code_eq_asm('globs.c',GLOB_STRUCT_ASM)
+        self.code_eq_asm('globs.c', GLOB_STRUCT_ASM)
+        
+    def test_goto(self):
+        self.code_eq_asm('goto.c', GOTO_ASM)
 
 if __name__ == '__main__':
     main()
