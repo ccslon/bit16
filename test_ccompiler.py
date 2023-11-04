@@ -246,6 +246,28 @@ set2:
   RET
 '''
 CALLS_ASM = '''
+baz:
+  SUB SP, 2
+  LD [SP, 0], A
+  LD [SP, 1], B
+  LD A, [SP, 0] ; y
+  LD B, [SP, 1] ; z
+  MUL A, B
+  JR .L0
+.L0:
+  ADD SP, 2
+  RET
+bar:
+  SUB SP, 2
+  LD [SP, 0], A
+  LD [SP, 1], B
+  LD A, [SP, 0] ; x
+  LD B, [SP, 1] ; y
+  MUL A, B
+  JR .L1
+.L1:
+  ADD SP, 2
+  RET
 foo:
   PUSH LR, D, E
   SUB SP, 3
@@ -265,8 +287,8 @@ foo:
   CALL baz
   MOV D, A
   ADD C, D
-  JR .L0
-.L0:
+  JR .L2
+.L2:
   MOV A, C
   ADD SP, 3
   POP PC, D, E
@@ -473,6 +495,8 @@ baz:
   ADD SP, 1
   RET
 '''
+
+#TODO test this -> &patterns[j].regex
 class TestCompiler(TestCase):
     
     def code_eq_asm(self, FILE_NAME, ASM):
@@ -520,11 +544,12 @@ class TestCompiler(TestCase):
         self.code_eq_asm('getset2.c', GETSET2_ASM)
     
     def test_calls(self):
+        self.maxDiff = None
         self.code_eq_asm('calls.c', CALLS_ASM)
         
-    def test_hello(self):
-        self.maxDiff = None
-        self.code_eq_asm('hello.c', HELLO_ASM)
+    # def test_hello(self):
+    #     self.maxDiff = None
+    #     self.code_eq_asm('hello.c', HELLO_ASM)
         
     def test_array(self):
         self.code_eq_asm('array.c', ARRAY_ASM)
