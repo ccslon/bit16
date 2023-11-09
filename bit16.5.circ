@@ -273,6 +273,12 @@
       <a name="facing" val="south"/>
       <a name="incoming" val="16"/>
     </comp>
+    <comp lib="0" loc="(780,1350)" name="Pin">
+      <a name="appearance" val="NewPins"/>
+      <a name="facing" val="west"/>
+      <a name="output" val="true"/>
+      <a name="width" val="7"/>
+    </comp>
     <comp lib="0" loc="(870,390)" name="Splitter">
       <a name="appear" val="center"/>
       <a name="facing" val="west"/>
@@ -616,6 +622,7 @@
       <a name="color" val="#41ff00"/>
       <a name="trigger" val="falling"/>
     </comp>
+    <comp lib="5" loc="(590,1300)" name="Keyboard"/>
     <comp lib="5" loc="(590,690)" name="Button">
       <a name="facing" val="west"/>
     </comp>
@@ -1078,6 +1085,8 @@
     <wire from="(720,650)" to="(830,650)"/>
     <wire from="(720,660)" to="(730,660)"/>
     <wire from="(720,670)" to="(740,670)"/>
+    <wire from="(730,1310)" to="(730,1350)"/>
+    <wire from="(730,1350)" to="(780,1350)"/>
     <wire from="(730,230)" to="(870,230)"/>
     <wire from="(730,270)" to="(880,270)"/>
     <wire from="(730,600)" to="(730,660)"/>
