@@ -10,8 +10,8 @@ from cnodes import Label, Goto, GlobalList, ListAssign, List, GlobDecl, Post, Pr
 
 '''
 TODO
-[ ] Type checking
-[ ] '.' vs '->' checking
+[X] Type checking
+[X] '.' vs '->' checking
 [ ] Cast
 [X] Allocating arrays
 [X] Globals overhaul including global structs and arrays
@@ -21,7 +21,24 @@ TODO
 [ ] Enums
 [X] peek2
 [X] labels and goto
+[ ] Typedef
+[ ] Error handling
+[ ] Generate vs Reduce
+[ ] Scope in Parser?
+[ ] Line numbers in errors
+[ ] Returning local structs
+[ ] PREPROCESSING
+1. combine cparser.py, cnodes.py, and ccompiler.py
+2. Add globals/locals to env in parser
+    in Parser.decls() add to env
+    next(Parser) returns token or proper id
+    
+    
 '''
+class Token:
+    def __init__(self, type, lexeme, line_no):
+        self.type, self.lexeme, self.line_no = type, lexeme, line_no
+
 class MetaLexer(type):
     def __init__(self, name, bases, attrs):
         self.action = {}
@@ -41,7 +58,7 @@ class MetaLexer(type):
 
 class LexerBase(metaclass=MetaLexer):
     def lex(self, text):
-        return [(match.lastgroup, result, self.line_no) for match in self.regex.finditer(text) if (result := self.action[match.lastgroup](self, match.group())) is not None] + [('end','',self.line_no)]
+        return [Token(match.lastgroup, result, self.line_no) for match in self.regex.finditer(text) if (result := self.action[match.lastgroup](self, match.group())) is not None] + [('end','',self.line_no)]
 
 class CLexer(LexerBase):    
     def __init__(self):
@@ -427,7 +444,7 @@ class CParser:
             if self.accept('else'):
                 statement.false = self.statement()
             
-        elif self.accept('switch'): #BIG TODO
+        elif self.accept('switch'):
             self.expect('(')
             test = self.expr()
             self.expect(')')
@@ -628,13 +645,15 @@ class CParser:
         return program
         
     def __next__(self):
-        _, value, _ = self.tokens[self.index]
+        token = self.tokens[self.index]
+        if token.type == 'id':
+            return env.scope[token.lexeme]()
         self.index += 1
         return value
         
     def peek(self, *symbols, offset=0):
-        type_, value, _ = self.tokens[self.index+offset]
-        return type_ in symbols or (not value.isalnum() and value in symbols)
+        token = self.tokens[self.index+offset]
+        return token.type in symbols or (not token.value.isalnum() and token.value in symbols)
     
     def peek2(self, sym1, sym2):
         if self.index < len(self.tokens) - 1:            
@@ -650,8 +669,8 @@ class CParser:
         self.error(symbol)
         
     def error(self, expected=None):
-        etype, evalue, eline_no = self.tokens[self.index]
-        raise SyntaxError(f'Line {eline_no}: Unexpected {etype} token "{evalue}".'+ (f' Expected "{expected}"' if expected is not None else ''))
+        error = self.tokens[self.index]
+        raise SyntaxError(f'Line {error.line_no}: Unexpected {error.type} token "{error.value}".'+ (f' Expected "{expected}"' if expected is not None else ''))
         
 parser = CParser()
 

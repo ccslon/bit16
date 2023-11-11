@@ -27,6 +27,7 @@ def ccompile(file_name, sflag=False, fflag=True):
 
 if __name__ == '__main__':
     # ccompile('hello.c', sflag=True, oflag=False)    
-    ccompile('tests//structs.c', sflag=True, fflag=False)
-    # ccompile('tests//globs.c')
+    ccompile('tests//goto.c', sflag=True, fflag=False)
+    # ccompile('tests//hello.c')
     # ccompile('std//stdio.h', sflag=True, oflag=False)
+    # ccompile('c//cats.c')

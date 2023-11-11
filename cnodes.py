@@ -193,13 +193,13 @@ class Char(Expr):
         emit.imm(Reg(n), self.value)
         return Reg(n)
     def glob(self):
-        return self.vale
+        return self.value
     
 class String(Expr):
     def __init__(self, value):
         self.value = value[1:-1]
     def type(self):
-        return Const(Pointer(Type('char')))
+        return Pointer(Const(Type('char')))
     def analyze(self, n):
         env.regs = max(env.regs, n)
         if self.value not in env.strings:
@@ -229,9 +229,6 @@ class Id(Expr):
         return env.globals[self.name]
     def init_store(self, n):
         env.scope[self.name].init_store(n, self.name)
-        # elif self.name in env.globals:
-        #     emit.load_glob(Reg(n+1), self.name)
-        #     emit.store(Reg(n), Reg(n+1))
     def store(self, n):
         if self.name in env.scope:
             self.type().store(n, self.name)
@@ -328,10 +325,10 @@ class Cast(Expr):
 class Conditional(Expr):
     def __init__(self, cond, true, false):
         self.cond, self.true, self.false = cond, true, false
-        assert self.true.type() == self.false.type()
-        return self.true.type()
+        
+        # return self.true.type()
     def compile(self, n):
-        env.if_jump_end = False
+        assert self.true.type() == self.false.type()
         label = env.next_label()
         sublabel = env.next_label() if self.false else label
         self.cond.compare(n, sublabel)
@@ -478,7 +475,6 @@ class Decl(Expr):
     def analyze(self, n):
         self.type_spec.analyze()
         env.space += self.type_spec.size
-    # def address(self)
     def store(self, n):        
         self.compile(n)
         self.id.init_store(n)

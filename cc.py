@@ -1,0 +1,888 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Wed Nov  8 10:16:36 2023
+
+@author: ccslon
+"""
+
+'''
+TODO
+
+'''
+
+import re
+from collections import UserList, UserDict
+from bit16 import Reg, Op, Cond
+
+class Loop(UserList):
+    def start(self):
+        return self[-1][0]
+    def end(self):
+        return self[-1][1]
+
+class Frame(UserDict):
+    def __init__(self):          
+        self.size = 0
+        super().__init__()
+    def __setitem__(self, name, local):
+        local.location = self.size
+        self.size += local.type.size
+        super().__setitem__(name, local)
+
+class Scope(Frame):
+    def __init__(self, old=None):
+        if old is None:            
+            super().__init__()
+        else:            
+            self.size = old.size
+            self.data = old.data.copy()
+class Env:
+    def clear(self):
+        self.labels = 0
+        self.loop = Loop()
+        self.globals = {}
+        self.strings = []
+        self.functions = {}
+        self.if_jump_end = False
+        self.scope = Scope()
+        self.stack = []
+        self.structs = {}
+    def begin_func(self):
+        self.func = None
+        self.args = 0
+        self.regs = 0
+        self.space = 0
+        self.returns = False
+        self.calls = False
+    def begin_scope(self):
+        new = Scope(self.scope)
+        self.stack.append(self.scope)
+        self.scope = new
+    def end_scope(self):
+        self.scope = self.stack.pop() 
+    def begin_loop(self):
+        self.loop.append((self.next_label(), self.next_label()))
+    def end_loop(self):
+        self.loop.pop()
+    def next_label(self):
+        label = self.labels
+        self.labels += 1
+        return label
+
+env = Env()
+
+class Emitter:
+    def clear(self):
+        self.labels = []
+        self.asm = []
+    def add(self, asm):
+        for label in self.labels:
+            self.asm.append(f'{label}:')
+        self.asm.append(f'  {asm}')
+        self.labels.clear()
+    def space(self, name, size):
+        self.asm.append(f'{name}: space {size}')
+    def glob(self, name, value):
+        self.asm.append(f'{name}: {value}')
+    def push(self, lr, *regs):
+        if lr:
+            regs = (Reg.LR,) + regs
+        if regs:
+            self.add('PUSH '+', '.join(reg.name for reg in regs))
+    def pop(self, pc, *regs):
+        if pc:
+            regs = (Reg.PC,) + regs
+        if regs:
+            self.add('POP '+', '.join(reg.name for reg in regs))
+    def call(self, label):
+        self.add(f'CALL {label}')
+    def ret(self):
+        self.add('RET')
+    def load_glob(self, rd, name):
+        self.add(f'LD {rd.name}, ={name}')
+    def data(self, value):
+        self.add(str(value))
+    def load(self, rd, rb, offset5=None, name=None):
+        self.add(f'LD {rd.name}, [{rb.name}'+(f', {offset5}' if offset5 is not None else '')+']'+(f' ; {name}' if name else ''))
+    def store(self, rd, rb, offset5=None, name=None):
+        self.add(f'LD [{rb.name}'+(f', {offset5}' if offset5 is not None else '')+f'], {rd.name}'+(f' ; {name}' if name else ''))
+    def imm(self, rd, value):
+        self.add(f'LD {rd.name}, {value}')
+    def inst(self, op, rd, src):
+        if op in [Op.NOT, Op.NEG]:
+            self.add(f'{op.name} {rd.name}')
+        else:
+            if type(src) is Reg:
+                self.add(f'{op.name} {rd.name}, {src.name}')
+            else:
+                self.add(f'{op.name} {rd.name}, {src}')    
+    def inst3(self, op, rd, rs, rs2):
+        self.add(f'{op.name} {rd.name}, {rs.name}, {rs2.name}')
+    def inst4(self, op, rd, rs, const4):
+        self.add(f'{op.name} {rd.name}, {rs.name}, {const4}')
+    def jump(self, cond, target):
+        self.add(f'{cond.name} {target}')
+    def halt(self):
+        self.add('HALT')
+
+emit = Emitter()
+
+class Expr:
+    def generate(self, n):
+        pass
+    
+class Num(Expr):
+    def __init__(self, token):
+        value = token.lexeme
+        self.token = token
+        if value == 'NULL':
+            self.value = 0
+        elif value.startswith('0x'):
+            self.value = int(value, base=16)
+        elif value.startswith('0b'):
+            self.value = int(value, base=2)
+        else:
+            self.value = int(value)
+    def reduce(self, n):
+        if -32 <= self.value < 64:
+            emit.inst(Op.MOV, Reg(n), self.value)
+        else:
+            emit.imm(Reg(n), self.value)
+        return Reg(n)
+
+class Char(Expr):
+    def __init__(self, token):
+        self.token = token
+    def reduce(self, n):
+        emit.imm(Reg(n), self.token.lexeme)
+        return Reg(n)
+
+class Unary(Expr):
+    OP = {'-':Op.NEG,
+          '~':Op.NOT}
+    def __init__(self, sign, primary):
+        self.sign, self.primary = self.OP[sign.lexeme], primary
+    def reduce(self, n):
+        emit.inst(self.sign, self.primary.reduce(n), Reg.A)
+        return Reg(n)
+
+class Type(Expr):
+    def __init__(self, type):
+        self.type = type
+        self.size = 1
+    def assign(self, left, n, right):        
+        emit.store(right.reduce(n), Reg.SP, left.location)
+    def address(self, local, n):
+        emit.inst4(Op.ADD, Reg(n), Reg.SP, local.location)
+        return Reg(n)
+    def reduce(self, local, n):
+        emit.load(Reg(n), Reg.SP, local.location)
+        return Reg(n)
+
+class Const(Type):
+    def __init__(self, type):
+        self.type = type
+        self.size = type.size
+        
+class Pointer(Type):
+    def __init__(self, type):
+        self.to = self.of = type
+        super().__init__(type)
+
+class Struct(Type, Frame):
+    def __init__(self, name):
+        self.name = name
+        self.size = 0
+        self.data = {}
+    def address(self, local, n):
+        emit.inst4(Op.ADD, Reg(n), Reg.SP, local.location) 
+        return Reg(n)
+    
+class Array(Type):
+    def __init__(self, of, length):
+        self.size = of.size * length.value
+        self.of = of
+        self.length = length.value
+        
+
+class Binary(Expr):    
+    OP = {'+' :Op.ADD,
+          '++':Op.ADD,
+          '+=':Op.ADD,
+          '-' :Op.SUB,
+          '--':Op.SUB,
+          '-=':Op.SUB,
+          '*' :Op.MUL,
+          '*=':Op.MUL,
+          '<<':Op.SHL,
+          '<<=':Op.SHL,
+          '>>':Op.SHR,
+          '>>=':Op.SHR,
+          '^' :Op.XOR,
+          '^=':Op.XOR,
+          '|' :Op.OR,
+          '|=':Op.OR,
+          '&' :Op.AND,
+          '&=':Op.AND,}
+    def __init__(self, op, left, right):
+        self.op, self.left, self.right = self.OP[op.lexeme], left, right
+    def analyze(self, n):
+        self.left.analyze(n)
+        self.right.analyze_right(n+1)
+    def reduce(self, n):        
+        emit.inst(self.op, self.left.reduce(n), self.right.reduce(n+1))
+        return Reg(n)
+
+class Assign(Expr):
+    def __init__(self, left, right):
+        self.left, self.right = left, right
+    def type(self):
+        return self.left.type()
+    def analyze(self, n):
+        self.right.analyze(n)
+        self.left.analyze_store(n)        
+    def reduce(self, n):
+        self.generate(n)
+        return Reg(n)
+    def generate(self, n):
+        self.left.assign(n, self.right)
+    
+class Block(Expr, UserList):
+    def analyze(self, n):
+        for statement in self:
+            statement.analyze(n)
+    def generate(self, n):
+        for statement in self:
+            statement.generate(env.args)
+
+class Local(Expr):
+    def __init__(self, type, token):
+        self.type, self.token = type, token
+    def assign(self, n, right):
+        return self.type.assign(self, n, right)
+    def reduce(self, n):
+        return self.type.reduce(self, n)
+    def address(self, n):
+        return self.type.address(self, n)
+    def generate(self, n):
+        pass
+
+class Params(Expr, UserList):
+    def generate(self):
+        for i, param in enumerate(self):
+            emit.store(Reg(i), Reg.SP, i) #env.scope.index(param.id.name))
+    
+class Func(Expr):
+    def __init__(self, type, id, params, block):
+        self.type, self.id, self.params, self.block = type, id, params, block
+    def generate(self):
+        env.begin_func()
+        # self.params.analyze()
+        # self.block.analyze(1)
+        # if env.returns:
+        #     env.func = env.next_label()
+        emit.labels.append(self.id.lexeme)
+        # print(env.args, env.regs)
+        # push = list(map(Reg, range(max(len(self.params), env.returns), env.args + env.regs)))
+        # emit.push(env.calls, *push)
+        # if env.space:
+        #     emit.inst(Op.SUB, Reg.SP, env.space)
+        self.params.generate()
+        self.block.generate(env.args)
+        # if env.returns:
+        #     emit.labels.append(f'.L{env.func}')
+        #     if env.args > 0:
+        #         emit.inst(Op.MOV, Reg.A, Reg(env.args))
+        # if env.space:
+        #     emit.inst(Op.ADD, Reg.SP, env.space)
+        # emit.pop(env.calls, *push)
+        if not env.calls:
+            emit.ret()
+
+class Main(Expr):
+    def __init__(self, block):
+        self.block = block
+    def generate(self):
+        env.begin_func()
+        # self.block.analyze(1)
+        # if env.space:
+        #     emit.inst(Op.SUB, Reg.SP, env.space)
+        self.block.compile(0)
+        # if env.space:
+        #     emit.inst(Op.ADD, Reg.SP, env.space)
+        emit.halt()
+
+class Dot(Expr):
+    def __init__(self, postfix, attr):
+        self.postfix, self.attr = postfix, attr
+        self.type = attr.type
+    def assign(self, n, right):
+        emit.store(right.reduce(n), self.postfix.address(n+1), self.attr.location)
+        return Reg(n)
+    def address(self, n):
+        emit.inst(Op.ADD, self.postfix.address(n), self.attr.location)
+        return Reg(n)
+    def reduce(self, n):
+        emit.load(Reg(n), self.postfix.address(n), self.attr.location)
+        return Reg(n)  
+
+class Arrow(Expr):
+    def __init__(self, postfix, attr):
+        self.postfix, self.attr = postfix, attr
+        self.type = attr.type
+    def address(self, n):
+        emit.inst(Op.ADD, self.postfix.address(n), self.attr.location)
+        return Reg(n)    
+    def assign(self, n, right):
+        emit.store(right.reduce(n), self.postfix.address(n+1), self.attr.location)
+    def reduce(self, n):        
+        emit.load(Reg(n), self.postfix.address(n), self.attr.location)
+        return Reg(n)
+
+class SubScr(Expr): #TODO
+    def __init__(self, postfix, sub):
+        self.postfix, self.sub = postfix, sub
+        self.type = self.postfix.type.of
+    def address(self, n):
+        self.postfix.reduce(n)
+        self.sub.reduce(n+1)
+        if type(self.postfix.type) in [Array, Pointer] and self.postfix.type.of.size > 1:
+            emit.inst(Op.MUL, Reg(n+1), self.postfix.type.of.size)
+        emit.inst(Op.ADD, Reg(n), Reg(n+1))
+        return Reg(n)
+    def assign(self, n, right):
+        emit.store(right.reduce(n), self.address(n+1))     
+    def reduce(self, n):
+        emit.load(self.address(n), Reg(n))
+        return Reg(n)
+
+class Args(Expr, UserList):
+    def compile(self, n):
+        for i, arg in enumerate(self, n):
+            arg.load(i)
+        if n > 0:
+            for i, arg in enumerate(self):
+                emit.inst(Op.MOV, Reg(i), Reg(n+i)) 
+
+class Call(Expr):
+    def __init__(self, postfix, args):
+        self.postfix, self.args = postfix, args
+    def compile(self, n):
+        self.args.compile(n)
+        emit.call(self.postfix.name)
+        if n > 0:
+            emit.inst(Op.MOV, Reg(n), Reg.A)
+        return Reg(n)
+    
+class Program(Expr, UserList):
+    def generate(self):
+        for statement in self:
+            statement.generate()
+        return '\n'.join(emit.asm)
+
+class Token:
+    def __init__(self, type, lexeme, line_no):
+        self.type, self.lexeme, self.line_no = type, lexeme, line_no
+
+class MetaLexer(type):
+    def __init__(self, name, bases, attrs):
+        self.action = {}
+        regex = []        
+        flag = attrs['flag'] if 'flag' in attrs else 0 #re.NOFLAG
+        for attr in attrs:
+            if attr.startswith('RE_'):
+                name = attr[3:]
+                if callable(attrs[attr]):
+                    pattern = attrs[attr].__doc__
+                    self.action[name] = attrs[attr]
+                else:
+                    pattern = attrs[attr]
+                    self.action[name] = lambda self, match: match
+                regex.append((name, pattern))
+        self.regex = re.compile('|'.join(rf'(?P<{name}>{pattern})' for name, pattern in regex), flag)
+
+class LexerBase(metaclass=MetaLexer):
+    def lex(self, text):
+        return [Token(match.lastgroup, result, self.line_no) for match in self.regex.finditer(text) if (result := self.action[match.lastgroup](self, match.group())) is not None] + [Token('end','',self.line_no)]
+
+class CLexer(LexerBase):    
+    def __init__(self):
+        self.line_no = 1
+    
+    RE_num = r'(0x[0-9a-f]+)|(0b[01]+)|(\d+)|(NULL)'
+    RE_char = r"'\\?[^']'"
+    RE_const = r'const'
+    RE_type = r'\b((void)|(int)|(char))\b'
+    RE_struct = r'\bstruct\b'
+    RE_id = r'\w(\w|\d)*'
+    def RE_comment(self, match):
+        r'/\*(?:(?!/\*).|\n)*\*/'
+        self.line_no += match.count('\n')
+    def RE_line_comment(self, match):
+        r'//[^\n]*\n'
+        self.line_no += 1
+    def RE_new_line(self, match):
+        r'\n'
+        self.line_no += 1
+    RE_semi = r';'
+    RE_lparen = r'\('
+    RE_rparen = r'\)'
+    RE_lbrack = r'{'
+    RE_rbrack = r'}'
+    RE_lbrace = r'\['
+    RE_rbrace = r'\]'
+    RE_dplus = r'\+\+'
+    RE_ddash = r'--'
+    RE_arrow = r'->'
+    RE_pluseq = r'\+='
+    RE_dasheq = r'-='
+    RE_stareq = r'\*='
+    RE_slasheq = r'/='
+    RE_percenteq = r'%='
+    RE_lshifteq = r'<<='
+    RE_rshifteq = r'>>='
+    RE_careteq = r'\^='
+    RE_pipeeq = r'\|='
+    RE_ampeq = r'&='
+    RE_eq = r'='
+    RE_plus =  r'\+'
+    RE_dash = r'-'
+    RE_star = r'\*'
+    RE_slash = r'/'
+    RE_percent = r'%'
+    RE_lshift = r'<<'
+    RE_rshift = r'>>'
+    RE_caret = r'\^'
+    RE_pip = r'\|'
+    RE_amp = r'\&'   
+    RE_exp = r'!'
+    RE_tilde = r'~'
+    RE_dot = r'\.'
+    def RE_error(self, match):
+        r'\S'
+        raise SyntaxError(f'line {self.line_no}: Invalid symbol "{match}"')
+
+lexer = CLexer()
+
+class CParser:
+    def resolve(self, name):
+        if name in env.scope:
+            return env.scope[name]
+        elif name in env.functions:
+            return env.functions[name]
+        else:
+            self.error(f'name "{name}" not found')
+    def primary(self):
+        '''
+        PRIMARY -> id|num|char|string|'(' EXPR ')'
+        '''
+        if self.peek('id'):
+            return self.resolve(next(self).lexeme)
+        elif self.peek('num'):
+            return Num(next(self))
+        elif self.peek('char'):
+            return Char(next(self))
+        elif self.accept('('):
+            primary = self.expr()
+            self.expect(')')
+        else:
+            self.error('PRIMARY EXPRESSION')
+        return primary
+    
+    def postfix(self):
+        '''
+        POST -> PRIMARY {'[' EXPR ']'|'(' ARGS ')'|'.' id|'->' id|'++'|'--'}
+        '''
+        postfix = self.primary()
+        while self.peek('.','[','->'):
+            if self.accept('.'):
+                postfix = Dot(postfix, postfix.type[self.expect('id').lexeme])
+            elif self.accept('['):
+                postfix = SubScr(postfix, self.expr())
+                self.expect(']')
+            elif self.accept('->'):
+                postfix = Arrow(postfix, postfix.type.to[self.expect('id').lexeme])
+            elif self.accept('('):
+                postfix = Call(postfix, self.args())
+                self.expect(')')
+            else:
+                self.error('POSTFIX EXPRESSION')
+        return postfix
+    
+    def args(self):
+        '''
+        ARGS -> ASSIGN {',' ASSIGN}
+        '''
+        args = Args()
+        if not self.peek(')'):
+            args.append(self.assign())
+            while self.accept(','):
+                args.append(self.assign())
+        return args
+    
+    def unary(self):
+        '''
+        UNARY -> POSTFIX
+                |('++'|'--') UNARY
+                |('-'|'~'|'!'|'*'|'&') CAST
+                |'sizeof' UNARY
+                |'sizeof' '(' TYPE_SPEC ')'
+        '''
+        if self.peek('-','~',):
+            return Unary(next(self), self.unary())
+        else:
+            return self.postfix()
+    
+    def type_spec(self):
+        '''
+        TYPE_SPEC -> (type|(('struct'|'union') id)) {'*'}
+        '''
+        if self.peek('type'):
+            type_spec = Type(next(self))
+        elif self.accept('struct'):
+            type_spec = env.structs[self.expect('id').lexeme]
+        else:
+            self.error('TYPE SPECIFIER')
+        return type_spec
+    
+    def type_qual(self):
+        '''
+        TYPE_QUAL -> 'const' TYPE_SPEC
+        '''
+        if self.accept('const'):
+            return Const(self.type_spec())
+        return self.type_spec()
+    
+    def mul(self):
+        '''
+        MUL -> UNARY {('*'|'/'|'%') UNARY}
+        '''
+        mul = self.unary()
+        while self.peek('*'):
+            mul = Binary(next(self), mul, self.unary())
+        return mul
+    
+    def add(self):
+        '''
+        ADD -> MUL {('+'|'-') MUL}
+        '''
+        add = self.mul()
+        while self.peek('+','-'):
+            add = Binary(next(self), add, self.mul())
+        return add
+            
+    def shift(self):
+        '''
+        SHIFT -> ADD {('<<'|'>>') ADD}
+        '''
+        shift = self.add()
+        while self.peek('<<','>>'):
+            shift = Binary(next(self), shift, self.add())
+            self.add()
+        return shift
+    
+    def assign(self):
+        '''
+        ASSIGN -> UNARY ['+'|'-'|'*'|'/'|'%'|'<<'|'>>'|'^'|'|'|'&']'=' ASSIGN
+                 |COND
+        '''
+        assign = self.shift()
+        if self.accept('='):
+            assert isinstance(assign, (Local,Dot,Arrow))
+            assign = Assign(assign, self.assign())
+        elif self.peek('+=','-=','*=','/=','%=','<<=','>>=','^=','|=','&='):
+            assert isinstance(assign, (Local,Dot,Arrow))
+            assign = Assign(assign, Binary(next(self), assign, self.assign()))
+        return assign
+    
+    def expr(self):
+        '''
+        EXPR -> ASSIGN
+        '''
+        return self.assign()
+        # while self.accept(','):
+        #     self.assign()
+    
+    def const_expr(self):
+        '''
+        CONST -> EXPR
+        '''
+        return self.expr()
+             
+    def statement(self):
+        '''
+        STATE -> '{' BLOCK '}'
+                |SELECT
+                |LOOP
+                |JUMP
+                |ASSIGN ';'
+        SELECT -> 'if' '(' EXPR ')' STATE ['else' STATE]|'switch' '(' EXPR ')' '{' {'case' CONST_EXPR ':' STATEMENT} ['default' ':' STATEMENT] '}'
+        LOOP -> 'while' '(' EXPR ')' STATE|'for' '(' EXPR ';' EXPR ';' EXPR ')' STATE|'do' STATEMENT 'while' '(' EXPR ')' ';'
+        JUMP -> 'goto' ';'|'return' [EXPR] ';' |'break' ';' |'continue' ';'
+        '''
+        if self.accept('{'):            
+            env.begin_scope()
+            statement = self.block()
+            env.end_scope()
+            self.expect('}')
+        else:
+            statement = self.assign()
+            assert isinstance(statement, (Assign, Call))
+            self.expect(';')
+        return statement    
+
+    def block(self):
+        '''
+        BLOCK -> {DECL} {STATE} [BLOCK]
+        '''
+        block = Block()
+        while self.peek('const','type','struct','union'):
+            block.append(self.init())
+        while self.peek('{','id','++','--'):
+            block.append(self.statement())
+        if not (self.peek('}') or self.peek('end')):# or (len(block) > 0):
+            block.extend(self.block())        
+        return block
+    
+    def init(self):
+        '''
+        INIT -> DECL ['=' EXPR] ';'
+        '''
+        init = self.decl()
+        if self.accept('='):
+            init = Assign(init, self.expr())
+        self.expect(';')
+        return init
+    
+    def abstract(self):
+        abstract = self.type_qual()
+        while self.accept('*'):
+            abstract = Pointer(abstract)
+        return abstract
+    
+    def decl(self):
+        '''
+        DECL -> TYPE_QUAL id {'[' [num] ']'}
+        '''
+        abstract = self.abstract()
+        id = self.expect('id')
+        #Array here
+        local = Local(abstract, id)
+        env.scope[id.lexeme] = local
+        return local
+
+    def params(self):
+        '''
+        PARAMS -> [DECL {',' DECL}]
+        '''
+        params = Params()
+        if self.peek('const','type','struct','union'):    
+            params.append(self.decl())
+            while self.accept(','):
+                params.append(self.decl())
+        return params
+    
+    def program(self):
+        program = Program()
+        while self.peek('type','const','struct'):
+            if self.peekn('struct','id','{'):
+                next(self)
+                id = next(self)
+                next(self)
+                struct = Struct(id.lexeme)
+                env.structs[id.lexeme] = struct
+                while not self.accept('}'):
+                    type = self.abstract()
+                    id = self.expect('id')
+                    struct[id.lexeme] = Local(type, id)
+                    self.expect(';')
+                self.expect(';')
+            else:
+                type = self.abstract()
+                id = self.expect('id')
+                if self.accept('('):                    #Function
+                    env.begin_scope()
+                    params = self.params()
+                    self.expect(')')
+                    self.expect('{')
+                    block = self.block()
+                    env.end_scope()
+                    self.expect('}')
+                    #add function to scope/locals
+                    print(env.scope)
+                    env.functions[id.lexeme] = Local(type, id)
+                    if id.lexeme == 'main':
+                        program.insert(0, Main(block))
+                    else:
+                        program.append(Func(type, id, params, block))
+                else:                                   #Global
+                    pass
+        return program
+    
+    def parse(self, text):
+        self.included = set()
+        self.tokens = lexer.lex(text)
+        for i, t in enumerate(self.tokens): print(i, t.type, t.lexeme)
+        self.index = 0
+        program = self.program()
+        self.expect('end')
+        return program
+        
+    def __next__(self):
+        token = self.tokens[self.index]
+        self.index += 1
+        return token
+        
+    def peek(self, *symbols, offset=0):
+        token = self.tokens[self.index+offset]
+        return token.type in symbols or (not token.lexeme.isalnum() and token.lexeme in symbols)
+    
+    def peekn(self, *buckets):
+        if self.index+len(buckets) < len(self.tokens)-1:
+            for i, bucket in enumerate(buckets):
+                if type(bucket) is str:
+                    bucket = (bucket,)
+                if not self.peek(*bucket, offset=i):
+                    return False
+            return True
+        return False
+            
+    
+    def peek2(self, sym1, sym2):
+        if self.index < len(self.tokens) - 1:            
+            return self.peek(sym1) and self.peek(sym2, offset=1)
+    
+    def accept(self, *symbols):
+        if self.peek(*symbols):
+            return next(self)
+    
+    def expect(self, symbol):
+        if self.peek(symbol):
+            return next(self)
+        self.error(symbol)
+        
+    def error(self, expected=None):
+        error = self.tokens[self.index]
+        raise SyntaxError(f'Line {error.line_no}: Unexpected {error.type} token "{error.lexeme}".'+ (f' Expected "{expected}"' if expected is not None else ''))
+        
+parser = CParser()
+
+def parse(text):
+    return parser.parse(text)
+
+test = '''
+struct Owner {
+    int name;
+    int phone;
+};
+struct Cat {
+    int name;
+    int age;
+    struct Owner owner;
+};
+
+void test() {
+    int foo;
+    int bar = 9;
+    foo = 8;
+    int baz = foo + -bar;
+    {
+     char foo;
+     foo = 'g';
+    }
+    foo = 5;
+    const int* ptr = 6;
+}
+
+void test2(int foo) {
+    struct Owner me;
+    me.name = 100;
+    me.phone = 1000;
+    int bar = me.name;
+}
+
+void tset3() {
+    struct Cat cat;
+    cat.name = 1;
+    cat.age = 10;
+    cat.owner.name = 100;
+    cat.owner.phone = 1000;
+}
+
+void test4(struct Cat* cat) {
+    cat->name = 1;
+    cat->age = 10;
+    cat->owner.name = 100;
+}
+void test5(struct Cat* cats) {
+    cats[0].name = 1;
+}
+
+
+'''
+'''
+  MOV A, 9
+  LD [SP, 1], A
+  MOV A, 8
+  LD [SP, 0], A
+  LD A, [SP, 0]
+  LD B, [SP, 1]
+  NEG B
+  ADD A, B
+  LD [SP, 2], A
+  LD A, 'g'
+  LD [SP, 3], A
+  MOV A, 5
+  LD [SP, 0], A
+  MOV A, 6
+  LD [SP, 3], A
+  RET
+test2:
+  LD [SP, 0], A
+  LD A, 100
+  ADD B, SP, 1
+  LD [B, 0], A
+  LD A, 1000
+  ADD B, SP, 1
+  LD [B, 1], A
+  ADD A, SP, 1
+  LD A, [A, 0]
+  LD [SP, 3], A
+  RET
+tset3:
+  MOV A, 1
+  ADD B, SP, 0
+  LD [B, 0], A
+  MOV A, 10
+  ADD B, SP, 0
+  LD [B, 1], A
+  LD A, 100
+  ADD B, SP, 0
+  ADD B, 2
+  LD [B, 0], A
+  LD A, 1000
+  ADD B, SP, 0
+  ADD B, 2
+  LD [B, 1], A
+  RET
+test4:
+  LD [SP, 0], A
+  MOV A, 1
+  LD B, [SP, 0]
+  LD [B, 0], A
+  MOV A, 10
+  LD B, [SP, 0]
+  LD [B, 1], A
+  LD A, 100
+  ADD B, SP, 0
+  ADD B, 2
+  LD [B, 0], A
+  RET
+'''
+
+if __name__ == '__main__':
+    env.clear()
+    emit.clear()
+    ast = parse(test.strip('\n'))
+    asm = ast.generate()
+    print(asm.strip('\n'))

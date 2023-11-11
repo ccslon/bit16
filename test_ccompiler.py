@@ -8,6 +8,16 @@ Created on Fri Sep  8 14:37:22 2023
 from unittest import TestCase, main
 import cparser
 
+
+'''
+define int fact(int n)
+    t1 = int n
+    t2 = int 0
+    t1 = int t1 == t2
+    if t1 then else .L0
+
+
+'''
 MAIN_ASM = '''
   HALT
 '''
