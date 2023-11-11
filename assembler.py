@@ -22,7 +22,7 @@ TOKENS = {'const': r'(-?\d+)|(x[0-9a-f]+)|(b[01]+)',
           'halt': r'halt',
           'space': r'space',
           'reg': r'|'.join(map(r'\b{}\b'.format, (reg.name for reg in Reg))),
-          'label': r'\.?[a-z](\w|\d)*',
+          'label': r'\.?\w(\w|\d)*',
           'equal': r'=',
           'colon': r':',
           'dash': r'-',
@@ -251,8 +251,8 @@ class Assembler:
             return next(self)
         self.error(expected=symbols)
         
-    def error(self, expected=None, offset=0):
-        etype, evalue = self.tokens[self.index-offset]
+    def error(self, expected=None):
+        etype, evalue = self.tokens[self.index]
         raise SyntaxError(f'Unexpected {etype} token "{evalue}" at token #{self.index} in line {self.line_no}')# + 'Expected {}'.format(' or '.join(map('"{}"'.format, expected))) if expected else '')
 
 class Linker:

@@ -129,7 +129,7 @@ class CLexer(LexerBase):
     RE_caret = r'\^'
     RE_dpipe = r'\|\|'
     RE_damp = '\&\&'
-    RE_pip = r'\|'
+    RE_pipe = r'\|'
     RE_amp = r'\&'
     RE_deq = r'=='
     RE_ne = r'!='
@@ -259,6 +259,15 @@ class CParser:
         if self.accept('const'):
             return Const(self.type_spec())
         return self.type_spec()
+    
+    def type_name(self):
+        '''
+        TYPE_NAME -> TYPE_QUAL {'*'}
+        '''
+        type_name = self.type_qual()
+        while self.accept('*'):
+            type_name = Pointer(type_name)
+        return type_name
     
     def mul(self):
         '''
@@ -542,12 +551,12 @@ class CParser:
         '''
         DECL -> TYPE_QUAL id {'[' [num] ']'}
         '''
-        type_qual = self.type_qual()
+        type_name = self.type_name()
         iden = Id(self.expect('id'))
         while self.accept('['):
-            type_qual = Array(type_qual, Num(self.expect('num')))
+            type_name = Array(type_name, Num(self.expect('num')))
             self.expect(']')
-        return Decl(type_qual, iden)
+        return Decl(type_name, iden)
     
     def fields(self):
         '''
@@ -578,15 +587,15 @@ class CParser:
                 else:
                     self.error()
             else:
-                type_qual = self.type_qual()
+                type_name = self.type_name()
                 if self.accept('{'):                        #Struct
-                    assert type(type_qual) is Struct
+                    assert type(type_name) is Struct
                     fields = Fields()
                     while not self.accept('}'):
                         fields.append(self.decl())
                         self.expect(';')
                     self.expect(';')
-                    program.append(StructDecl(type_qual.name, fields))
+                    program.append(StructDecl(type_name.name, fields))
                 else:
                     iden = Id(self.expect('id'))
                     if self.accept('('):                    #Function
@@ -598,12 +607,12 @@ class CParser:
                         if iden.name == 'main':
                             program.insert(0, Main(block))
                         else:
-                            program.append(FuncDecl(type_qual, iden, params, block))
+                            program.append(FuncDecl(type_name, iden, params, block))
                     else:                                   #Global
                         while self.accept('['):
-                            type_qual = Array(type_qual, Num(self.expect('num')))
+                            type_name = Array(type_name, Num(self.expect('num')))
                             self.expect(']')
-                        init = GlobDecl(type_qual, iden)
+                        init = GlobDecl(type_name, iden)
                         if self.accept('='):
                             if self.accept('{'):
                                 init = GlobalList(init, self.init_list())
