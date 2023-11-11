@@ -166,7 +166,7 @@ class Unary(Expr):
         emit.inst(self.sign, self.primary.reduce(n), Reg.A)
         return Reg(n)
 
-class Type(Expr):
+class Type(Expr): #TODO
     def __init__(self, type):
         self.type = type
         self.size = 1
@@ -178,6 +178,19 @@ class Type(Expr):
     def reduce(self, local, n):
         emit.load(Reg(n), Reg.SP, local.location)
         return Reg(n)
+    def attr_assign(self, postfix, n, attr, right):
+        emit.store(right.reduce(n), postfix.address(n+1), attr.location)
+        return Reg(n)
+    def attr_reduce(self, postfix, n, attr):
+        emit.load(Reg(n), postfix.address(n), attr.location)
+        return Reg(n)  
+    def subscr_assign(self, subscr, n, right):
+        emit.store(right.reduce(n), subscr.address(n+1)) 
+        return Reg(n)
+    def subscr_reduce(self, subscr, n):
+        emit.load(subscr.address(n), Reg(n))
+        return Reg(n)
+
 
 class Const(Type):
     def __init__(self, type):
@@ -316,15 +329,13 @@ class Dot(Expr):
     def __init__(self, postfix, attr):
         self.postfix, self.attr = postfix, attr
         self.type = attr.type
-    def assign(self, n, right):
-        emit.store(right.reduce(n), self.postfix.address(n+1), self.attr.location)
-        return Reg(n)
     def address(self, n):
         emit.inst(Op.ADD, self.postfix.address(n), self.attr.location)
         return Reg(n)
+    def assign(self, n, right):        
+        return self.type.attr_assign(self.postfix, n, self.attr, right)
     def reduce(self, n):
-        emit.load(Reg(n), self.postfix.address(n), self.attr.location)
-        return Reg(n)  
+        return self.type.attr_reduce(self.postfix, n, self.attr)
 
 class Arrow(Expr):
     def __init__(self, postfix, attr):
@@ -333,13 +344,12 @@ class Arrow(Expr):
     def address(self, n):
         emit.inst(Op.ADD, self.postfix.address(n), self.attr.location)
         return Reg(n)    
-    def assign(self, n, right):
-        emit.store(right.reduce(n), self.postfix.address(n+1), self.attr.location)
-    def reduce(self, n):        
-        emit.load(Reg(n), self.postfix.address(n), self.attr.location)
-        return Reg(n)
+    def assign(self, n, right):        
+        return self.type.attr_assign(self.postfix, n, self.attr, right)
+    def reduce(self, n):
+        return self.type.attr_reduce(self.postfix, n, self.attr)
 
-class SubScr(Expr): #TODO
+class SubScr(Expr): 
     def __init__(self, postfix, sub):
         self.postfix, self.sub = postfix, sub
         self.type = self.postfix.type.of
@@ -351,10 +361,9 @@ class SubScr(Expr): #TODO
         emit.inst(Op.ADD, Reg(n), Reg(n+1))
         return Reg(n)
     def assign(self, n, right):
-        emit.store(right.reduce(n), self.address(n+1))     
+        return self.type.subscr_assign(self, n, right)    
     def reduce(self, n):
-        emit.load(self.address(n), Reg(n))
-        return Reg(n)
+        return self.type.subscr_reduce(self, n)
 
 class Args(Expr, UserList):
     def compile(self, n):
@@ -364,7 +373,7 @@ class Args(Expr, UserList):
             for i, arg in enumerate(self):
                 emit.inst(Op.MOV, Reg(i), Reg(n+i)) 
 
-class Call(Expr):
+class Call(Expr): #TODO
     def __init__(self, postfix, args):
         self.postfix, self.args = postfix, args
     def compile(self, n):
@@ -709,7 +718,7 @@ class CParser:
                     env.end_scope()
                     self.expect('}')
                     #add function to scope/locals
-                    print(env.scope)
+                    # print(env.scope)
                     env.functions[id.lexeme] = Local(type, id)
                     if id.lexeme == 'main':
                         program.insert(0, Main(block))
@@ -722,7 +731,7 @@ class CParser:
     def parse(self, text):
         self.included = set()
         self.tokens = lexer.lex(text)
-        for i, t in enumerate(self.tokens): print(i, t.type, t.lexeme)
+        # for i, t in enumerate(self.tokens): print(i, t.type, t.lexeme)
         self.index = 0
         program = self.program()
         self.expect('end')
@@ -817,8 +826,6 @@ void test4(struct Cat* cat) {
 void test5(struct Cat* cats) {
     cats[0].name = 1;
 }
-
-
 '''
 '''
   MOV A, 9
