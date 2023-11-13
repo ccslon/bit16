@@ -20,6 +20,19 @@ class Loop(UserList):
     def end(self):
         return self[-1][1]
 
+class Regs:
+    def clear(self):
+        self.max = 0
+    def __getitem__(self, item):
+        if item == 'SP':
+            return Reg.SP
+        if item > 5:
+            raise SyntaxError('Not enough registers =(')
+        self.max = max(self.max, item)
+        return Reg(item)
+
+r = Regs()
+
 class Frame(UserDict):
     def __init__(self):          
         self.size = 0
@@ -75,20 +88,26 @@ class Emitter:
     def clear(self):
         self.labels = []
         self.asm = []
+        self.func = []
+    def begin_func(self):
+        self.func = []
+    def end_func(self):
+        self.asm.extend(self.func)
     def add(self, asm):
         for label in self.labels:
-            self.asm.append(f'{label}:')
-        self.asm.append(f'  {asm}')
+            self.func.append(f'{label}:')
+        self.func.append(f'  {asm}')
         self.labels.clear()
     def space(self, name, size):
-        self.asm.append(f'{name}: space {size}')
+        self.func.append(f'{name}: space {size}')
     def glob(self, name, value):
-        self.asm.append(f'{name}: {value}')
+        self.func.append(f'{name}: {value}')
     def push(self, lr, *regs):
         if lr:
             regs = (Reg.LR,) + regs
         if regs:
-            self.add('PUSH '+', '.join(reg.name for reg in regs))
+            self.func.insert(0, '  PUSH '+', '.join(reg.name for reg in regs))
+            # self.add('PUSH '+', '.join(reg.name for reg in regs))
     def pop(self, pc, *regs):
         if pc:
             regs = (Reg.PC,) + regs
@@ -108,6 +127,10 @@ class Emitter:
         self.add(f'LD [{rb.name}'+(f', {offset5}' if offset5 is not None else '')+f'], {rd.name}'+(f' ; {name}' if name else ''))
     def imm(self, rd, value):
         self.add(f'LD {rd.name}, {value}')
+    def loadm(self, rd, size):
+        self.add('LDM {'+', '.join(r[rd+i].name for i in range(size))+'}, '+f'{r[size].name}')
+    def storem(self, rd, size):
+        self.add(f'LDM {r[size].name}'+', {'+', '.join(r[rd+i].name for i in range(size))+'}')
     def inst(self, op, rd, src):
         if op in [Op.NOT, Op.NEG]:
             self.add(f'{op.name} {rd.name}')
@@ -128,6 +151,8 @@ class Emitter:
 emit = Emitter()
 
 class Expr:
+    def ret(self, n):
+        self.reduce(n)
     def generate(self, n):
         pass
     
@@ -145,17 +170,17 @@ class Num(Expr):
             self.value = int(value)
     def reduce(self, n):
         if -32 <= self.value < 64:
-            emit.inst(Op.MOV, Reg(n), self.value)
+            emit.inst(Op.MOV, r[n], self.value)
         else:
-            emit.imm(Reg(n), self.value)
-        return Reg(n)
+            emit.imm(r[n], self.value)
+        return r[n]
 
 class Char(Expr):
     def __init__(self, token):
         self.token = token
     def reduce(self, n):
-        emit.imm(Reg(n), self.token.lexeme)
-        return Reg(n)
+        emit.imm(r[n], self.token.lexeme)
+        return r[n]
 
 class Unary(Expr):
     OP = {'-':Op.NEG,
@@ -164,33 +189,22 @@ class Unary(Expr):
         self.sign, self.primary = self.OP[sign.lexeme], primary
     def reduce(self, n):
         emit.inst(self.sign, self.primary.reduce(n), Reg.A)
-        return Reg(n)
+        return r[n]
 
 class Type(Expr): #TODO
     def __init__(self, type):
         self.type = type
-        self.size = 1
-    def assign(self, left, n, right):        
-        emit.store(right.reduce(n), Reg.SP, left.location)
-    def address(self, local, n):
-        emit.inst4(Op.ADD, Reg(n), Reg.SP, local.location)
-        return Reg(n)
-    def reduce(self, local, n):
-        emit.load(Reg(n), Reg.SP, local.location)
-        return Reg(n)
-    def attr_assign(self, postfix, n, attr, right):
-        emit.store(right.reduce(n), postfix.address(n+1), attr.location)
-        return Reg(n)
-    def attr_reduce(self, postfix, n, attr):
-        emit.load(Reg(n), postfix.address(n), attr.location)
-        return Reg(n)  
-    def subscr_assign(self, subscr, n, right):
-        emit.store(right.reduce(n), subscr.address(n+1)) 
-        return Reg(n)
-    def subscr_reduce(self, subscr, n):
-        emit.load(subscr.address(n), Reg(n))
-        return Reg(n)
-
+        self.size = 0 if type == 'void' else 1
+    def store(self, local, n, base):
+        emit.store(r[n], r[base], local.location)
+    def address(self, local, n, base):
+        emit.inst4(Op.ADD, r[n], r[base], local.location)
+        return r[n]
+    def reduce(self, local, n, base):
+        emit.load(r[n], r[base], local.location)
+        return r[n]
+    def ret(self, local, n, base):
+        self.reduce(local, n, base)
 
 class Const(Type):
     def __init__(self, type):
@@ -199,24 +213,32 @@ class Const(Type):
         
 class Pointer(Type):
     def __init__(self, type):
-        self.to = self.of = type
-        super().__init__(type)
+        self.to = self.of = self.type = type
+        self.size = 1
 
 class Struct(Type, Frame):
     def __init__(self, name):
         self.name = name
         self.size = 0
         self.data = {}
-    def address(self, local, n):
-        emit.inst4(Op.ADD, Reg(n), Reg.SP, local.location) 
-        return Reg(n)
+    def address(self, local, n, base):
+        emit.inst4(Op.ADD, r[n], r[base], local.location) 
+        return r[n]
+    def store(self, local, n, base):
+        self.address(local, n+self.size, base)
+        emit.storem(r[n], self.size)
+    def reduce(self, local, n, base):
+        self.address(local, n+self.size, base)
+        emit.loadm(r[n], self.size)
+        return r[n]
+    def ret(self, local, n, base):
+        self.reduce(local, 0, base)
     
 class Array(Type):
     def __init__(self, of, length):
         self.size = of.size * length.value
         self.of = of
-        self.length = length.value
-        
+        self.length = length.value        
 
 class Binary(Expr):    
     OP = {'+' :Op.ADD,
@@ -244,73 +266,81 @@ class Binary(Expr):
         self.right.analyze_right(n+1)
     def reduce(self, n):        
         emit.inst(self.op, self.left.reduce(n), self.right.reduce(n+1))
-        return Reg(n)
+        return r[n]
 
 class Assign(Expr):
     def __init__(self, left, right):
         self.left, self.right = left, right
-    def type(self):
-        return self.left.type()
     def analyze(self, n):
         self.right.analyze(n)
         self.left.analyze_store(n)        
     def reduce(self, n):
         self.generate(n)
-        return Reg(n)
+        return r[n]
     def generate(self, n):
-        self.left.assign(n, self.right)
+        self.right.reduce(n)
+        self.left.store(n)
     
 class Block(Expr, UserList):
-    def analyze(self, n):
-        for statement in self:
-            statement.analyze(n)
     def generate(self, n):
         for statement in self:
-            statement.generate(env.args)
+            statement.generate(n)
 
 class Local(Expr):
     def __init__(self, type, token):
         self.type, self.token = type, token
-    def assign(self, n, right):
-        return self.type.assign(self, n, right)
+    def store(self, n):
+        return self.type.store(self, n, 'SP') #SP
     def reduce(self, n):
-        return self.type.reduce(self, n)
+        return self.type.reduce(self, n, 'SP')
     def address(self, n):
-        return self.type.address(self, n)
-    def generate(self, n):
-        pass
+        return self.type.address(self, n, 'SP')
+    def ret(self, n):
+        self.type.ret(self, n, 'SP')
+
+class Attr(Local):
+    def store(self, n):
+        return self.type.store(self, n, n+1)
+    def reduce(self, n):
+        return self.type.reduce(self, n, n)
+    def address(self, n):
+        return self.type.address(self, n, n)
+    def ret(self, n):
+        self.type.ret(self, n, n)
 
 class Params(Expr, UserList):
     def generate(self):
         for i, param in enumerate(self):
-            emit.store(Reg(i), Reg.SP, i) #env.scope.index(param.id.name))
+            emit.store(r[i], Reg.SP, i) #env.scope.index(param.id.name))
     
 class Func(Expr):
-    def __init__(self, type, id, params, block):
-        self.type, self.id, self.params, self.block = type, id, params, block
+    def __init__(self, type, id, params, block, max_args, space):
+        self.type, self.id, self.params, self.block, self.max_args, self.space = type, id, params, block, max_args, space
     def generate(self):
         env.begin_func()
-        # self.params.analyze()
-        # self.block.analyze(1)
-        # if env.returns:
-        #     env.func = env.next_label()
-        emit.labels.append(self.id.lexeme)
-        # print(env.args, env.regs)
-        # push = list(map(Reg, range(max(len(self.params), env.returns), env.args + env.regs)))
-        # emit.push(env.calls, *push)
-        # if env.space:
-        #     emit.inst(Op.SUB, Reg.SP, env.space)
+        emit.begin_func()
+        r.clear()
+        
+        if self.space:
+            emit.inst(Op.SUB, Reg.SP, self.space)
+        if self.type.size: 
+            env.return_label = env.next_label()
         self.params.generate()
-        self.block.generate(env.args)
-        # if env.returns:
-        #     emit.labels.append(f'.L{env.func}')
-        #     if env.args > 0:
-        #         emit.inst(Op.MOV, Reg.A, Reg(env.args))
-        # if env.space:
-        #     emit.inst(Op.ADD, Reg.SP, env.space)
-        # emit.pop(env.calls, *push)
-        if not env.calls:
+        self.block.generate(0 if self.max_args is None else self.max_args)
+        # print(env.args, env.regs)
+        emit.func.append(f'.L{env.return_label}:')
+        if type(self.type) is not Struct and self.max_args is not None and self.max_args > 0:
+            emit.inst(Op.MOV, Reg.A, r[self.max_args])
+        if self.space:
+            emit.inst(Op.ADD, Reg.SP, self.space)
+        print(r.max)
+        push = list(map(Reg, range(max(len(self.params), self.type.size), r.max+1))) #(0 if self.max_args is None else self.max_args) + 
+        emit.push(self.max_args is not None, *push)
+        emit.pop(self.max_args is not None, *push)
+        emit.func.insert(0, f'{self.id.lexeme}:')
+        if self.max_args is None:
             emit.ret()
+        emit.end_func()
 
 class Main(Expr):
     def __init__(self, block):
@@ -331,11 +361,13 @@ class Dot(Expr):
         self.type = attr.type
     def address(self, n):
         emit.inst(Op.ADD, self.postfix.address(n), self.attr.location)
-        return Reg(n)
-    def assign(self, n, right):        
-        return self.type.attr_assign(self.postfix, n, self.attr, right)
+        return r[n]
+    def store(self, n):
+        self.postfix.address(n+1)
+        return self.attr.store(n)
     def reduce(self, n):
-        return self.type.attr_reduce(self.postfix, n, self.attr)
+        self.postfix.address(n)
+        return self.attr.reduce(n)
 
 class Arrow(Expr):
     def __init__(self, postfix, attr):
@@ -343,11 +375,13 @@ class Arrow(Expr):
         self.type = attr.type
     def address(self, n):
         emit.inst(Op.ADD, self.postfix.address(n), self.attr.location)
-        return Reg(n)    
-    def assign(self, n, right):        
-        return self.type.attr_assign(self.postfix, n, self.attr, right)
+        return r[n] 
+    def store(self, n):
+        self.postfix.address(n+1)
+        return self.attr.store(n)
     def reduce(self, n):
-        return self.type.attr_reduce(self.postfix, n, self.attr)
+        self.postfix.address(n)
+        return self.attr.reduce(n)
 
 class SubScr(Expr): 
     def __init__(self, postfix, sub):
@@ -357,32 +391,46 @@ class SubScr(Expr):
         self.postfix.reduce(n)
         self.sub.reduce(n+1)
         if type(self.postfix.type) in [Array, Pointer] and self.postfix.type.of.size > 1:
-            emit.inst(Op.MUL, Reg(n+1), self.postfix.type.of.size)
-        emit.inst(Op.ADD, Reg(n), Reg(n+1))
-        return Reg(n)
-    def assign(self, n, right):
-        return self.type.subscr_assign(self, n, right)    
+            emit.inst(Op.MUL, r[n+1], self.postfix.type.of.size)
+        emit.inst(Op.ADD, r[n], r[n+1])
+        return r[n]
+    def store(self, n):
+        emit.store((n), self.address(n+1))
+        return r[n]
     def reduce(self, n):
-        return self.type.subscr_reduce(self, n)
+        emit.load(self.address(n), r[n])
+        return r[n]
 
 class Args(Expr, UserList):
-    def compile(self, n):
+    def generate(self, n):
         for i, arg in enumerate(self, n):
-            arg.load(i)
+            arg.reduce(i)
         if n > 0:
             for i, arg in enumerate(self):
-                emit.inst(Op.MOV, Reg(i), Reg(n+i)) 
+                emit.inst(Op.MOV, r[i], r[n+i]) 
 
 class Call(Expr): #TODO
     def __init__(self, postfix, args):
-        self.postfix, self.args = postfix, args
-    def compile(self, n):
-        self.args.compile(n)
-        emit.call(self.postfix.name)
+        self.primary, self.args = postfix, args
+    def reduce(self, n):
+        return self.generate(n)
+    def generate(self, n):
+        self.args.generate(n)
+        emit.call(self.primary.token.lexeme)
         if n > 0:
-            emit.inst(Op.MOV, Reg(n), Reg.A)
-        return Reg(n)
-    
+            emit.inst(Op.MOV, r[n], Reg.A)
+        return r[n]
+
+class Return(Expr):
+    def __init__(self):
+        self.expr = None
+        # self.type = Type('void')
+    def generate(self, n):
+        # assert self.type() == env.func.type_spec, f'{self.expr.type()} != {env.func.type_spec} in {env.func.id.name}'       
+        if self.expr:
+            self.expr.ret(n)
+        emit.jump(Cond.JR, f'.L{env.return_label}')
+
 class Program(Expr, UserList):
     def generate(self):
         for statement in self:
@@ -423,6 +471,7 @@ class CLexer(LexerBase):
     RE_const = r'const'
     RE_type = r'\b((void)|(int)|(char))\b'
     RE_struct = r'\bstruct\b'
+    RE_return = r'\breturn\b'
     RE_id = r'\w(\w|\d)*'
     def RE_comment(self, match):
         r'/\*(?:(?!/\*).|\n)*\*/'
@@ -467,6 +516,7 @@ class CLexer(LexerBase):
     RE_exp = r'!'
     RE_tilde = r'~'
     RE_dot = r'\.'
+    RE_comma = r','
     def RE_error(self, match):
         r'\S'
         raise SyntaxError(f'line {self.line_no}: Invalid symbol "{match}"')
@@ -503,7 +553,7 @@ class CParser:
         POST -> PRIMARY {'[' EXPR ']'|'(' ARGS ')'|'.' id|'->' id|'++'|'--'}
         '''
         postfix = self.primary()
-        while self.peek('.','[','->'):
+        while self.peek('.','[','->','('):
             if self.accept('.'):
                 postfix = Dot(postfix, postfix.type[self.expect('id').lexeme])
             elif self.accept('['):
@@ -512,8 +562,12 @@ class CParser:
             elif self.accept('->'):
                 postfix = Arrow(postfix, postfix.type.to[self.expect('id').lexeme])
             elif self.accept('('):
+                # TODO assert type(postfix) is ...
                 postfix = Call(postfix, self.args())
                 self.expect(')')
+                if env.calls is None:
+                    env.calls = 0
+                env.calls = max(env.calls, len(postfix.args))
             else:
                 self.error('POSTFIX EXPRESSION')
         return postfix
@@ -634,6 +688,11 @@ class CParser:
             statement = self.block()
             env.end_scope()
             self.expect('}')
+        elif self.accept('return'):
+            statement = Return()
+            if not self.accept(';'):
+                statement.expr = self.expr()
+                self.expect(';')
         else:
             statement = self.assign()
             assert isinstance(statement, (Assign, Call))
@@ -647,7 +706,7 @@ class CParser:
         block = Block()
         while self.peek('const','type','struct','union'):
             block.append(self.init())
-        while self.peek('{','id','++','--'):
+        while self.peek('{','id','++','--','return'):
             block.append(self.statement())
         if not (self.peek('}') or self.peek('end')):# or (len(block) > 0):
             block.extend(self.block())        
@@ -673,11 +732,12 @@ class CParser:
         '''
         DECL -> TYPE_QUAL id {'[' [num] ']'}
         '''
-        abstract = self.abstract()
+        type = self.abstract()
         id = self.expect('id')
         #Array here
-        local = Local(abstract, id)
+        local = Local(type, id)
         env.scope[id.lexeme] = local
+        env.space += type.size
         return local
 
     def params(self):
@@ -703,13 +763,15 @@ class CParser:
                 while not self.accept('}'):
                     type = self.abstract()
                     id = self.expect('id')
-                    struct[id.lexeme] = Local(type, id)
+                    struct[id.lexeme] = Attr(type, id)
                     self.expect(';')
                 self.expect(';')
             else:
                 type = self.abstract()
                 id = self.expect('id')
                 if self.accept('('):                    #Function
+                    env.calls = None
+                    env.space = 0
                     env.begin_scope()
                     params = self.params()
                     self.expect(')')
@@ -723,7 +785,7 @@ class CParser:
                     if id.lexeme == 'main':
                         program.insert(0, Main(block))
                     else:
-                        program.append(Func(type, id, params, block))
+                        program.append(Func(type, id, params, block, env.calls, env.space))
                 else:                                   #Global
                     pass
         return program
@@ -826,6 +888,19 @@ void test4(struct Cat* cat) {
 void test5(struct Cat* cats) {
     cats[0].name = 1;
 }
+int getint() {
+    return 1;
+}
+
+void test6() {
+    int i = getint();
+}
+
+void test7() {
+    struct Cat cat1;
+    struct Cat cat2;
+    cat2 = cat1;
+}
 '''
 '''
   MOV A, 9
@@ -887,9 +962,52 @@ test4:
   RET
 '''
 
+test2 = '''
+struct Owner {
+    int name;
+    int phone;
+};
+struct Cat {
+    int name;
+    int age;
+    struct Owner owner;
+};
+
+void test() {
+    struct Owner me;
+    int name = me.name;
+}
+
+struct div_t {
+    int quot;
+    int rem;
+};
+
+struct div_t div(int num, int den) {
+    struct div_t ans;
+    ans.quot = num;
+    ans.rem = den;
+    return ans;
+}
+
+void test2() {
+    struct Owner me;
+    struct Owner you;
+    me = you;
+}
+
+int bar(int m, int c) {
+    return m + c;
+}
+
+int foo(int n) {
+    return bar(n, 5);
+}
+'''
+
 if __name__ == '__main__':
     env.clear()
     emit.clear()
-    ast = parse(test.strip('\n'))
+    ast = parse(test2.strip('\n'))
     asm = ast.generate()
     print(asm.strip('\n'))

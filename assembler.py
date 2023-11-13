@@ -12,6 +12,7 @@ TOKENS = {'const': r'(-?\d+)|(x[0-9a-f]+)|(b[01]+)',
           'string': r'"[^"]*"',
           'char': r"'\\?[^']'",
           'ld': r'ld',
+          'ldm': r'ldm',
           'nop': r'nop',
           'op': '|'.join(map(r'\b{}\b'.format, (op.name for op in Op))),
           'cond': '|'.join(map(r'\b{}\b'.format, (cond.name for cond in Cond))),
@@ -194,6 +195,31 @@ class Assembler:
                         self.inst1(Op.MOV, Reg.PC, Reg.LR)
                     elif self.match('out', 'reg'):
                         pass
+                    elif self.match('ldm'):
+                        if self.peek('reg'): #ldm A, {B, C}
+                            dest = next(self)
+                            self.expect(',')
+                            self.expect('{')
+                            regs = [self.expect('reg')]
+                            while self.accept(','):
+                                regs.append(self.expect('reg'))
+                            self.expect('}')
+                            for i, reg in enumerate(regs):
+                                self.store1(reg, dest, i)
+                            #store??
+                        elif self.accept('{'): #ldm {B, C}, A
+                            regs = [self.expect('reg')]
+                            while self.accept(','):
+                                regs.append(self.expect('reg'))
+                            self.expect('}')
+                            self.expect(',')
+                            dest = self.expect('reg')
+                            for i, reg in enumerate(regs):
+                                self.load1(reg, dest, i)
+                            
+                        else:
+                            self.error()
+                        
                     elif self.match('halt'):
                         self.inst1(Op.MOV, Reg.PC, Reg.PC)
                     else:
