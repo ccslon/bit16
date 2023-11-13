@@ -13,7 +13,7 @@ def ccompile(file_name, sflag=False, fflag=True):
         with open(file_name) as in_file:
             text = in_file.read()
     ast = cparser.parse(text)
-    asm = ast.compile()
+    asm = ast.generate()
     if sflag:
         print(asm)
         if fflag:
@@ -27,7 +27,7 @@ def ccompile(file_name, sflag=False, fflag=True):
 
 if __name__ == '__main__':
     # ccompile('hello.c', sflag=True, oflag=False)    
-    ccompile('tests//goto.c', sflag=True, fflag=False)
+    ccompile('tests//fib.c', sflag=True, fflag=False)
     # ccompile('tests//hello.c')
     # ccompile('std//stdio.h', sflag=True, oflag=False)
     # ccompile('c//cats.c')

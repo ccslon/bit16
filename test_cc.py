@@ -6,18 +6,10 @@ Created on Fri Sep  8 14:37:22 2023
 """
 
 from unittest import TestCase, main
-import cc
+import cparser
 
 
-'''
-define int fact(int n)
-    t1 = int n
-    t2 = int 0
-    t1 = int t1 == t2
-    if t1 then else .L0
 
-
-'''
 MAIN_ASM = '''
   HALT
 '''
@@ -161,6 +153,39 @@ fib:
   ADD B, C
   JR .L0
 .L0:
+  MOV A, B
+  ADD SP, 1
+  POP PC, B, C
+fib2:
+  PUSH LR, B, C
+  SUB SP, 1
+  LD [SP, 0], A ; n
+  LD B, [SP, 0] ; n
+  CMP B, 1
+  JEQ .L7
+  CMP B, 2
+  JEQ .L8
+  JR .L6
+.L7:
+  MOV B, 0
+  JR .L4
+.L8:
+  MOV B, 1
+  JR .L4
+.L6:
+  LD B, [SP, 0] ; n
+  SUB B, 1
+  MOV A, B
+  CALL fib
+  MOV B, A
+  LD C, [SP, 0] ; n
+  SUB C, 2
+  MOV A, C
+  CALL fib
+  MOV C, A
+  ADD B, C
+  JR .L4
+.L4:
   MOV A, B
   ADD SP, 1
   POP PC, B, C
@@ -656,9 +681,7 @@ class TestCompiler(TestCase):
         if file_name.endswith('.c'):
             with open(r'tests/' + file_name) as in_file:
                 text = in_file.read()
-        cc.env.clear()
-        cc.emit.clear()
-        ast = cc.parse(text)
+        ast = cparser.parse(text)
         asm = ast.generate()
         self.assertEqual(asm, target.strip('\n'))
     

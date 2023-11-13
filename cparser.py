@@ -6,10 +6,9 @@ Created on Mon Jul  3 19:47:39 2023
 """
 
 import re
-from cnodes import Label, Goto, GlobalList, ListAssign, List, GlobDecl, Post, Pre, Switch, Case, Const, Do, Decl, Array, Struct, Pointer, Type, Conditional, Cast, Arrow, Id, Num, Unary, Binary, Compare, Call, Args, FuncDecl, Assign, If, Block, Program, Return, While, For, Break, Continue, Script, StructDecl, Params, Fields, Logic, Dot, Deref, AddrOf, Main, Global, Char, String
+from cnodes import Program, Main, Func, List, Params, Block, Switch, Case, If, Return, Glob, Attr, Local, Assign, Condition, Logic, Compare, Binary, Array, Struct, Pointer, Const, Type, Pre, Post, Deref, AddrOf, Unary, Args, Call, Arrow, SubScr, Dot, String, Char, Num, Frame
 
 '''
-TODO
 [X] Type checking
 [X] '.' vs '->' checking
 [ ] Cast
@@ -28,13 +27,16 @@ TODO
 [ ] Line numbers in errors
 [ ] Returning local structs
 [ ] PREPROCESSING
-1. combine cparser.py, cnodes.py, and ccompiler.py
-2. Add globals/locals to env in parser
-    in Parser.decls() add to env
-    next(Parser) returns token or proper id
-    
-    
 '''
+
+class Scope(Frame):
+    def __init__(self, old=None):
+        if old is None:            
+            super().__init__()
+        else:            
+            self.size = old.size
+            self.data = old.data.copy()
+
 class Token:
     def __init__(self, type, lexeme, line_no):
         self.type, self.lexeme, self.line_no = type, lexeme, line_no
@@ -58,7 +60,7 @@ class MetaLexer(type):
 
 class LexerBase(metaclass=MetaLexer):
     def lex(self, text):
-        return [Token(match.lastgroup, result, self.line_no) for match in self.regex.finditer(text) if (result := self.action[match.lastgroup](self, match.group())) is not None] + [('end','',self.line_no)]
+        return [Token(match.lastgroup, result, self.line_no) for match in self.regex.finditer(text) if (result := self.action[match.lastgroup](self, match.group())) is not None] + [Token('end','',self.line_no)]
 
 class CLexer(LexerBase):    
     def __init__(self):
@@ -67,24 +69,15 @@ class CLexer(LexerBase):
     RE_num = r'(0x[0-9a-f]+)|(0b[01]+)|(\d+)|(NULL)'
     RE_char = r"'\\?[^']'"
     RE_string = r'"[^"]*"'
-    RE_include = r'include'
     RE_const = r'const'
     RE_type = r'\b((void)|(int)|(char))\b'
-    RE_struct = r'struct'
-    RE_union = r'union'
-    RE_enum = r'enum'
+    RE_struct = r'\bstruct\b'
+    RE_return = r'\breturn\b'
     RE_if = r'if'
     RE_else = r'else'
-    RE_while = r'while'
-    RE_for = r'for'
-    RE_do = r'do'
     RE_switch = r'switch'
     RE_case = r'case'
     RE_default = r'default'
-    RE_goto = r'\b(goto)\b'
-    RE_continue = r'continue'
-    RE_break = r'break'
-    RE_return = r'return'
     RE_id = r'\w(\w|\d)*'
     def RE_comment(self, match):
         r'/\*(?:(?!/\*).|\n)*\*/'
@@ -96,19 +89,16 @@ class CLexer(LexerBase):
         r'\n'
         self.line_no += 1
     RE_semi = r';'
-    RE_comma = r','
-    RE_dot = r'\.'    
+    RE_colon = ':'
     RE_lparen = r'\('
     RE_rparen = r'\)'
     RE_lbrack = r'{'
     RE_rbrack = r'}'
     RE_lbrace = r'\['
     RE_rbrace = r'\]'
-    RE_hash = r'#'
-    RE_colon = r':'
-    RE_arrow = r'->'
     RE_dplus = r'\+\+'
     RE_ddash = r'--'
+    RE_arrow = r'->'
     RE_pluseq = r'\+='
     RE_dasheq = r'-='
     RE_stareq = r'\*='
@@ -129,30 +119,41 @@ class CLexer(LexerBase):
     RE_caret = r'\^'
     RE_dpipe = r'\|\|'
     RE_damp = '\&\&'
-    RE_pipe = r'\|'
-    RE_amp = r'\&'
+    RE_pip = r'\|'
+    RE_amp = r'\&'  
     RE_deq = r'=='
     RE_ne = r'!='
     RE_ge = r'>='
     RE_le = r'<='
     RE_eq = r'='
     RE_gt = r'>'
-    RE_lt = r'<'    
+    RE_lt = r'<'   
     RE_exp = r'!'
     RE_tilde = r'~'
+    RE_dot = r'\.'
+    RE_comma = r','
     def RE_error(self, match):
         r'\S'
         raise SyntaxError(f'line {self.line_no}: Invalid symbol "{match}"')
 
 lexer = CLexer()
 
-class CParser:    
+class CParser:
+    def resolve(self, name):
+        if name in self.scope:
+            return self.scope[name]
+        elif name in self.functions:
+            return self.functions[name]
+        elif name in self.globs:
+            return self.globs[name]
+        else:
+            self.error(f'name "{name}" not found')
     def primary(self):
         '''
-        PRIMARY -> id|Num|char|string|'(' EXPR ')'
+        PRIMARY -> id|num|char|string|'(' EXPR ')'
         '''
         if self.peek('id'):
-            return Id(next(self))
+            return self.resolve(next(self).lexeme)
         elif self.peek('num'):
             return Num(next(self))
         elif self.peek('char'):
@@ -171,21 +172,25 @@ class CParser:
         POST -> PRIMARY {'[' EXPR ']'|'(' ARGS ')'|'.' id|'->' id|'++'|'--'}
         '''
         postfix = self.primary()
-        if self.peek('[','(','.','->','++','--'):
-            assert type(postfix) is Id
-            while self.peek('[','(','.','->','++','--'):
-                if self.accept('['):
-                    postfix = Script(postfix, self.expr())
-                    self.expect(']')
-                elif self.accept('('):
-                    postfix = Call(postfix, self.args())
-                    self.expect(')')
-                elif self.accept('.'):
-                    postfix = Dot(postfix, self.expect('id'))
-                elif self.accept('->'):
-                    postfix = Arrow(postfix, self.expect('id'))
-                elif self.peek('++','--'):
+        while self.peek('.','[','->','(','++','--'):
+            if self.accept('.'):
+                postfix = Dot(postfix, postfix.type[self.expect('id').lexeme])
+            elif self.accept('['):
+                postfix = SubScr(postfix, self.expr())
+                self.expect(']')
+            elif self.accept('->'):
+                postfix = Arrow(postfix, postfix.type.to[self.expect('id').lexeme])
+            elif self.accept('('):
+                # TODO assert type(postfix) is ...
+                postfix = Call(postfix, self.args())
+                self.expect(')')
+                if self.calls is None:
+                    self.calls = 0
+                self.calls = max(self.calls, len(postfix.args))
+            elif self.peek('++','--'):
                     postfix = Post(next(self), postfix)
+            else:
+                self.error('POSTFIX EXPRESSION')
         return postfix
     
     def args(self):
@@ -207,38 +212,16 @@ class CParser:
                 |'sizeof' UNARY
                 |'sizeof' '(' TYPE_SPEC ')'
         '''
-        if self.peek('++','--'):
-            return Pre(next(self), self.unary())
-        elif self.peek('-','~',):
+        if self.peek('-','~',):
             return Unary(next(self), self.unary())
-        elif self.accept('!'):
-            unary = Call(Id('not'), Args([self.unary()]))
-            self.include('stdlib')
-            return unary
-        elif self.accept('*'):
-            return Deref(self.unary())
         elif self.accept('&'):
             return AddrOf(self.unary())
-        elif self.accept('sizeof'): #TODO
-            if self.accept('('):
-                self.type_spec()
-                self.expect(')')
-            else:
-                self.unary()
+        elif self.accept('*'):
+            return Deref(self.unary())
+        elif self.peek('++','--'):
+            return Pre(next(self), self.unary())
         else:
             return self.postfix()
-            
-    def cast(self): #TODO
-        '''
-        CAST -> '(' TYPE_SPEC ')' CAST
-               |UNARY
-        '''
-        if self.accept('('):
-            target = self.type_spec()
-            self.expect(')')
-            return Cast(target, self.cast())
-        else:
-            return self.unary()
     
     def type_spec(self):
         '''
@@ -246,8 +229,8 @@ class CParser:
         '''
         if self.peek('type'):
             type_spec = Type(next(self))
-        elif self.accept('struct','union'):
-            type_spec = Struct(self.expect('id'))
+        elif self.accept('struct'):
+            type_spec = self.structs[self.expect('id').lexeme]
         else:
             self.error('TYPE SPECIFIER')
         return type_spec
@@ -260,26 +243,13 @@ class CParser:
             return Const(self.type_spec())
         return self.type_spec()
     
-    def type_name(self):
-        '''
-        TYPE_NAME -> TYPE_QUAL {'*'}
-        '''
-        type_name = self.type_qual()
-        while self.accept('*'):
-            type_name = Pointer(type_name)
-        return type_name
-    
     def mul(self):
         '''
         MUL -> UNARY {('*'|'/'|'%') UNARY}
         '''
         mul = self.unary()
-        while self.peek('*','/','%'):
-            if self.peek('/','%'):
-                mul = Call(Id('div' if next(self) == '/' else 'mod'), Args([mul, self.unary()]))
-                self.include('stdlib')
-            else:
-                mul = Binary(next(self), mul, self.unary())
+        while self.peek('*'):
+            mul = Binary(next(self), mul, self.unary())
         return mul
     
     def add(self):
@@ -372,7 +342,7 @@ class CParser:
         if self.accept('?'):
             expr = self.expr()
             self.expect(':')
-            cond = Conditional(cond, expr, self.cond())
+            cond = Condition(cond, expr, self.cond())
         return cond
     
     def assign(self):
@@ -382,10 +352,10 @@ class CParser:
         '''
         assign = self.cond()
         if self.accept('='):
-            assert isinstance(assign, (Id, Script, Dot, Deref, Arrow))
+            assert isinstance(assign, (Local,Dot,Arrow,SubScr,Deref))
             assign = Assign(assign, self.assign())
         elif self.peek('+=','-=','*=','/=','%=','<<=','>>=','^=','|=','&='):
-            assert isinstance(assign, (Id, Script, Dot, Deref, Arrow))
+            assert isinstance(assign, (Local,Dot,Arrow,SubScr,Deref))
             assign = Assign(assign, Binary(next(self), assign, self.assign()))
         return assign
     
@@ -402,24 +372,6 @@ class CParser:
         CONST -> EXPR
         '''
         return self.expr()
-  
-    def init_list(self):
-        '''
-        INIT_LIST -> CONST|'{' INIT_LIST {',' INIT_LIST} '}'
-        '''
-        init = List()
-        if self.accept('{'):    
-            init.extend(self.init_list())
-            self.expect('}')
-        else:
-            init.append(self.const_expr())
-        while self.accept(','):
-            if self.accept('{'):
-                init.extend(self.init_list())
-                self.expect('}')
-            else:
-                init.append(self.const_expr())
-        return init
              
     def statement(self):
         '''
@@ -432,10 +384,12 @@ class CParser:
         LOOP -> 'while' '(' EXPR ')' STATE|'for' '(' EXPR ';' EXPR ';' EXPR ')' STATE|'do' STATEMENT 'while' '(' EXPR ')' ';'
         JUMP -> 'goto' ';'|'return' [EXPR] ';' |'break' ';' |'continue' ';'
         '''
-        if self.accept('{'):
+        if self.accept('{'):            
+            self.begin_scope()
             statement = self.block()
+            self.end_scope()
             self.expect('}')
-                       
+            
         elif self.accept('if'):
             self.expect('(')
             expr = self.expr()
@@ -459,69 +413,66 @@ class CParser:
                 statement.default = self.statement()
             self.expect('}')
             
-        elif self.accept('while'):
-            self.expect('(')
-            expr = self.expr()
-            self.expect(')')
-            statement = While(expr, self.statement())
-            
-        elif self.accept('do'):
-            statement = self.statement()
-            self.expect('while')
-            self.expect('(')
-            statement = Do(statement, self.expr())
-            self.expect(')')
-            self.expect(';')
-            
-        elif self.accept('for'):
-            self.expect('(')
-            init = self.expr()
-            self.expect(';')
-            cond = self.expr()
-            self.expect(';')
-            step = self.expr()
-            self.expect(')')
-            statement = For(init, cond, step, self.statement())
-        
-        elif self.accept('goto'):
-            statement = Goto(self.expect('id'))
-            self.expect(';')        
-            
-        elif self.accept('continue'):
-            statement = Continue()
-            self.expect(';')
-            
-        elif self.accept('break'):
-            statement = Break()
-            self.expect(';')
-            
         elif self.accept('return'):
             statement = Return()
             if not self.accept(';'):
                 statement.expr = self.expr()
                 self.expect(';')
-        elif self.peek2('id',':'):
-            statement = Label(next(self))
-            next(self)
+                
         else:
             statement = self.assign()
-            assert isinstance(statement, (Assign, Call, Pre, Post))
+            assert isinstance(statement, (Assign, Call))
             self.expect(';')
-        return statement    
+            
+        return statement
 
     def block(self):
         '''
         BLOCK -> {DECL} {STATE} [BLOCK]
         '''
-        block = Block()        
+        block = Block()
         while self.peek('const','type','struct','union'):
             block.append(self.init())
-        while self.peek('{','*','id','++','--','if','switch','while','do','for','goto','return','break','continue'):
+        while self.peek('{','id','++','--','return','if','switch'):
             block.append(self.statement())
-        if not self.peek('}') or len(block) > 0:
-            block.extend(self.block())
+        if not (self.peek('}') or self.peek('end')):# or (len(block) > 0):
+            block.extend(self.block())        
         return block
- 
+    
+    def init(self):
+        '''
+        INIT -> DECL ['=' EXPR] ';'
+        '''
+        init = self.decl()
+        if self.accept('='):
+            if self.accept('{'):
+                init = Assign(init, self.init_list())
+                self.expect('}')
+            else:
+                init = Assign(init, self.expr())
+        self.expect(';')
+        return init
+    
+    def abstract(self):
+        abstract = self.type_qual()
+        while self.accept('*'):
+            abstract = Pointer(abstract)
+        return abstract
+    
+    def decl(self):
+        '''
+        DECL -> TYPE_QUAL id {'[' [num] ']'}
+        '''
+        type = self.abstract()
+        id = self.expect('id')
+        while self.accept('['):
+            type = Array(type, Num(self.expect('num')))
+            self.expect(']')
+        local = Local(type, id)
+        self.scope[id.lexeme] = local
+        self.space += type.size
+        return local
+
     def params(self):
         '''
         PARAMS -> [DECL {',' DECL}]
@@ -533,112 +484,94 @@ class CParser:
                 params.append(self.decl())
         return params
     
-    def init(self):
+    def init_list(self):
         '''
-        INIT -> DECL ['=' EXPR] ';'
+        INIT_LIST -> CONST|'{' INIT_LIST {',' INIT_LIST} '}'
         '''
-        init = self.decl()
-        if self.accept('='):
+        init = List()
+        if self.accept('{'):    
+            init.extend(self.init_list())
+            self.expect('}')
+        else:
+            init.append(self.const_expr())
+        while self.accept(','):
             if self.accept('{'):
-                init = ListAssign(init, self.init_list())
+                init.extend(self.init_list())
                 self.expect('}')
             else:
-                init = Assign(init, self.expr())
-        self.expect(';')
+                init.append(self.const_expr())
         return init
     
-    def decl(self):
-        '''
-        DECL -> TYPE_QUAL id {'[' [num] ']'}
-        '''
-        type_name = self.type_name()
-        iden = Id(self.expect('id'))
-        while self.accept('['):
-            type_name = Array(type_name, Num(self.expect('num')))
-            self.expect(']')
-        return Decl(type_name, iden)
-    
-    def fields(self):
-        '''
-        FIELDS = '{' {DECL ';'} '}'
-        '''
-        fields = Fields()
-        if self.accept('{'):    
-            while not self.accept('}'):
-                fields.append(self.decl())
-                self.expect(';')
-        return fields
- 
     def program(self):
         program = Program()
-        while self.peek('#','type','struct','union','const'):
-            if self.accept('#'):
-                if self.accept('include'):
-                    if self.accept('<'):
-                        lib = self.expect('id')
-                        self.expect('.')
-                        assert self.expect('id') == 'h'
-                        self.expect('>')
-                        self.include(lib)
-                    elif self.peek('string'):
-                        self.include_h(next(self))
-                    else:
-                        self.error()
-                else:
-                    self.error()
-            else:
-                type_name = self.type_name()
-                if self.accept('{'):                        #Struct
-                    assert type(type_name) is Struct
-                    fields = Fields()
-                    while not self.accept('}'):
-                        fields.append(self.decl())
-                        self.expect(';')
+        while self.peek('type','const','struct'):
+            if self.peekn('struct','id','{'):
+                next(self)
+                id = next(self)
+                next(self)
+                struct = Struct(id.lexeme)
+                self.structs[id.lexeme] = struct
+                while not self.accept('}'):
+                    type = self.abstract()
+                    id = self.expect('id')
+                    struct[id.lexeme] = Attr(type, id)
                     self.expect(';')
-                    program.append(StructDecl(type_name.name, fields))
-                else:
-                    iden = Id(self.expect('id'))
-                    if self.accept('('):                    #Function
-                        params = self.params()
-                        self.expect(')')
-                        self.expect('{')
-                        block = self.block()
-                        self.expect('}')
-                        if iden.name == 'main':
-                            program.insert(0, Main(block))
+                self.expect(';')
+            else:
+                type = self.abstract()
+                id = self.expect('id')
+                if self.accept('('):                    #Function
+                    self.begin_func()
+                    self.calls = None
+                    self.space = 0
+                    self.begin_scope()
+                    params = self.params()
+                    self.expect(')')
+                    self.functions[id.lexeme] = Local(type, id)
+                    self.expect('{')
+                    block = self.block()
+                    self.end_scope()
+                    self.expect('}')
+                    if id.lexeme == 'main':
+                        program.insert(0, Main(block, self.space))
+                    else:
+                        program.append(Func(type, id, params, block, self.calls, self.space))
+                else:                                   #Global
+                    while self.accept('['):
+                        type = Array(type)
+                        self.expect(']')
+                    glob = Glob(type, id)
+                    if self.accept('='):
+                        if self.accept('{'):
+                            glob.init = self.init_list()
+                            self.expect('}')
                         else:
-                            program.append(FuncDecl(type_name, iden, params, block))
-                    else:                                   #Global
-                        while self.accept('['):
-                            type_name = Array(type_name, Num(self.expect('num')))
-                            self.expect(']')
-                        init = GlobDecl(type_name, iden)
-                        if self.accept('='):
-                            if self.accept('{'):
-                                init = GlobalList(init, self.init_list())
-                                self.expect('}')
-                            else:
-                                init = Global(init, self.expr())                            
-                        self.expect(';')
-                        program.append(init)
-        return program        
+                            glob.init = self.expr()
+                    self.expect(';')
+                    self.globs[id.lexeme] = glob
+                    program.append(glob)
+        return program
     
-    def include_h(self, h):
-        if h not in self.included:
-            with open(h) as h_file:
-                self.tokens[-1:] = lexer.lex(h_file.read())
-            self.included.add(h)
-    
-    def include(self, lib):
-        if lib not in self.included:
-            with open(f'std\\{lib}.h') as lib_file:
-                self.tokens[-1:] = lexer.lex(lib_file.read())
-            self.included.add(lib)
+    def begin_func(self):
+        self.space = 0
+        self.returns = False
+        self.calls = False
+    def begin_scope(self):
+        new = Scope(self.scope)
+        self.stack.append(self.scope)
+        self.scope = new
+    def end_scope(self):
+        self.scope = self.stack.pop() 
     
     def parse(self, text):
         self.included = set()
+        self.scope = Scope()
+        self.stack = []
+        self.functions = {}
+        self.structs = {}
+        self.globs = {}
         self.tokens = lexer.lex(text)
-        # for i, (t, v) in enumerate(self.tokens): print(i, t, v)
+        # for i, t in enumerate(self.tokens): print(i, t.type, t.lexeme)
         self.index = 0
         program = self.program()
         self.expect('end')
@@ -646,14 +579,22 @@ class CParser:
         
     def __next__(self):
         token = self.tokens[self.index]
-        if token.type == 'id':
-            return env.scope[token.lexeme]()
         self.index += 1
-        return value
+        return token
         
     def peek(self, *symbols, offset=0):
         token = self.tokens[self.index+offset]
-        return token.type in symbols or (not token.value.isalnum() and token.value in symbols)
+        return token.type in symbols or (not token.lexeme.isalnum() and token.lexeme in symbols)
+    
+    def peekn(self, *buckets):
+        if self.index+len(buckets) < len(self.tokens)-1:
+            for i, bucket in enumerate(buckets):
+                if type(bucket) is str:
+                    bucket = (bucket,)
+                if not self.peek(*bucket, offset=i):
+                    return False
+            return True
+        return False          
     
     def peek2(self, sym1, sym2):
         if self.index < len(self.tokens) - 1:            
@@ -670,7 +611,7 @@ class CParser:
         
     def error(self, expected=None):
         error = self.tokens[self.index]
-        raise SyntaxError(f'Line {error.line_no}: Unexpected {error.type} token "{error.value}".'+ (f' Expected "{expected}"' if expected is not None else ''))
+        raise SyntaxError(f'Line {error.line_no}: Unexpected {error.type} token "{error.lexeme}".'+ (f' Expected "{expected}"' if expected is not None else ''))
         
 parser = CParser()
 
