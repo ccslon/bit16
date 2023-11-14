@@ -11,8 +11,8 @@ from bit16 import Reg, Op, Cond, Data, Char, Jump, Inst1, Inst2, Inst3, Inst4, L
 TOKENS = {'const': r'(-?\d+)|(x[0-9a-f]+)|(b[01]+)',
           'string': r'"[^"]*"',
           'char': r"'\\?[^']'",
-          'ld': r'ld',
           'ldm': r'ldm',
+          'ld': r'ld',
           'nop': r'nop',
           'op': '|'.join(map(r'\b{}\b'.format, (op.name for op in Op))),
           'cond': '|'.join(map(r'\b{}\b'.format, (cond.name for cond in Cond))),
@@ -195,7 +195,7 @@ class Assembler:
                         self.inst1(Op.MOV, Reg.PC, Reg.LR)
                     elif self.match('out', 'reg'):
                         pass
-                    elif self.match('ldm'):
+                    elif self.accept('ldm'):
                         if self.peek('reg'): #ldm A, {B, C}
                             dest = next(self)
                             self.expect(',')
@@ -205,7 +205,7 @@ class Assembler:
                                 regs.append(self.expect('reg'))
                             self.expect('}')
                             for i, reg in enumerate(regs):
-                                self.store1(reg, dest, i)
+                                self.store1(dest, i, reg)
                             #store??
                         elif self.accept('{'): #ldm {B, C}, A
                             regs = [self.expect('reg')]
