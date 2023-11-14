@@ -9,7 +9,7 @@ import re
 from cnodes import Program, Main, Func, List, Params, Block, Label, Goto, Break, Continue, For, Do, While, Switch, Case, If, Return, Glob, Attr, Local, Assign, Condition, Logic, Compare, Binary, Array, Struct, Pointer, Const, Type, Pre, Post, Deref, AddrOf, Unary, Args, Call, Arrow, SubScr, Dot, String, Char, Num, Frame
 
 '''
-[X] Type checking
+[ ] Type checking
 [X] '.' vs '->' checking
 [ ] Cast
 [X] Allocating arrays
@@ -18,14 +18,14 @@ from cnodes import Program, Main, Func, List, Params, Block, Label, Goto, Break,
 [X] Proper ++int and int++
 [ ] Unions
 [ ] Enums
-[X] peek2
+[X] peekn
 [X] labels and goto
 [ ] Typedef
 [ ] Error handling
-[ ] Generate vs Reduce
-[ ] Scope in Parser?
+[X] Generate vs Reduce
+[X] Scope in Parser
 [ ] Line numbers in errors
-[ ] Returning local structs
+[X] Returning local structs
 [ ] PREPROCESSING
 '''
 
