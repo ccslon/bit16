@@ -571,76 +571,6 @@ void test5(struct Cat* cats) {
 }
 '''
 
-test_ASM = '''
-test:
-  MOV A, 9
-  LD [SP, 1], A
-  MOV A, 8
-  LD [SP, 0], A
-  LD A, [SP, 0]
-  LD B, [SP, 1]
-  NEG B
-  ADD A, B
-  LD [SP, 2], A
-  LD A, 'g'
-  LD [SP, 3], A
-  MOV A, 5
-  LD [SP, 0], A
-  MOV A, 6
-  LD [SP, 3], A
-  RET
-test2:
-  LD [SP, 0], A
-  LD A, 100
-  ADD B, SP, 1
-  LD [B, 0], A
-  LD A, 1000
-  ADD B, SP, 1
-  LD [B, 1], A
-  ADD A, SP, 1
-  LD A, [A, 0]
-  LD [SP, 3], A
-  RET
-tset3:
-  MOV A, 1
-  ADD B, SP, 0
-  LD [B, 0], A
-  MOV A, 10
-  ADD B, SP, 0
-  LD [B, 1], A
-  LD A, 100
-  ADD B, SP, 0
-  ADD B, 2
-  LD [B, 0], A
-  LD A, 1000
-  ADD B, SP, 0
-  ADD B, 2
-  LD [B, 1], A
-  RET
-test4:
-  LD [SP, 0], A
-  MOV A, 1
-  ADD B, SP, 0
-  LD [B, 0], A
-  MOV A, 10
-  ADD B, SP, 0
-  LD [B, 1], A
-  LD A, 100
-  ADD B, SP, 0
-  ADD B, 2
-  LD [B, 0], A
-  RET
-test5:
-  LD [SP, 0], A
-  MOV A, 1
-  LD B, [SP, 0]
-  MOV C, 0
-  MUL C, 4
-  ADD B, C
-  LD [B, 0], A
-  RET
-'''
-
 RETURN_STRUCT_ASM = '''
 div:
   PUSH C
@@ -673,6 +603,56 @@ print_int:
   LDM C, {A, B}
   ADD SP, 3
   POP PC, B, C, D
+'''
+
+POINTERS_ASM = '''
+change:
+  PUSH B
+  SUB SP, 1
+  LD [SP, 0], A ; n
+  LD A, [SP, 0] ; n
+  LD A, [A]
+  ADD A, 10
+  LD B, [SP, 0] ; n
+  LD [B], A
+  ADD SP, 1
+  POP B
+  RET
+foo:
+  PUSH LR, B
+  SUB SP, 2
+  LD [SP, 0], A ; m
+  LD B, [SP, 0] ; m
+  MUL B, 5
+  LD [SP, 1], B ; n
+  ADD B, SP, 1
+  MOV A, B
+  CALL change
+  MOV B, A
+  ADD SP, 2
+  POP PC, B
+print:
+  SUB SP, 1
+  LD [SP, 0], A ; str
+  ADD SP, 1
+  RET
+bar:
+  PUSH LR, C
+  SUB SP, 2
+  LD [SP, 0], A ; str
+  LD [SP, 1], B ; i
+  LD B, [SP, 0] ; str
+  MOV A, B
+  CALL print
+  MOV B, A
+  LD B, [SP, 0] ; str
+  LD C, [SP, 1] ; i
+  ADD B, C
+  MOV A, B
+  CALL print
+  MOV B, A
+  ADD SP, 2
+  POP PC, C
 '''
 
 class TestCompiler(TestCase):
@@ -749,6 +729,9 @@ class TestCompiler(TestCase):
     
     def test_return_struct(self):
         self.code_eq_asm('returns.c', RETURN_STRUCT_ASM)
+        
+    def test_pointers(self):
+        self.code_eq_asm('pointers.c', POINTERS_ASM)
 
 if __name__ == '__main__':
     main()

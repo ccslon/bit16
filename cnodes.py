@@ -192,10 +192,10 @@ class Expr:
     def branch(self, n, _):
         self.generate(n)
     def compare(self, n, label):
-        emit.inst(Op.CMP, self.compile(n), 0)
+        emit.inst(Op.CMP, self.reduce(n), 0)
         emit.jump(Cond.JEQ, f'.L{label}')
     def compare_false(self, n, label):
-        emit.inst(Op.CMP, self.compile(n), 0)
+        emit.inst(Op.CMP, self.reduce(n), 0)
         emit.jump(Cond.JNE, f'.L{label}')
     def ret(self, n):
         self.reduce(n)
@@ -278,7 +278,7 @@ class Post(Expr):
     def __init__(self, op, postfix):
         self.op, self.postfix = self.OPS[op.lexeme], postfix
     def generate(self, n):
-        self.postfix.compile(n)
+        self.postfix.reduce(n)
         emit.inst4(self.op, r[n+1], r[n], 1)
         self.postfix.store(n+1)
         return r[n]
