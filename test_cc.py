@@ -194,7 +194,7 @@ SUM_ASM = '''
 sum:
   PUSH B
   SUB SP, 3
-  LD [SP, 0], A
+  LD [SP, 0], A ; n
   MOV A, 0
   LD [SP, 1], A ; s
   MOV A, 0
@@ -503,7 +503,7 @@ stdin:
 GOTO_ASM = '''
 foo:
   SUB SP, 1
-  LD [SP, 0], A
+  LD [SP, 0], A ; bar
   LD A, [SP, 0] ; bar
   CMP A, 3
   JLE .L1
