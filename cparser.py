@@ -10,13 +10,14 @@ import clexer
 from cnodes import Program, Main, Func, List, Params, Block, Label, Goto, Break, Continue, For, Do, While, Switch, Case, If, Return, Glob, Attr, Local, Assign, Condition, Logic, Compare, Binary, Array, Struct, Pointer, Const, Type, Pre, Post, Deref, AddrOf, Unary, Args, Call, Arrow, SubScr, Dot, String, Char, Num, Frame
 
 '''
+TODO
 [ ] Type checking
 [X] '.' vs '->' checking
 [ ] Cast
-[X] Allocating arrays
+[X] Allocating local arrays
 [X] Globals overhaul including global structs and arrays
-[X] Init lists e.g. struct FILE stdout = {0x7f00, 0, 0};
-[X] Proper ++int and int++
+[X] Init lists 
+[X] Proper ++/--
 [ ] Unions
 [ ] Enums
 [X] peekn
@@ -28,11 +29,13 @@ from cnodes import Program, Main, Func, List, Params, Block, Label, Goto, Break,
 [ ] Line numbers in errors
 [X] Returning local structs
 [ ] PREPROCESSING
+    [X] include header files
+    [ ] Macros??
 '''
 
 class Scope(Frame):
     def __init__(self, old=None):
-        if old is None:            
+        if old is None:
             super().__init__()
         else:            
             self.size = old.size
