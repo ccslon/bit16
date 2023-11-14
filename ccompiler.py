@@ -23,11 +23,12 @@ def ccompile(file_name, sflag=False, fflag=True):
         bit16 = assembler.assemble(asm)
         if fflag:
             with open(f'{file_name[:-2]}.bit16', 'w+') as out_file:
-                out_file.write(' '.join(bit16))
+                out_file.write('v2.0 raw\n'+' '.join(bit16))
 
 if __name__ == '__main__':
     # ccompile('hello.c', sflag=True, oflag=False)    
-    ccompile('tests//pointers.c', sflag=True, fflag=False)
+    # ccompile('tests//pointers.c', sflag=True, fflag=False)
     # ccompile('tests//hello.c')
     # ccompile('std//stdio.h', sflag=True, oflag=False)
-    # ccompile('c//cats.c')
+    ccompile('c//fib.c')
+    # ccompile('c//print_num.c', sflag=True, fflag=False)
