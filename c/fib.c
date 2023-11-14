@@ -36,6 +36,17 @@ void print_int(int num) {
     puts(&buffer);
 }
 
+int fib(int n) {
+    switch (n) {
+        case 1: return 0;
+        case 2: return 1;
+        default: return fib(n-1) + fib(n-2);
+    }
+}
+
 void main() {
-    print_int(420);
+    int i;
+    for (i = 1; i <= 10; i++) {
+        print_int(fib(i));
+    }
 }
