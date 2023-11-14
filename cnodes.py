@@ -155,7 +155,8 @@ class Struct(Type, Frame):
         self.size = 0
         self.data = {}
     def address(self, local, n, base):
-        emit.inst4(Op.ADD, r[n], r[base], local.location) 
+        if local.location is not None:
+            emit.inst4(Op.ADD, r[n], r[base], local.location)
         return r[n]
     def store(self, local, n, base):
         self.address(local, self.size, base)
@@ -277,6 +278,9 @@ class Post(Expr):
            '--':Op.SUB}
     def __init__(self, op, postfix):
         self.op, self.postfix = self.OPS[op.lexeme], postfix
+    def reduce(self, n):
+        self.generate(n)
+        return r[n]
     def generate(self, n):
         self.postfix.reduce(n)
         emit.inst4(self.op, r[n+1], r[n], 1)
@@ -362,8 +366,8 @@ class Logic(Binary):
     OP = {'&&':Op.AND,
           '||':Op.OR}
     def __init__(self, op, left, right):
-        self.op, self.left, self.right = self.OP[op], left, right
-    def reduce(self, n, label):
+        self.op, self.left, self.right = self.OP[op.lexeme], left, right
+    def compare(self, n, label):
         # assert self.left.type() == self.right.type()
         if self.op == Op.AND:
             emit.inst(Op.CMP, self.left.reduce(n), 0)
@@ -530,13 +534,13 @@ class Arrow(Expr):
         self.postfix, self.attr = postfix, attr
         self.type = attr.type
     def address(self, n):
-        emit.inst(Op.ADD, self.postfix.address(n), self.attr.location)
+        emit.inst(Op.ADD, self.postfix.reduce(n), self.attr.location)
         return r[n] 
     def store(self, n):
-        self.postfix.address(n+1)
+        self.postfix.reduce(n+1)
         return self.attr.store(n)
     def reduce(self, n):
-        self.postfix.address(n)
+        self.postfix.reduce(n)
         return self.attr.reduce(n)
 
 class SubScr(Expr): 
@@ -652,24 +656,24 @@ class For(While):
         env.end_loop()
 
 class Continue(Expr):
-    def compile(self, n):
+    def generate(self, n):
         emit.jump(Cond.JR, f'.L{env.loop.start()}')
         
 class Break(Expr):
-    def compile(self, n):
+    def generate(self, n):
         emit.jump(Cond.JR, f'.L{env.loop.end()}')
 
 class Goto(Expr):
     def __init__(self, target):
         self.target = target
-    def compile(self, n):
-        emit.jump(Cond.JR, self.target)
+    def generate(self, n):
+        emit.jump(Cond.JR, self.target.lexeme)
         
 class Label(Expr):
     def __init__(self, target):
         self.target = target
-    def compile(self, n):
-        emit.labels.append(self.target)
+    def generate(self, n):
+        emit.labels.append(self.target.lexeme)
 
 class Args(Expr, UserList):
     def generate(self, n):
