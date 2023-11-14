@@ -6,7 +6,7 @@ Created on Mon Jul  3 19:47:39 2023
 """
 
 import re
-from cnodes import Program, Main, Func, List, Params, Block, Switch, Case, If, Return, Glob, Attr, Local, Assign, Condition, Logic, Compare, Binary, Array, Struct, Pointer, Const, Type, Pre, Post, Deref, AddrOf, Unary, Args, Call, Arrow, SubScr, Dot, String, Char, Num, Frame
+from cnodes import Program, Main, Func, List, Params, Block, Label, Goto, Break, Continue, For, Do, While, Switch, Case, If, Return, Glob, Attr, Local, Assign, Condition, Logic, Compare, Binary, Array, Struct, Pointer, Const, Type, Pre, Post, Deref, AddrOf, Unary, Args, Call, Arrow, SubScr, Dot, String, Char, Num, Frame
 
 '''
 [X] Type checking
@@ -78,6 +78,12 @@ class CLexer(LexerBase):
     RE_switch = r'switch'
     RE_case = r'case'
     RE_default = r'default'
+    RE_while = r'while'
+    RE_do = r'do'  
+    RE_for = r'for'
+    RE_break = r'break'
+    RE_continue = r'continue'
+    RE_goto = r'goto'
     RE_id = r'\w(\w|\d)*'
     def RE_comment(self, match):
         r'/\*(?:(?!/\*).|\n)*\*/'
@@ -413,15 +419,55 @@ class CParser:
                 statement.default = self.statement()
             self.expect('}')
             
+        elif self.accept('while'):
+            self.expect('(')
+            expr = self.expr()
+            self.expect(')')
+            statement = While(expr, self.statement())
+            
+        elif self.accept('do'):
+            statement = self.statement()
+            self.expect('while')
+            self.expect('(')
+            statement = Do(statement, self.expr())
+            self.expect(')')
+            self.expect(';')
+            
+        elif self.accept('for'):
+            self.expect('(')
+            init = self.expr()
+            self.expect(';')
+            cond = self.expr()
+            self.expect(';')
+            step = self.expr()
+            self.expect(')')
+            statement = For(init, cond, step, self.statement())
+        
         elif self.accept('return'):
             statement = Return()
             if not self.accept(';'):
                 statement.expr = self.expr()
                 self.expect(';')
-                
+            
+        elif self.accept('break'):
+            statement = Break()
+            self.expect(';') 
+            
+        elif self.accept('continue'):
+            statement = Continue()
+            self.expect(';')   
+        
+        elif self.accept('goto'):
+            statement = Goto(self.expect('id'))
+            self.expect(';') 
+        
+        elif self.peekn('id',':'):
+            statement = Label(next(self))
+            next(self)
+        
         else:
             statement = self.assign()
-            assert isinstance(statement, (Assign, Call))
+            assert isinstance(statement, (Assign, Call, Pre, Post))
             self.expect(';')
             
         return statement
@@ -433,7 +479,7 @@ class CParser:
         block = Block()
         while self.peek('const','type','struct','union'):
             block.append(self.init())
-        while self.peek('{','id','++','--','return','if','switch'):
+        while self.peek('{','id','++','--','return','if','switch','while','do','for','break','continue','goto'):
             block.append(self.statement())
         if not (self.peek('}') or self.peek('end')):# or (len(block) > 0):
             block.extend(self.block())        

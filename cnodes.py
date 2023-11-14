@@ -468,7 +468,7 @@ class List(Expr, UserList):
 class Params(Expr, UserList):
     def generate(self):
         for i, param in enumerate(self):
-            emit.store(r[i], Reg.SP, i, param.token.lexeme) #env.scope.index(param.id.name))
+            emit.store(r[i], Reg.SP, i, param.token.lexeme)
     
 class Func(Expr):
     def __init__(self, type, id, params, block, max_args, space):
@@ -612,6 +612,64 @@ class Switch(Expr):
         if self.default:
             self.default.generate(n)            
         env.end_loop()
+
+class While(Expr):
+    def __init__(self, cond, state):
+        self.cond, self.state = cond, state
+    def generate(self, n):
+        env.begin_loop()
+        emit.labels.append(f'.L{env.loop.start()}')
+        self.cond.compare(n, env.loop.end())
+        self.state.generate(n)
+        emit.jump(Cond.JR, f'.L{env.loop.start()}')
+        emit.labels.append(f'.L{env.loop.end()}')
+        env.end_loop()
+
+class Do(Expr):
+    def __init__(self, state, cond):
+        self.state, self.cond = state, cond
+    def generate(self, n):
+        env.begin_loop()
+        emit.labels.append(f'.L{env.loop.start()}')        
+        self.state.generate(n)
+        self.cond.compare_false(n, env.loop.start())
+        emit.labels.append(f'.L{env.loop.end()}')
+        env.end_loop()
+
+class For(While):
+    def __init__(self, init, cond, step, state):
+        super().__init__(cond, state)
+        self.init, self.step = init, step
+    def generate(self, n):
+        self.init.generate(n)
+        env.begin_loop()
+        emit.labels.append(f'.L{env.loop.start()}')
+        self.cond.compare(n, env.loop.end())
+        self.state.generate(n)
+        self.step.generate(n)
+        emit.jump(Cond.JR, f'.L{env.loop.start()}')
+        emit.labels.append(f'.L{env.loop.end()}')
+        env.end_loop()
+
+class Continue(Expr):
+    def compile(self, n):
+        emit.jump(Cond.JR, f'.L{env.loop.start()}')
+        
+class Break(Expr):
+    def compile(self, n):
+        emit.jump(Cond.JR, f'.L{env.loop.end()}')
+
+class Goto(Expr):
+    def __init__(self, target):
+        self.target = target
+    def compile(self, n):
+        emit.jump(Cond.JR, self.target)
+        
+class Label(Expr):
+    def __init__(self, target):
+        self.target = target
+    def compile(self, n):
+        emit.labels.append(self.target)
 
 class Args(Expr, UserList):
     def generate(self, n):

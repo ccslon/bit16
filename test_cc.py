@@ -716,8 +716,8 @@ class TestCompiler(TestCase):
     def test_fib(self):
         self.code_eq_asm('fib.c', FIB_ASM)
         
-    # def test_sum(self):
-    #     self.code_eq_asm('sum.c', SUM_ASM)
+    def test_sum(self):
+        self.code_eq_asm('sum.c', SUM_ASM)
         
     def test_getset(self):
         self.code_eq_asm('getset.c', GETSET_ASM)
@@ -744,8 +744,8 @@ class TestCompiler(TestCase):
     def test_glob_struct(self):
         self.code_eq_asm('globs.c', GLOB_STRUCT_ASM)
         
-    # def test_goto(self):
-    #     self.code_eq_asm('goto.c', GOTO_ASM)
+    def test_goto(self):
+        self.code_eq_asm('goto.c', GOTO_ASM)
     
     def test_return_struct(self):
         self.code_eq_asm('returns.c', RETURN_STRUCT_ASM)
