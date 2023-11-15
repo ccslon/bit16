@@ -119,7 +119,7 @@ class Emitter:
 
 emit = Emitter()
 
-class Type: #TODO
+class Type:
     def __init__(self, type):
         self.type = type
         self.size = 0 if type.lexeme == 'void' else 1
@@ -460,7 +460,7 @@ class Glob(Local):
     def ret(self, n):
         self.address(n)
         self.type.ret(self, n, n)
-    def generate(self): #TODO
+    def generate(self):
         self.type.glob(self)
 
 class List(Expr, UserList):
@@ -683,7 +683,7 @@ class Args(Expr, UserList):
             for i, arg in enumerate(self):
                 emit.inst(Op.MOV, r[i], r[n+i]) 
 
-class Call(Expr): #TODO
+class Call(Expr):
     def __init__(self, postfix, args):
         self.primary, self.args = postfix, args
     def reduce(self, n):

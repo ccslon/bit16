@@ -21,7 +21,7 @@ TODO
 [ ] Unions
 [ ] Enums
 [X] peekn
-[X] labels and goto
+[X] Labels and goto
 [ ] Typedef
 [ ] Error handling
 [X] Generate vs Reduce
@@ -29,7 +29,15 @@ TODO
 [ ] Line numbers in errors
 [X] Returning local structs
 [ ] PREPROCESSING
+<<<<<<< Updated upstream
     [X] include header files
+=======
+<<<<<<< HEAD
+    [X] Headers
+=======
+    [X] include header files
+>>>>>>> 4a7babe3aa48f9bf6771e23cf622fd2039528ae6
+>>>>>>> Stashed changes
     [ ] Macros??
 '''
 
@@ -42,6 +50,7 @@ class Scope(Frame):
             self.data = old.data.copy()
 
 class CParser:
+    
     def resolve(self, name):
         if name in self.scope:
             return self.scope[name]
@@ -50,7 +59,8 @@ class CParser:
         elif name in self.globs:
             return self.globs[name]
         else:
-            self.error(f'name "{name}" not found')
+            self.error(f'Name "{name}" not found')
+            
     def primary(self):
         '''
         PRIMARY -> id|num|char|string|'(' EXPR ')'
@@ -113,7 +123,7 @@ class CParser:
                 |('++'|'--') UNARY
                 |('-'|'~'|'!'|'*'|'&') CAST
                 |'sizeof' UNARY
-                |'sizeof' '(' TYPE_SPEC ')'
+                |'sizeof' '(' ABSTRACT ')' #TODO
         '''
         if self.peek('-','~',):
             return Unary(next(self), self.unary())
@@ -145,6 +155,15 @@ class CParser:
         if self.accept('const'):
             return Const(self.type_spec())
         return self.type_spec()
+    
+    def abstract(self):
+        '''
+        ABSTRACT -> TYPE_QUAL {'*'}
+        '''
+        abstract = self.type_qual()
+        while self.accept('*'):
+            abstract = Pointer(abstract)
+        return abstract
     
     def mul(self):
         '''
@@ -255,10 +274,10 @@ class CParser:
         '''
         assign = self.cond()
         if self.accept('='):
-            assert isinstance(assign, (Local,Dot,Arrow,SubScr,Deref))
+            assert isinstance(assign, (Local,Glob,Dot,Arrow,SubScr,Deref))
             assign = Assign(assign, self.assign())
         elif self.peek('+=','-=','*=','/=','%=','<<=','>>=','^=','|=','&='):
-            assert isinstance(assign, (Local,Dot,Arrow,SubScr,Deref))
+            assert isinstance(assign, (Local,Glob,Dot,Arrow,SubScr,Deref))
             assign = Assign(assign, Binary(next(self), assign, self.assign()))
         return assign
     
@@ -283,9 +302,15 @@ class CParser:
                 |LOOP
                 |JUMP
                 |ASSIGN ';'
-        SELECT -> 'if' '(' EXPR ')' STATE ['else' STATE]|'switch' '(' EXPR ')' '{' {'case' CONST_EXPR ':' STATEMENT} ['default' ':' STATEMENT] '}'
-        LOOP -> 'while' '(' EXPR ')' STATE|'for' '(' EXPR ';' EXPR ';' EXPR ')' STATE|'do' STATEMENT 'while' '(' EXPR ')' ';'
-        JUMP -> 'goto' ';'|'return' [EXPR] ';' |'break' ';' |'continue' ';'
+        SELECT -> 'if' '(' EXPR ')' STATEMENT ['else' STATEMENT]
+                 |'switch' '(' EXPR ')' '{' {'case' CONST_EXPR ':' STATEMENT} ['default' ':' STATEMENT] '}'
+        LOOP -> 'while' '(' EXPR ')' STATEMENT
+               |'for' '(' EXPR ';' EXPR ';' EXPR ')' STATEMENT
+               |'do' STATEMENT 'while' '(' EXPR ')' ';'
+        JUMP -> 'goto' id ';'
+               |'return' [EXPR] ';'
+               |'break' ';'
+               |'continue' ';'
         '''
         if self.accept('{'):            
             self.begin_scope()
@@ -368,39 +393,6 @@ class CParser:
             self.expect(';')
             
         return statement
-
-    def block(self):
-        '''
-        BLOCK -> {DECL} {STATE} [BLOCK]
-        '''
-        block = Block()
-        while self.peek('const','type','struct','union'):
-            block.append(self.init())
-        while self.peek('{','id','*','++','--','return','if','switch','while','do','for','break','continue','goto'):
-            block.append(self.statement())
-        if not (self.peek('}') or self.peek('end')):# or (len(block) > 0):
-            block.extend(self.block())        
-        return block
-    
-    def init(self):
-        '''
-        INIT -> DECL ['=' EXPR] ';'
-        '''
-        init = self.decl()
-        if self.accept('='):
-            if self.accept('{'):
-                init = Assign(init, self.init_list())
-                self.expect('}')
-            else:
-                init = Assign(init, self.expr())
-        self.expect(';')
-        return init
-    
-    def abstract(self):
-        abstract = self.type_qual()
-        while self.accept('*'):
-            abstract = Pointer(abstract)
-        return abstract
     
     def decl(self):
         '''
@@ -415,17 +407,33 @@ class CParser:
         self.scope[id.lexeme] = local
         self.space += type.size
         return local
+    
+    def init(self):
+        '''
+        INIT -> DECL ['=' (EXPR|INIT_LIST)] ';'
+        '''
+        init = self.decl()
+        if self.accept('='):
+            if self.accept('{'):
+                init = Assign(init, self.init_list())
+                self.expect('}')
+            else:
+                init = Assign(init, self.expr())
+        self.expect(';')
+        return init
 
-    def params(self):
+    def block(self):
         '''
-        PARAMS -> [DECL {',' DECL}]
+        BLOCK -> {DECL} {STATE} [BLOCK]
         '''
-        params = Params()
-        if self.peek('const','type','struct','union'):    
-            params.append(self.decl())
-            while self.accept(','):
-                params.append(self.decl())
-        return params
+        block = Block()
+        while self.peek('const','type','struct','union'):
+            block.append(self.init())
+        while self.peek('{','id','*','++','--','return','if','switch','while','do','for','break','continue','goto'):
+            block.append(self.statement())
+        if not (self.peek('}') or self.peek('end')):# or (len(block) > 0):
+            block.extend(self.block())        
+        return block
     
     def init_list(self):
         '''
@@ -444,6 +452,17 @@ class CParser:
             else:
                 init.append(self.const_expr())
         return init
+
+    def params(self):
+        '''
+        PARAMS -> [DECL {',' DECL}]
+        '''
+        params = Params()
+        if self.peek('const','type','struct','union'):    
+            params.append(self.decl())
+            while self.accept(','):
+                params.append(self.decl())
+        return params
     
     def program(self):
         program = Program()
@@ -465,8 +484,6 @@ class CParser:
                 id = self.expect('id')
                 if self.accept('('):                    #Function
                     self.begin_func()
-                    self.calls = None
-                    self.space = 0
                     self.begin_scope()
                     params = self.params()
                     self.expect(')')
@@ -504,18 +521,22 @@ class CParser:
                 if self.accept('include'):
                     if self.peek('string'):
                         file_name = next(self).lexeme[1:-1]
-                        end = self.index
-                        with open(file_name, 'r') as header:
-                            self.tokens[start:end] = clexer.lex(header.read())[:-1]
+                        if file_name not in self.included: #TODO
+                            end = self.index
+                            with open(file_name, 'r') as header:
+                                self.tokens[start:end] = clexer.lex(header.read())[:-1]
+                            self.included.add(file_name)
                     elif self.accept('<'):
                         file_name = next(self).lexeme
                         self.expect('.')
                         if self.expect('id').lexeme != 'h':
                             self.error('h')
                         self.expect('>')
-                        end = self.index
-                        with open(f'std\{file_name}.h', 'r') as header:
-                            self.tokens[start:end] = clexer.lex(header.read())[:-1]
+                        if file_name not in self.included:
+                            end = self.index                        
+                            with open(f'std\{file_name}.h', 'r') as header:
+                                self.tokens[start:end] = clexer.lex(header.read())[:-1]
+                            self.included.add(file_name)
                     else:
                         self.error()
                     self.index = start
@@ -526,18 +547,19 @@ class CParser:
     
     def begin_func(self):
         self.space = 0
-        self.returns = False
-        self.calls = False
+        self.calls = None
+        
     def begin_scope(self):
         new = Scope(self.scope)
         self.stack.append(self.scope)
         self.scope = new
+        
     def end_scope(self):
         self.scope = self.stack.pop() 
     
     def parse(self, text):
         self.included = set()
-        self.scope = Scope()
+        self.scope = None
         self.stack = []
         self.functions = {}
         self.structs = {}
@@ -567,11 +589,7 @@ class CParser:
                 if not self.peek(*bucket, offset=i):
                     return False
             return True
-        return False          
-    
-    def peek2(self, sym1, sym2):
-        if self.index < len(self.tokens) - 1:            
-            return self.peek(sym1) and self.peek(sym2, offset=1)
+        return False
     
     def accept(self, *symbols):
         if self.peek(*symbols):
@@ -580,11 +598,11 @@ class CParser:
     def expect(self, symbol): 
         if self.peek(symbol):
             return next(self)
-        self.error(symbol)
+        self.error(f'Expected "{symbol}"')
         
-    def error(self, expected=None):
+    def error(self, msg=None):
         error = self.tokens[self.index]
-        raise SyntaxError(f'Line {error.line_no}: Unexpected {error.type} token "{error.lexeme}".'+ (f' Expected "{expected}"' if expected is not None else ''))
+        raise SyntaxError(f'Line {error.line_no}: Unexpected {error.type} token "{error.lexeme}".'+(f' {msg}.' if msg is not None else ''))
         
 parser = CParser()
 

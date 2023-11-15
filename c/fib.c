@@ -1,22 +1,6 @@
 #include <stdio.h>
 #include <string.h>
-
-struct div_t {
-    int div;
-    int mod;
-};
-
-struct div_t div(int n, int d) {
-    struct div_t ans;
-    int q = 0;
-    while (n >= d) {
-        n -= d;
-        q++;
-    }
-    ans.div = q;
-    ans.mod = n;
-    return ans;
-}
+#include <stdlib.h>
 
 void print_int(int num) {
     struct div_t ans;
@@ -28,9 +12,9 @@ void print_int(int num) {
     i = 0;
     do {
         ans = div(num, 10);
-        buffer[i] = '0' + ans.mod;
+        buffer[i] = '0' + ans.rem;
         i++;
-        num = ans.div;
+        num = ans.quot;
     } while (num > 0);
     strrev(&buffer);
     puts(&buffer);

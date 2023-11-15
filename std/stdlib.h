@@ -1,14 +1,18 @@
-int div(int num, int den) {
-    int quot = 0;
-    while (num >= den) {
-        num -= den;
-        quot++;
+#include <string.h>
+struct div_t {
+    int quot;
+    int rem;
+};
+struct div_t div(int num, int den) {
+    struct div_t ans;
+    int q = 0;
+    while (n >= d) {
+        n -= d;
+        q++;
     }
-    return quot;
-}
-int mod(int num, int den) {
-    while (num >= den) num -= d;
-    return num;
+    ans.quot = q;
+    ans.rem = n;
+    return ans;
 }
 int not(int num) {
     return num == 0;
@@ -23,7 +27,7 @@ int rand() {
 int srand(int seed) {
     
 }
-#include <string.h>
+
 int atoi(char* str) {
     str = strrev(str);
     int place = 1;
