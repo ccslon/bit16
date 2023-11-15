@@ -1,53 +1,38 @@
-#include <string.h>
-struct div_t {
+#define div_t struct div_t
+div_t {
     int quot;
     int rem;
 };
-struct div_t div(int num, int den) {
-    struct div_t ans;
-    int q = 0;
-    while (n >= d) {
-        n -= d;
-        q++;
+div_t div(int num, int den) {
+    div_t ans;
+    int quot = 0;
+    while (num >= den) {
+        num -= den;
+        quot++;
     }
-    ans.quot = q;
-    ans.rem = n;
+    ans.quot = quot;
+    ans.rem = num;
     return ans;
 }
-int not(int num) {
+int not_(int num) {
     return num == 0;
 }
 int abs(int num) {
     if (num < 0) return -num;
     return num;
 }
-int rand() {
-
-}
-int srand(int seed) {
-    
-}
-
+int rand() {}
+int srand(int seed) {}
 int atoi(char* str) {
-    str = strrev(str);
-    int place = 1;
     int num = 0;
     while (*str != '\0') {
-        num += place * (*str - '0');
-        place *= 10;
+        num *= 10;
+        num += *str - '0';
         str++;
     }
     return num;
 }
-void* calloc(int nitems, int size) {
-
-}
-void free(void* ptr) {
-
-}
-void* malloc(int size) {
-
-}
-void* realloc(void* ptr, int size) {
-
-}
+void* calloc(int nitems, int size) {}
+void free(void* ptr) {}
+void* malloc(int size) {}
+void* realloc(void* ptr, int size) {}

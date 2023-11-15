@@ -3,7 +3,7 @@
 #include <stdlib.h>
 
 void print_int(int num) {
-    struct div_t ans;
+    div_t ans;
     char buffer[5];
     int i;
     for (i = 0; i < 5; i++) {

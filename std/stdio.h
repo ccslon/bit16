@@ -1,12 +1,9 @@
-
 struct FILE {
     int* buffer;
     int read;
     int write;
 };
-
 struct FILE stdout = {0x7f00, 0, 0};
-
 int fputc(char c, struct FILE* stream) {
     stream->buffer[stream->write++] = c;
     return 0;
