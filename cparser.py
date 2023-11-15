@@ -29,17 +29,11 @@ TODO
 [ ] Line numbers in errors
 [X] Returning local structs
 [ ] PREPROCESSING
-<<<<<<< Updated upstream
     [X] include header files
-=======
-<<<<<<< HEAD
-    [X] Headers
-=======
-    [X] include header files
->>>>>>> 4a7babe3aa48f9bf6771e23cf622fd2039528ae6
->>>>>>> Stashed changes
     [ ] Macros??
 '''
+
+
 
 class Scope(Frame):
     def __init__(self, old=None):
@@ -512,39 +506,6 @@ class CParser:
                     program.append(glob)
         return program
     
-    def preprocess(self):
-        self.index = 0
-        while self.index < len(self.tokens):
-            if self.peek('#'):
-                start = self.index
-                next(self)
-                if self.accept('include'):
-                    if self.peek('string'):
-                        file_name = next(self).lexeme[1:-1]
-                        if file_name not in self.included: #TODO
-                            end = self.index
-                            with open(file_name, 'r') as header:
-                                self.tokens[start:end] = clexer.lex(header.read())[:-1]
-                            self.included.add(file_name)
-                    elif self.accept('<'):
-                        file_name = next(self).lexeme
-                        self.expect('.')
-                        if self.expect('id').lexeme != 'h':
-                            self.error('h')
-                        self.expect('>')
-                        if file_name not in self.included:
-                            end = self.index                        
-                            with open(f'std\{file_name}.h', 'r') as header:
-                                self.tokens[start:end] = clexer.lex(header.read())[:-1]
-                            self.included.add(file_name)
-                    else:
-                        self.error()
-                    self.index = start
-                else:
-                    self.error()
-            else:
-                next(self)
-    
     def begin_func(self):
         self.space = 0
         self.calls = None
@@ -565,7 +526,6 @@ class CParser:
         self.structs = {}
         self.globs = {}
         self.tokens = clexer.lex(text)
-        self.preprocess()
         # for i, t in enumerate(self.tokens): print(i, t.type, t.lexeme)
         self.index = 0
         program = self.program()

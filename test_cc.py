@@ -6,6 +6,7 @@ Created on Fri Sep  8 14:37:22 2023
 """
 
 from unittest import TestCase, main
+import cpreproc
 import cparser
 
 
@@ -661,6 +662,7 @@ class TestCompiler(TestCase):
         if file_name.endswith('.c'):
             with open(r'tests/' + file_name) as in_file:
                 text = in_file.read()
+        text = cpreproc.preprocess(text)
         ast = cparser.parse(text)
         asm = ast.generate()
         self.assertEqual(asm, target.strip('\n'))

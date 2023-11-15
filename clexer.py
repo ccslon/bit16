@@ -38,6 +38,9 @@ class CLexer(LexerBase):
     RE_num = r'(0x[0-9a-f]+)|(0b[01]+)|(\d+)|(NULL)'
     RE_char = r"'\\?[^']'"
     RE_string = r'"[^"]*"'
+    def RE_eof(self, match):
+        r'@'
+        self.line_no = 0
     RE_const = r'const'
     RE_type = r'\b((void)|(int)|(char))\b'
     RE_struct = r'\bstruct\b'
@@ -64,7 +67,6 @@ class CLexer(LexerBase):
     def RE_new_line(self, match):
         r'\n'
         self.line_no += 1
-    RE_hash = r'#'
     RE_semi = r';'
     RE_colon = ':'
     RE_lparen = r'\('
