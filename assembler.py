@@ -18,8 +18,8 @@ TOKENS = {'const': r'(-?\d+)|(x[0-9a-f]+)|(b[01]+)',
           'cond': '|'.join(map(r'\b{}\b'.format, (cond.name for cond in Cond))),
           'push': r'push',
           'pop': r'pop',
-          'call': r'call',
-          'ret': r'ret',
+          'call': r'\bcall\b',
+          'ret': r'\bret\b',
           'halt': r'halt',
           'space': r'space',
           'reg': r'|'.join(map(r'\b{}\b'.format, (reg.name for reg in Reg))),
@@ -187,10 +187,10 @@ class Assembler:
                             self.inst2(Op.ADD, Reg.SP, 1)
                             self.load1(reg, Reg.SP , -1)                                                        
                     elif self.match('jump', 'label'):
-                        self.imm(*self.values())
+                        self.imm(Reg.PC, *self.values())
                     elif self.match('call', 'label'):
-                        self.inst4(Op.ADD, Reg.LR, Reg.PC, 2)
-                        self.jump(Cond.JR, *self.values())
+                        self.inst4(Op.ADD, Reg.LR, Reg.PC, 3)
+                        self.imm(Reg.PC, *self.values())
                     elif self.match('ret'):
                         self.inst1(Op.MOV, Reg.PC, Reg.LR)
                     elif self.match('out', 'reg'):
