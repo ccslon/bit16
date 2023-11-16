@@ -125,7 +125,7 @@ class CNode:
 class Type(CNode):
     def __init__(self, type):
         self.type = type
-        self.size = 0 if type.lexeme == 'void' else 1
+        self.size = 0 if type == 'void' else 1
     def store(self, local, n, base):
         emit.store(r[n], r[base], local.location, local.token.lexeme)
     def address(self, local, n, base):
@@ -141,16 +141,30 @@ class Type(CNode):
             emit.glob(glob.token.lexeme, self.init.value)
         else:
             emit.space(glob.token.lexeme, 1)
+    def __eq__(self, other):
+        return type(other) is type(self)
+    def __str__(self):
+        return self.type
 
 class Const(Type):
     def __init__(self, type):
         self.type = type
         self.size = type.size
+    def __eq__(self, other):
+        return self.type == other or \
+            (type(other) is Const and self.type == other.type)
+    def __str__(self):
+        return f'const {self.type}'
         
 class Pointer(Type):
     def __init__(self, type):
         self.to = self.of = self.type = type
         self.size = 1
+    def __eq__(self, other):
+        return type(other) is Type and other.type == 'int' or \
+            type(other) is Pointer and self.to == other.to
+    def __str__(self):
+        return f'{self.to}*'
 
 class Struct(Type, Frame):
     def __init__(self, name):
@@ -176,7 +190,12 @@ class Struct(Type, Frame):
             for expr in glob.init:
                 emit.data(expr.value)
         else:
-            emit.space(glob.token.lexeme, self.size)               
+            emit.space(glob.token.lexeme, self.size)       
+    def __eq__(self, other):
+        return type(other) is Struct and self.name == other.name or \
+            other == 'list'
+    def __str__(self):
+        return f'struct {self.name}'
     
 class Array(Type):
     def __init__(self, of, length):
@@ -191,6 +210,11 @@ class Array(Type):
         emit.storem(r[n], self.size)
     def reduce(self, local, n, base):
         return self.address(local, n, base)
+    def __eq__(self, other):
+        return type(other) is Array and self.of == other.of or \
+            other == 'list'
+    def __str__(self):
+        return f'{self.of}[]'
 
 class Expr:
     def branch(self, n, _):
@@ -210,6 +234,7 @@ class Expr:
     
 class Num(Expr):
     def __init__(self, token):
+        self.type = Const(Type('int'))
         value = token.lexeme
         self.token = token
         if value == 'NULL':
@@ -235,6 +260,7 @@ class Num(Expr):
 
 class Char(Expr):
     def __init__(self, token):
+        self.type = Const(Type('char'))
         self.token = token
     def reduce(self, n):
         emit.imm(r[n], self.token.lexeme)
@@ -242,6 +268,8 @@ class Char(Expr):
 
 class String(Expr):
     def __init__(self, token):
+        self.type = Pointer(Const(Type('char')))
+        self.token = token
         self.value = token.lexeme[1:-1]
     def reduce(self, n):
         if self.value not in env.strings:
@@ -252,12 +280,14 @@ class String(Expr):
 
 class AddrOf(Expr):
     def __init__(self, unary):
+        self.type = Pointer(unary.type)
         self.unary = unary
     def reduce(self, n):
         return self.unary.address(n)
 
 class Deref(Expr):
     def __init__(self, to):
+        self.type = to.type.to
         self.to = to
     def store(self, n):
         self.to.reduce(n+1)
@@ -271,6 +301,8 @@ class Unary(Expr):
     OP = {'-':Op.NEG,
           '~':Op.NOT}
     def __init__(self, sign, primary):
+        assert primary.type == Type('int')
+        self.type = primary.type
         self.sign, self.primary = self.OP[sign.lexeme], primary
     def reduce(self, n):
         emit.inst(self.sign, self.primary.reduce(n), Reg.A)
@@ -323,8 +355,12 @@ class Binary(Expr):
           '&' :Op.AND,
           '&=':Op.AND,}
     def __init__(self, op, left, right):
+        assert left.type == right.type, f'Line {op.line_no}: Cannot {left.type} {op.lexeme} {right.type}'
+        self.type = left.type
+        self.token = op
         self.op, self.left, self.right = self.OP[op.lexeme], left, right
-    def reduce(self, n):        
+    def reduce(self, n):
+        
         emit.inst(self.op, self.left.reduce(n), self.right.num_reduce(n+1))
         return r[n]
 
@@ -353,7 +389,7 @@ class Compare(Binary):
         emit.inst(Op.CMP, self.left.reduce(n), self.right.num_reduce(n+1))
         emit.jump(self.op, f'.L{label}')
     def reduce(self, n):
-        # assert self.left.type() == self.right.type()
+        
         label = env.next_label()
         sublabel = env.next_label()
         emit.inst(Op.CMP, self.left.reduce(n), self.right.num_reduce(n+1))
@@ -407,8 +443,10 @@ class Condition(Expr):
         self.false.branch(n, root)
 
 class Assign(Expr):
-    def __init__(self, left, right):
-        self.left, self.right = left, right
+    def __init__(self, token, left, right):
+        assert left.type == right.type, f'Line {token.line_no}: {left.type} != {right.type}'
+        self.type = left.type
+        self.token, self.left, self.right = token, left, right
     def analyze(self, n):
         self.right.analyze(n)
         self.left.analyze_store(n)        
@@ -467,6 +505,9 @@ class Glob(Local):
         self.type.glob(self)
 
 class List(Expr, UserList):
+    def __init__(self):
+        self.type = 'list'
+        super().__init__()
     def reduce(self, n):
         for i, expr in enumerate(self):
             expr.reduce(n+i)
@@ -687,8 +728,9 @@ class Args(Expr, UserList):
                 emit.inst(Op.MOV, r[i], r[n+i]) 
 
 class Call(Expr):
-    def __init__(self, postfix, args):
-        self.primary, self.args = postfix, args
+    def __init__(self, primary, args):
+        self.type = primary.type
+        self.primary, self.args = primary, args
     def reduce(self, n):
         return self.generate(n)
     def generate(self, n):

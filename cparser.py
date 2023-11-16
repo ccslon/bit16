@@ -135,7 +135,7 @@ class CParser:
         TYPE_SPEC -> (type|(('struct'|'union') id)) {'*'}
         '''
         if self.peek('type'):
-            type_spec = Type(next(self))
+            type_spec = Type(next(self).lexeme)
         elif self.accept('struct'):
             type_spec = self.structs[self.expect('id').lexeme]
         else:
@@ -267,12 +267,13 @@ class CParser:
                  |COND
         '''
         assign = self.cond()
-        if self.accept('='):
+        if self.peek('='):
             assert isinstance(assign, (Local,Glob,Dot,Arrow,SubScr,Deref))
-            assign = Assign(assign, self.assign())
+            assign = Assign(next(self), assign, self.assign())
         elif self.peek('+=','-=','*=','/=','%=','<<=','>>=','^=','|=','&='):
             assert isinstance(assign, (Local,Glob,Dot,Arrow,SubScr,Deref))
-            assign = Assign(assign, Binary(next(self), assign, self.assign()))
+            token = next(self)
+            assign = Assign(token, assign, Binary(token, assign, self.assign()))
         return assign
     
     def expr(self):
@@ -407,12 +408,13 @@ class CParser:
         INIT -> DECL ['=' (EXPR|INIT_LIST)] ';'
         '''
         init = self.decl()
-        if self.accept('='):
+        if self.peek('='):
+            token = next(self)
             if self.accept('{'):
-                init = Assign(init, self.init_list())
+                init = Assign(token, init, self.init_list())
                 self.expect('}')
             else:
-                init = Assign(init, self.expr())
+                init = Assign(token, init, self.expr())
         self.expect(';')
         return init
 
