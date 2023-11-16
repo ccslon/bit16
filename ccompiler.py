@@ -33,6 +33,6 @@ if __name__ == '__main__':
     # ccompile('hello.c', sflag=True, oflag=False)    
     # ccompile('tests//pointers.c', sflag=True, fflag=False)
     # ccompile('tests//hello.c')
-    # ccompile('std//stdio.h', sflag=True, oflag=False)
-    ccompile('c//fib.c')
+    ccompile('std//ctype.h', sflag=True, fflag=False)
+    # ccompile('c//fib.c')
     # ccompile('c//print_num.c', sflag=True, fflag=False)

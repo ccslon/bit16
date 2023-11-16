@@ -4,5 +4,5 @@ int pow(int base, int exp) {
         pow *= base;
         exp--;
     }
-    return pow
+    return pow;
 }

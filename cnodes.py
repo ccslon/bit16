@@ -119,7 +119,10 @@ class Emitter:
 
 emit = Emitter()
 
-class Type:
+class CNode:
+    pass
+
+class Type(CNode):
     def __init__(self, type):
         self.type = type
         self.size = 0 if type.lexeme == 'void' else 1

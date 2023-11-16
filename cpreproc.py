@@ -29,8 +29,8 @@ FILE f;
 
 class CPreProc:
     
-    STD = re.compile(r'#include (?P<file><\w+\.h>)')
-    INCLUDE = re.compile(r'#include (?P<file>"\w\.[ch]")')
+    STD = re.compile(r'#include (?P<file><\w+\.h>)\n')
+    INCLUDE = re.compile(r'#include (?P<file>"\w\.[ch]")\n')
     DEFINE = re.compile(r'#define (?P<name>(\w|\.)+)(\((?P<args>\w+(,\s*\w+)*)\))? (?P<expr>.+)\n')
     
     def include(self, regex, text, ext=''):

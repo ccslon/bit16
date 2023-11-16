@@ -1,6 +1,3 @@
-int isalnum(char c) {
-    return isalpha(c) || isdigit(c);
-}
 int isalpha(char c) {
     return 'A' <= c && c <= 'Z' || 'a' <= c && c <= 'z';
 }
@@ -9,6 +6,9 @@ int iscntrl(char c) {
 }
 int isdigit(char c) {
     return '0' <= c && c <= '9';
+}
+int isalnum(char c) {
+    return isalpha(c) || isdigit(c);
 }
 int islower(char c) {
     return 'a' <= c && c <= 'z';
