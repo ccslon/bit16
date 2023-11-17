@@ -15,7 +15,7 @@ class Loop(UserList):
 
 class Regs:
     def clear(self):
-        self.max = 0
+        self.max = -1
     def __getitem__(self, item):
         if item == 'SP':
             return Reg.SP
@@ -132,13 +132,17 @@ class Type(CNode):
         emit.inst4(Op.ADD, r[n], r[base], local.location)
         return r[n]
     def reduce(self, local, n, base):
-        emit.load(r[n], r[base], local.location, local.token.lexeme)
+        if local.location is None:
+            emit.load_glob(r[n], local.token.lexeme)
+            emit.load(r[n], r[n])
+        else:
+            emit.load(r[n], r[base], local.location, local.token.lexeme)
         return r[n]
     def ret(self, local, n, base):
         self.reduce(local, n, base)
     def glob(self, glob):
-        if self.init:
-            emit.glob(glob.token.lexeme, self.init.value)
+        if glob.init:
+            emit.glob(glob.token.lexeme, glob.init.value)
         else:
             emit.space(glob.token.lexeme, 1)
     def __eq__(self, other):
@@ -160,6 +164,12 @@ class Pointer(Type):
     def __init__(self, type):
         self.to = self.of = self.type = type
         self.size = 1
+    def reduce(self, local, n, base):
+        if local.location is None:
+            emit.load_glob(r[n], local.token.lexeme)
+        else:
+            emit.load(r[n], r[base], local.location, local.token.lexeme)
+        return r[n]
     def __eq__(self, other):
         return type(other) is Type and other.type == 'int' or \
             type(other) is Pointer and self.to == other.to
@@ -172,7 +182,9 @@ class Struct(Type, Frame):
         self.size = 0
         self.data = {}
     def address(self, local, n, base):
-        if local.location is not None:
+        if local.location is None:
+            emit.load_glob(r[n], local.token.lexeme)
+        else:
             emit.inst4(Op.ADD, r[n], r[base], local.location)
         return r[n]
     def store(self, local, n, base):
@@ -186,9 +198,10 @@ class Struct(Type, Frame):
         self.reduce(local, 0, base)
     def glob(self, glob):
         if glob.init:
+            datas = [expr.data() for expr in glob.init]
             emit.asm.append(f'{glob.token.lexeme}:')
-            for expr in glob.init:
-                emit.data(expr.value)
+            for data in datas:
+                emit.data(data)
         else:
             emit.space(glob.token.lexeme, self.size)       
     def __eq__(self, other):
@@ -203,13 +216,24 @@ class Array(Type):
         self.of = of
         self.length = length.value    
     def address(self, local, n, base):
-        emit.inst4(Op.ADD, r[n], r[base], local.location) 
+        if local.location is None:
+            emit.load_glob(r[n], local.token.lexeme)
+        else:
+            emit.inst4(Op.ADD, r[n], r[base], local.location)
         return r[n]
     def store(self, local, n, base):
         self.address(local, n+self.size, base)
         emit.storem(r[n], self.size)
     def reduce(self, local, n, base):
         return self.address(local, n, base)
+    def glob(self, glob):
+        if glob.init:
+            datas = [expr.data() for expr in glob.init]
+            emit.asm.append(f'{glob.token.lexeme}:')
+            for data in datas:
+                emit.data(data)
+        else:
+            emit.space(glob.token.lexeme, self.size)
     def __eq__(self, other):
         return type(other) is Array and self.of == other.of or \
             other == 'list'
@@ -245,6 +269,8 @@ class Num(Expr):
             self.value = int(value, base=2)
         else:
             self.value = int(value)
+    def data(self):
+        return self.value
     def reduce(self, n):
         if -32 <= self.value < 64:
             emit.inst(Op.MOV, r[n], self.value)
@@ -262,20 +288,24 @@ class Char(Expr):
     def __init__(self, token):
         self.type = Const(Type('char'))
         self.token = token
+    def data(self):
+        return self.token.lexeme
     def reduce(self, n):
-        emit.imm(r[n], self.token.lexeme)
+        emit.imm(r[n], self.data())
         return r[n]
 
 class String(Expr):
     def __init__(self, token):
         self.type = Pointer(Const(Type('char')))
         self.token = token
-        self.value = token.lexeme[1:-1]
-    def reduce(self, n):
+        self.value = f'"{token.lexeme[1:-1]}\\0"'
+    def data(self):
         if self.value not in env.strings:
             env.strings.append(self.value)
-            emit.glob(f'.S{env.strings.index(self.value)}', f'"{self.value}\\0"')
-        emit.load_glob(r[n], f'.S{env.strings.index(self.value)}')
+            emit.glob(f'.S{env.strings.index(self.value)}', self.value)
+        return f'.S{env.strings.index(self.value)}'
+    def reduce(self, n):        
+        emit.load_glob(r[n], self.data())
         return r[n]
 
 class AddrOf(Expr):
@@ -490,11 +520,9 @@ class Glob(Local):
         self.location = None
         self.init = None
     def store(self, n):
-        self.address(n)
-        return self.type.store(self, n, n+1)
+        self.type.store(self, n, n+1)
     def reduce(self, n):
-        self.address(n)
-        return self.type.reduce(self, n, n)
+        self.type.reduce(self, n, n)
     def address(self, n):
         emit.load_glob(r[n], self.token.lexeme)
         return r[n]

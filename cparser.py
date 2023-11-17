@@ -494,7 +494,7 @@ class CParser:
                         program.append(Func(type, id, params, block, self.calls, self.space))
                 else:                                   #Global
                     while self.accept('['):
-                        type = Array(type)
+                        type = Array(type, Num(self.expect('num')))
                         self.expect(']')
                     glob = Glob(type, id)
                     if self.accept('='):
@@ -521,7 +521,6 @@ class CParser:
         self.scope = self.stack.pop() 
     
     def parse(self, text):
-        self.included = set()
         self.scope = None
         self.stack = []
         self.functions = {}
