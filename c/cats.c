@@ -1,29 +1,35 @@
-#include <stdio.h>
-struct Owner {
+#include "bit16lib.h"
+#define Cat struct _Cat_
+#define Owner struct _Owner_
+Owner {
     char* name;
-    char* email;
-};
+    int phone;
+}; 
 
-struct Cat {
+Cat {
     char* name;
     int age;
-    struct Owner owner;
+    Owner* owner;
 };
 
+Owner owners[2] = {{"Colin",34}, {"Mom", 21}};
+Cat cats[3];
+char* name = "Cats Ya!";
+int num = 69;
+
+void print_cat(Cat* cat) {
+    println(name);
+    printint(num);
+    put('\n');
+    println(cat->name);    
+    printint(cat->age);
+    put('\n');
+    println(cat->owner->name);
+}
 void main() {
-    struct Owner me = {"Colin", "ccs@email.com"};
-    puts(me.name);
-    puts(me.email);
-    char* honey = "Honey";
-    struct Cat cat = {honey,10,{"Nick", "Nickel@email.com"}};
-    puts(cat.name);
-    puts(cat.owner.name);
-    puts(cat.owner.email);
-    struct Cat cats[2];
-    cats[0].name = "Sam";
-    cats[1].name = "Pippin";
-    int i;
-    for (i = 0; i < 2; i++) {
-        puts(cats[i].name);
-    }    
+    Cat* cat1 = &cats[0];
+    cat1->name = "Cloud";
+    cat1->age = 10;
+    cat1->owner = &owners[0];
+    print_cat(cat1);
 }
