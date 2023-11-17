@@ -15,11 +15,16 @@ n n n nightn m
 '''(?P<args>\(\w+(,\s*\w+)*\))'''
 test = '''
 #include <stdio.h>
+#include "test.c"
 #define n 5
 #define BUFSIZE 10
 #define FILE struct _FILE_
 #define min(a, b) (a > b ? b : a)
 #define binary(a, op, b) a op b
+/* #define n 1111
+*/
+int t; //#define t 2222
+
 int m = min(4, n);
 int o = binary(h, +, j)
 int buffer[BUFSIZE];
@@ -28,10 +33,13 @@ FILE f;
 '''
 
 class CPreProc:
-    
+    COMMENT = re.compile(r'(/\*(.|\n)*?\*/)|(//.*\n)', re.M)
     STD = re.compile(r'#include (?P<file><\w+\.h>)\n')
-    INCLUDE = re.compile(r'#include (?P<file>"\w\.[ch]")\n')
+    INCLUDE = re.compile(r'#include (?P<file>"\w+\.[ch]")\n')
     DEFINE = re.compile(r'#define (?P<name>(\w|\.)+)(\((?P<args>\w+(,\s*\w+)*)\))? (?P<expr>.+)\n')
+    
+    def comments(self, text):
+        return self.COMMENT.sub(self.repl_comment, text)
     
     def include(self, regex, text, ext=''):
         for match in regex.finditer(text):
@@ -47,7 +55,7 @@ class CPreProc:
         self.included = set()
         while '#include' in text: #self.STD.match(text) or self.INCLUDE.match(text):
             text = self.include(self.STD, text, 'std\\')
-            text = self.include(self.INCLUDE, text)
+            text = self.include(self.INCLUDE, text, 'c\\')
         return text
     
     def defines(self, text):
@@ -64,9 +72,13 @@ class CPreProc:
         return text
     
     def preproc(self, text):
+        text = self.comments(text)
         text = self.includes(text)       
         text = self.defines(text)
         return text
+    
+    def repl_comment(self, match):
+        return '\n' * match.group().count('\n')
     
     def repl_define(self, match):
         args, expr = self.defined[match.group('name')]

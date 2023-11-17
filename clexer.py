@@ -29,11 +29,10 @@ class MetaLexer(type):
 
 class LexerBase(metaclass=MetaLexer):
     def lex(self, text):
+        self.line_no = 1
         return [Token(match.lastgroup, result, self.line_no) for match in self.regex.finditer(text) if (result := self.action[match.lastgroup](self, match.group())) is not None] + [Token('end','',self.line_no)]
 
-class CLexer(LexerBase):    
-    def __init__(self):
-        self.line_no = 1
+class CLexer(LexerBase):
     
     RE_num = r'(0x[0-9a-f]+)|(0b[01]+)|(\d+)|(NULL)'
     RE_char = r"'\\?[^']'"
@@ -58,12 +57,6 @@ class CLexer(LexerBase):
     RE_goto = r'goto'
     RE_include = r'include'
     RE_id = r'\w(\w|\d)*'
-    def RE_comment(self, match):
-        r'/\*(?:(?!/\*).|\n)*\*/'
-        self.line_no += match.count('\n')
-    def RE_line_comment(self, match):
-        r'//[^\n]*\n'
-        self.line_no += 1
     def RE_new_line(self, match):
         r'\n'
         self.line_no += 1
