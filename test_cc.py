@@ -480,26 +480,59 @@ array:
   RET
 '''
 GLOB_STRUCT_ASM = '''
+.S0: "Cloud\\0"
   SUB SP, 1
-  LD A, 32512
-  LD B, =stdout
-  LD [B, 0], A ; buffer
-  MOV A, 0
-  LD B, =stdout
-  LD [B, 1], A ; read
-  MOV A, 0
-  LD B, =stdout
-  LD [B, 2], A ; write
-  LD A, =stdin
-  LD A, [A, 1] ; read
-  LD [SP, 0], A ; head
+  LD A, =cats
+  MOV B, 0
+  MUL B, 3
+  ADD A, B
+  LD [SP, 0], A ; cat1
+  LD A, =.S0
+  LD B, [SP, 0] ; cat1
+  LD [B, 0], A ; name
+  MOV A, 10
+  LD B, [SP, 0] ; cat1
+  LD [B, 1], A ; age
+  LD A, =owners
+  MOV B, 0
+  MUL B, 2
+  ADD A, B
+  LD B, [SP, 0] ; cat1
+  LD [B, 2], A ; owner
+  LD A, [SP, 0] ; cat1
+  CALL print_cat
   ADD SP, 1
   HALT
-stdout: space 3
-stdin:
-  32256
-  0
-  0
+.S1: "Colin\\0"
+.S2: "Mom\\0"
+owners:
+  .S1
+  34
+  .S2
+  21
+cats: space 9
+name: "Cats Ya!\\0"
+num: 69
+print_cat:
+  SUB SP, 6
+  LD [SP, 0], A ; cat
+  LD A, =name
+  LD [SP, 1], A ; store
+  LD A, =num
+  LD A, [A]
+  LD [SP, 2], A ; n
+  LD A, [SP, 0] ; cat
+  LD A, [A, 0] ; name
+  LD [SP, 3], A ; mycat
+  LD A, [SP, 0] ; cat
+  LD A, [A, 1] ; age
+  LD [SP, 4], A ; age
+  LD A, [SP, 0] ; cat
+  LD A, [A, 2] ; owner
+  LD A, [A, 0] ; name
+  LD [SP, 5], A ; owner
+  ADD SP, 6
+  RET
 '''
 GOTO_ASM = '''
 foo:
@@ -684,10 +717,6 @@ class TestCompiler(TestCase):
     
     def test_paren1(self):
         self.code_eq_asm('paren.c', PAREN_ASM)
-    
-    # def test_assign(self):
-    #     self.maxDiff = None
-    #     self.code_eq_asm(test, test_ASM)
         
     def test_params(self):
         self.code_eq_asm('params.c', PARAMS_ASM)
