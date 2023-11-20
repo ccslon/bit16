@@ -38,7 +38,7 @@ class CLexer(LexerBase):
     RE_char = r"'\\?[^']'"
     RE_string = r'"[^"]*"'
     def RE_eof(self, match):
-        r'@'
+        r'@\n'
         self.line_no = 1
     RE_const = r'const'
     RE_type = r'\b((void)|(int)|(char))\b'
