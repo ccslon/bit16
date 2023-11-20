@@ -277,9 +277,9 @@ class Assembler:
             return next(self)
         self.error(expected=symbols)
         
-    def error(self, expected=None):
+    def error(self):
         etype, evalue = self.tokens[self.index]
-        raise SyntaxError(f'Unexpected {etype} token "{evalue}" at token #{self.index} in line {self.line_no}')# + 'Expected {}'.format(' or '.join(map('"{}"'.format, expected))) if expected else '')
+        raise SyntaxError(f'Unexpected {etype} token "{evalue}" at token #{self.index} in line {self.line_no}')
 
 class Linker:
     def link(objects):
