@@ -36,7 +36,7 @@ class CPreProc:
     COMMENT = re.compile(r'(/\*(.|\n)*?\*/)|(//.*\n)', re.M)
     STD = re.compile(r'#include (?P<file><\w+\.h>)\n')
     INCLUDE = re.compile(r'#include (?P<file>"\w+\.[ch]")\n')
-    DEFINE = re.compile(r'#define (?P<name>(\w|\.)+)(\((?P<args>\w+(,\s*\w+)*)\))? (?P<expr>.+)\n')
+    DEFINE = re.compile(r'#define (?P<name>(\w|\.)+)(\((?P<args>\w+(,\s*\w+)*)?\))? (?P<expr>.+)\n')
     
     def comments(self, text):
         return self.COMMENT.sub(self.repl_comment, text)

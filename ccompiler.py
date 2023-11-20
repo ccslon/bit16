@@ -34,5 +34,5 @@ if __name__ == '__main__':
     # ccompile('tests//globs.c', sflag=True, fflag=False)
     # ccompile('tests//globs.c')
     # ccompile('std//ctype.h', sflag=True, fflag=False)
-    ccompile('c//cats.c')
+    ccompile('c//hello.c')
     # ccompile('c//cats.c', sflag=True, fflag=False)

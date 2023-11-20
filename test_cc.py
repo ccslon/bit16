@@ -9,8 +9,6 @@ from unittest import TestCase, main
 import cpreproc
 import cparser
 
-
-
 MAIN_ASM = '''
   HALT
 '''
