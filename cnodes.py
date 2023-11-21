@@ -780,13 +780,13 @@ class Call(Expr):
         super().__init__(primary.type, primary.token)
         self.primary, self.args = primary, args
     def reduce(self, n):
-        return self.generate(n)
+        self.generate(n)
+        return r[n]
     def generate(self, n):
         self.args.generate(n)
         emit.call(self.primary.token.lexeme)
         if n > 0 and type(self.primary.type) is not Struct:
             emit.inst(Op.MOV, r[n], Reg.A)
-        return r[n]
 
 class Return(Expr):
     def __init__(self, token):

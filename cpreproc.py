@@ -37,13 +37,16 @@ FILE f;
 int x = thing();
 
 '''
+ID = r'\w(\w|\d)*'
 
 class CPreProc:
     COMMENT = re.compile(r'(/\*(.|\n)*?\*/)|(//.*\n)', re.M)
-    STD = re.compile(r'^#include (?P<file><\w+\.h>)$', re.M)
-    INCLUDE = re.compile(r'^#include (?P<file>"\w+\.[ch]")$', re.M)
-    OBJ = re.compile(r'^#define (?P<name>\w(\w|\d)*) (?P<expr>.+)$', re.M)
-    FUNC = re.compile(r'^#define (?P<name>\w(\w|\d)*)\((?P<args>(\w+(,\s*\w+)*)?)\) (?P<expr>\(.+\))$', re.M)
+    STD = re.compile(r'^\s*#\s*include\s+(?P<file><\w+\.h>)\s*$', re.M)
+    INCLUDE = re.compile(r'^\s*#\s*include\s+(?P<file>"\w+\.[ch]")\s*$', re.M)
+    OBJ = re.compile(rf'^\s*#\s*define\s+(?P<name>{ID})\s+(?P<expr>.+)\s*$', re.M)
+    FUNC = re.compile(rf'^\s*#\s*define\s+(?P<name>{ID})\(\s*(?P<args>({ID}(\s*,\s*{ID})*)?)\s*\)\s+(?P<expr>\(.+\))\s*$', re.M)
+      
+    ELIP = re.compile(r'^#define (?P<name>\w(\w|\d)*)\((?P<args>(\w+(,\s*\w+)*,)?)\s*(?P<elip>\.\.\.)\) (?P<expr>\(.+\))$', re.M)
     
     def comments(self, text):
         return self.COMMENT.sub(self.repl_comment, text)
