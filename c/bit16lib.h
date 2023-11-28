@@ -1,20 +1,17 @@
 #define div_t struct _div_t_
 #define FILE struct _FILE_
-
+#define BUFSIZE 6
 div_t {
-    int div;
-    int mod;
+    int quot;
+    int rem;
 };
-
-struct _FILE_ {
+FILE {
     int* buffer;
     int read;
     int write;
 };
-
 FILE out = {0x7f00, 0, 0};
-
-int strlen(char* str) {
+int strlen(const char* str) {
     int len = 0;
     while (*str != '\0') {
         str++;
@@ -34,7 +31,7 @@ char* strrev(char* str) {
     }
     return str;
 }
-int strcmp(char* str1, char* str2) {
+int strcmp(const char* str1, const char* str2) {
     int len1 = strlen(str1);
     int len2 = strlen(str2);
     if (len1 != len2) return len1 - len2;
@@ -44,48 +41,43 @@ int strcmp(char* str1, char* str2) {
     }
     return 0;
 }
-
-div_t div(int n, int d) {
+div_t div(int num, int den) {
     div_t ans;
-    int q = 0;
-    while (n >= d) {
-        n -= d;
-        q++;
+    int quot = 0;
+    while (num >= den) {
+        num -= den;
+        quot++;
     }
-    ans.div = q;
-    ans.mod = n;
+    ans.quot = quot;
+    ans.rem = num;
     return ans;
 }
-
 void put(const char c) {
     out.buffer[out.write++] = c;
 }
-
 void print(const char* str) {
     while (*str != '\0') {
         put(*str);
         str++;
     }
 }
-
 void println(const char* str) {
     print(str);
     put('\n');
 }
-
 void printint(int num) {
     div_t ans;
-    char buffer[5];
+    char buffer[BUFSIZE];
     int i;
-    for (i = 0; i < 5; i++) {
+    for (i = 0; i < BUFSIZE; i++) {
         buffer[i] = '\0';
     }
     i = 0;
     do {
         ans = div(num, 10);
-        buffer[i] = '0' + ans.mod;
+        buffer[i] = '0' + ans.rem;
         i++;
-        num = ans.div;
+        num = ans.quot;
     } while (num > 0);
     strrev(buffer);
     print(buffer);
