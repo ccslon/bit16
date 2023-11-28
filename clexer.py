@@ -101,6 +101,7 @@ class CLexer(LexerBase):
     RE_gt = r'>'
     RE_lt = r'<'   
     RE_exp = r'!'
+    RE_ques = r'\?'
     RE_tilde = r'~'
     RE_dot = r'\.'
     RE_comma = r','
