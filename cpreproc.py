@@ -21,10 +21,13 @@ test = '''
 #define FILE struct _FILE_
 #define min(a, b) (a > b ? b : a)
 #define binary(a, op, b) (a op b)
+#define foo(bar) (bar + 1)
 #define thing() (*(++i))
-/* #define n 1111
+/*
+#define n 1111 
 */
-int t; //#define t 2222
+
+int /* lol */ t; //#define t 2222
 
 char* lmao = "#define n 555";
 
@@ -33,18 +36,73 @@ int o = binary(h, +, j)
 int buffer[BUFSIZE];
 binary(BUFSIZE, **, n)
 FILE f;
+z = min(a +  28, * p);
+
+c = ( foo((2 * c)) + 55);
 
 int x = thing();
-
 '''
 ID = r'\w(\w|\d)*'
-
+ARG = r'(([^,]|"[^"]*")+'
 class CPreProc:
-    COMMENT = re.compile(r'(/\*(.|\n)*?\*/)|(//.*\n)', re.M)
-    STD = re.compile(r'^\s*#\s*include\s+(?P<file><\w+\.h>)\s*$', re.M)
-    INCLUDE = re.compile(r'^\s*#\s*include\s+(?P<file>"\w+\.[ch]")\s*$', re.M)
-    OBJ = re.compile(rf'^\s*#\s*define\s+(?P<name>{ID})\s+(?P<expr>.+)\s*$', re.M)
-    FUNC = re.compile(rf'^\s*#\s*define\s+(?P<name>{ID})\(\s*(?P<args>({ID}(\s*,\s*{ID})*)?)\s*\)\s+(?P<expr>\(.+\))\s*$', re.M)
+    COMMENT = re.compile(r'''
+                         /\*(.|\n)*?\*/
+                         |
+                         //.*\n
+                         ''', re.M | re.X)
+    STD = re.compile(r'''
+                     ^
+                     \s*
+                     \#
+                     \s*
+                     include
+                     \s+
+                     (?P<file><\w+\.h>)
+                     \s*
+                     $
+                     ''', re.M | re.X)
+    INCLUDE = re.compile(r'''
+                         ^
+                         \s*
+                         \#
+                         \s*
+                         include
+                         \s+
+                         (?P<file>"\w+\.[ch]")
+                         \s*
+                         $
+                         ''', re.M | re.X)
+    OBJ = re.compile(rf'''
+                     ^
+                     \s*
+                     \#
+                     \s*
+                     define
+                     \s+
+                     (?P<name>{ID})
+                     \s+
+                     (?P<expr>.+)
+                     \s*
+                     $
+                     ''', re.M | re.X)
+    FUNC = re.compile(rf'''
+                      ^
+                      \s*
+                      \#
+                      \s*
+                      define
+                      \s+
+                      (?P<name>{ID})
+                      \(
+                          \s*
+                          (?P<args>({ID}(\s*,\s*{ID})*)?)
+                          \s*
+                      \)
+                      \s+
+                      (?P<expr>\(.+\))
+                      \s*
+                      $
+                      ''', re.M | re.X)
       
     ELIP = re.compile(r'^#define (?P<name>\w(\w|\d)*)\((?P<args>(\w+(,\s*\w+)*,)?)\s*(?P<elip>\.\.\.)\) (?P<expr>\(.+\))$', re.M)
     
@@ -80,7 +138,7 @@ class CPreProc:
             if args is None:
                 text = re.sub(rf'\b{defn}\b', expr, text)
             else:
-                args = r'\s*,\s*'.join(map(r'(?P<{}>\S+)'.format, args))
+                args = r'\s*,\s*'.join(map(r'(?P<{}>([^,\n]|"[^"]*")+)'.format, args))
                 text = re.sub(rf'\b(?P<name>{defn})\({args}\)', self.repl_define, text)
         return text
     
@@ -100,7 +158,7 @@ class CPreProc:
         return expr
     
     def repl_macro(self, match):
-        return ''
+        return '\n'
     
 preproc = CPreProc()
 
@@ -109,3 +167,48 @@ def preprocess(text):
 
 if __name__ == '__main__':
     print(preprocess(test))
+    
+'''
+int a = 1;@
+
+struct _FILE_ {
+    int* buffer;
+    int read;
+    int write;
+};
+struct _FILE_ stdout = {0x7f00, 0, 0};
+int fputc(char c, struct _FILE_* stream) {
+    stream->buffer[stream->write++] = c;
+    return 0;
+}
+int putchar(char c) {
+    fputc(c, &stdout);
+    return 0;
+}
+int fputs(const char* str, struct _FILE_* stream) {
+    while (*str != '\0') {
+        fputc(*str, stream);
+        str++;
+    }
+    return 0;
+}
+int puts(const char* str) {
+    fputs(str, &stdout);
+    putchar('\5');
+    return 0;
+}@
+
+
+
+int  t; 
+
+char* lmao = "#define 5 555";
+
+int m = (4 > 5 ? 5 : 4);
+int o = (h + j)
+int buffer[10];
+(10 ** 5)
+struct _FILE_ f;
+z = min(a + 28, *p);
+int x = (*(++i));
+'''
