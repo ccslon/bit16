@@ -554,55 +554,6 @@ baz:
   RET
 '''
 
-test = '''
-struct Owner {
-    int name;
-    int phone;
-};
-struct Cat {
-    int name;
-    int age;
-    struct Owner owner;
-};
-
-void test() {
-    int foo;
-    int bar = 9;
-    foo = 8;
-    int baz = foo + -bar;
-    {
-     char foo;
-     foo = 'g';
-    }
-    foo = 5;
-    const int* ptr = 6;
-}
-
-void test2(int foo) {
-    struct Owner me;
-    me.name = 100;
-    me.phone = 1000;
-    int bar = me.name;
-}
-
-void tset3() {
-    struct Cat cat;
-    cat.name = 1;
-    cat.age = 10;
-    cat.owner.name = 100;
-    cat.owner.phone = 1000;
-}
-
-void test4(struct Cat* cat) {
-    cat->name = 1;
-    cat->age = 10;
-    cat->owner.name = 100;
-}
-void test5(struct Cat* cats) {
-    cats[0].name = 1;
-}
-'''
-
 RETURN_STRUCT_ASM = '''
 div:
   PUSH C
@@ -687,6 +638,39 @@ bar:
   POP PC, C
 '''
 
+DEFINES_ASM = '''
+test:
+  PUSH A, B
+  SUB SP, 2
+  MOV A, 0
+  LD [SP, 0], A ; i
+.L0:
+  LD A, [SP, 0] ; i
+  CMP A, 10
+  JGE .L1
+  LD A, [SP, 1] ; minN
+  LD B, [SP, 0] ; i
+  CMP A, B
+  JLE .L3
+  LD A, [SP, 0] ; i
+  JR .L2
+.L3:
+  LD A, [SP, 1] ; minN
+.L2:
+  LD [SP, 1], A ; minN
+  LD A, [SP, 1] ; minN
+  ADD B, A, 1
+  LD [SP, 1], B ; minN
+  LD A, [SP, 0] ; i
+  ADD B, A, 1
+  LD [SP, 0], B ; i
+  JR .L0
+.L1:
+  ADD SP, 2
+  POP A, B
+  RET
+'''
+
 class TestCompiler(TestCase):
     
     def code_eq_asm(self, file_name, target):
@@ -761,6 +745,9 @@ class TestCompiler(TestCase):
         
     def test_pointers(self):
         self.code_eq_asm('pointers.c', POINTERS_ASM)
+        
+    def test_defines(self):
+        self.code_eq_asm('define.c', DEFINES_ASM)
 
 if __name__ == '__main__':
     main()
