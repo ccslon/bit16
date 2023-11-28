@@ -245,6 +245,8 @@ class Expr(CNode):
     def __init__(self, type, token):
         self.type = type
         self.token = token
+    def branch_reduce(self, n , _):
+        self.reduce(n)
     def branch(self, n, _):
         self.generate(n)
     def compare(self, n, label):
@@ -453,6 +455,7 @@ class Logic(Binary):
 
 class Condition(Expr):
     def __init__(self, cond, true, false):
+        self.type = true.type
         self.cond, self.true, self.false = cond, true, false
     def reduce(self, n):
         env.if_jump_end = False
@@ -462,7 +465,7 @@ class Condition(Expr):
         self.true.reduce(n)
         emit.jump(Cond.JR, f'.L{label}')
         emit.labels.append(f'.L{sublabel}')
-        self.false.branch(n, label)
+        self.false.branch_reduce(n, label)
         emit.labels.append(f'.L{label}')
     def branch(self, n, root):
         sublabel = env.next_label()
@@ -470,7 +473,7 @@ class Condition(Expr):
         self.true.reduce(n)
         emit.jump(Cond.JR, f'.L{root}')
         emit.labels.append(f'.L{sublabel}')
-        self.false.branch(n, root)
+        self.false.branch_reduce(n, root)
 
 class Assign(Expr):
     def __init__(self, token, left, right):
