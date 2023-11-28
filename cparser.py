@@ -466,7 +466,7 @@ class CParser:
         block = Block()
         while self.peek('const','type','struct','union'):
             block.append(self.init())
-        while self.peek('{','id','*','++','--','return','if','switch','while','do','for','break','continue','goto'):
+        while self.peek('{','(','id','*','++','--','return','if','switch','while','do','for','break','continue','goto'):
             block.append(self.statement())
         if not (self.peek('}') or self.peek('end')):# or (len(block) > 0):
             block.extend(self.block())        
