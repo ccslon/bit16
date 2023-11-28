@@ -26,7 +26,7 @@ TODO
 [ ] Error handling
 [X] Generate vs Reduce
 [X] Scope in Parser
-[ ] Line numbers in errors
+[X] Line numbers in errors
 [X] Returning local structs
 [ ] PREPROCESSING
     [X] include header files

@@ -7,8 +7,6 @@ Created on Mon Jul  3 19:48:36 2023
 from collections import UserList, UserDict
 from bit16 import Reg, Op, Cond
 
-#TODO refactor types in exprs. statements (no types). Ops
-
 class Loop(UserList):
     def start(self):
         return self[-1][0]
@@ -26,7 +24,7 @@ class Regs:
         self.max = max(self.max, item)
         return Reg(item)
 
-r = Regs()
+regs = Regs()
 
 class Frame(UserDict):
     def __init__(self):          
@@ -37,7 +35,7 @@ class Frame(UserDict):
         self.size += local.type.size
         super().__setitem__(name, local)
         
-class Env:
+class Environment:
     def clear(self):
         self.labels = 0
         self.loop = Loop()
@@ -52,7 +50,7 @@ class Env:
         self.labels += 1
         return label
 
-env = Env()
+env = Environment()
 
 class Emitter:
     def clear(self):
@@ -97,9 +95,9 @@ class Emitter:
     def imm(self, rd, value):
         self.add(f'LD {rd.name}, {value}')
     def loadm(self, rd, size):
-        self.add('LDM {'+', '.join(r[rd+i].name for i in range(size))+'}, '+f'{r[size].name}')
+        self.add('LDM {'+', '.join(regs[rd+i].name for i in range(size))+'}, '+f'{regs[size].name}')
     def storem(self, rd, size):
-        self.add(f'LDM {r[size].name}'+', {'+', '.join(r[rd+i].name for i in range(size))+'}')
+        self.add(f'LDM {regs[size].name}'+', {'+', '.join(regs[rd+i].name for i in range(size))+'}')
     def inst(self, op, rd, src):
         if op in [Op.NOT, Op.NEG]:
             self.add(f'{op.name} {rd.name}')
@@ -127,17 +125,17 @@ class Type(CNode):
         self.type = type
         self.size = 0 if type == 'void' else 1
     def store(self, local, n, base):
-        emit.store(r[n], r[base], local.location, local.token.lexeme)
+        emit.store(regs[n], regs[base], local.location, local.token.lexeme)
     def address(self, local, n, base):
-        emit.inst4(Op.ADD, r[n], r[base], local.location)
-        return r[n]
+        emit.inst4(Op.ADD, regs[n], regs[base], local.location)
+        return regs[n]
     def reduce(self, local, n, base):
         if local.location is None:
-            emit.load_glob(r[n], local.token.lexeme)
-            emit.load(r[n], r[n])
+            emit.load_glob(regs[n], local.token.lexeme)
+            emit.load(regs[n], regs[n])
         else:
-            emit.load(r[n], r[base], local.location, local.token.lexeme)
-        return r[n]
+            emit.load(regs[n], regs[base], local.location, local.token.lexeme)
+        return regs[n]
     def ret(self, local, n, base):
         self.reduce(local, n, base)
     def glob(self, glob):
@@ -167,10 +165,10 @@ class Pointer(Type):
         self.size = 1
     def reduce(self, local, n, base):
         if local.location is None:
-            emit.load_glob(r[n], local.token.lexeme)
+            emit.load_glob(regs[n], local.token.lexeme)
         else:
-            emit.load(r[n], r[base], local.location, local.token.lexeme)
-        return r[n]
+            emit.load(regs[n], regs[base], local.location, local.token.lexeme)
+        return regs[n]
     def __eq__(self, other):
         return type(other) is Type and other.type == 'int' or \
             type(other) is Pointer and (self.to == other.to or \
@@ -186,17 +184,17 @@ class Struct(Type, Frame):
         self.data = {}
     def address(self, local, n, base):
         if local.location is None:
-            emit.load_glob(r[n], local.token.lexeme)
+            emit.load_glob(regs[n], local.token.lexeme)
         else:
-            emit.inst4(Op.ADD, r[n], r[base], local.location)
-        return r[n]
+            emit.inst4(Op.ADD, regs[n], regs[base], local.location)
+        return regs[n]
     def store(self, local, n, base):
         self.address(local, self.size, base)
-        emit.storem(r[0], self.size)
+        emit.storem(regs[0], self.size)
     def reduce(self, local, n, base):
         self.address(local, self.size, base)
-        emit.loadm(r[0], self.size)
-        return r[n]
+        emit.loadm(regs[0], self.size)
+        return regs[n]
     def ret(self, local, n, base):
         self.reduce(local, 0, base)
     def glob(self, glob):
@@ -220,13 +218,13 @@ class Array(Type):
         self.length = length.value    
     def address(self, local, n, base):
         if local.location is None:
-            emit.load_glob(r[n], local.token.lexeme)
+            emit.load_glob(regs[n], local.token.lexeme)
         else:
-            emit.inst4(Op.ADD, r[n], r[base], local.location)
-        return r[n]
+            emit.inst4(Op.ADD, regs[n], regs[base], local.location)
+        return regs[n]
     def store(self, local, n, base):
         self.address(local, n+self.size, base)
-        emit.storem(r[n], self.size)
+        emit.storem(regs[n], self.size)
     def reduce(self, local, n, base):
         return self.address(local, n, base)
     def glob(self, glob):
@@ -269,16 +267,16 @@ class NumBase(Expr):
         return self.value
     def reduce(self, n):
         if -32 <= self.value < 64:
-            emit.inst(Op.MOV, r[n], self.value)
+            emit.inst(Op.MOV, regs[n], self.value)
         else:
-            emit.imm(r[n], self.value)
-        return r[n]
+            emit.imm(regs[n], self.value)
+        return regs[n]
     def num_reduce(self, n):
         if -32 <= self.value < 64:
             return self.value
         else:
-            emit.imm(r[n], self.value)
-            return r[n]
+            emit.imm(regs[n], self.value)
+            return regs[n]
 
 class Num(NumBase):
     def __init__(self, token):
@@ -303,8 +301,8 @@ class Char(Expr):
     def data(self):
         return self.token.lexeme
     def reduce(self, n):
-        emit.imm(r[n], self.data())
-        return r[n]
+        emit.imm(regs[n], self.data())
+        return regs[n]
 
 class String(Expr):
     def __init__(self, token):
@@ -316,29 +314,35 @@ class String(Expr):
             emit.glob(f'.S{env.strings.index(self.value)}', self.value)
         return f'.S{env.strings.index(self.value)}'
     def reduce(self, n):        
-        emit.load_glob(r[n], self.data())
-        return r[n]
+        emit.load_glob(regs[n], self.data())
+        return regs[n]
 
-class Unary(Expr): #TODO OP
+class OpExpr(Expr):
+    OP = {}
+    def __init__(self, type, op):
+        super().__init__(type, op)
+        self.op = self.OP[op.lexeme]
+
+class Unary(OpExpr):
     OP = {'-':Op.NEG,
           '~':Op.NOT}
     def __init__(self, op, unary):
-        assert unary.type == Type('int')
+        assert unary.type == Type('int'), f'Line {op.line_no}: Cannot {op.lexeme} {unary.type}'
         super().__init__(unary.type, op)
-        self.sign, self.unary = self.OP[op.lexeme], unary
+        self.unary = unary
     def reduce(self, n):
-        emit.inst(self.sign, self.unary.reduce(n), Reg.A)
-        return r[n]
+        emit.inst(self.op, self.unary.reduce(n), Reg.A)
+        return regs[n]
 
-class Pre(Unary): #TODO OP
+class Pre(Unary):
     OP = {'++':Op.ADD,
           '--':Op.SUB}
     def reduce(self, n):
         self.generate(n)
-        return r[n]
+        return regs[n]
     def generate(self, n):
         self.unary.reduce(n)
-        emit.inst(self.op, r[n], 1)
+        emit.inst(self.op, regs[n], 1)
         self.unary.store(n)
 
 class AddrOf(Expr):
@@ -350,25 +354,26 @@ class AddrOf(Expr):
 
 class Deref(Expr):
     def __init__(self, token, unary):
+        assert hasattr(unary.type, 'to'), f'Line {token.line_no}: Cannot {token.lexeme} {unary.type}'
         super().__init__(unary.type.to, token)
         self.unary = unary
     def store(self, n):
         self.unary.reduce(n+1)
-        emit.store(r[n], r[n+1])
+        emit.store(regs[n], regs[n+1])
     def reduce(self, n):
         self.unary.reduce(n)
-        emit.load(r[n], r[n])
-        return r[n]  
+        emit.load(regs[n], regs[n])
+        return regs[n]  
 
 class Cast(Expr):
     def __init__(self, token, type, cast):
-        assert type == cast.type
+        assert type == cast.type, f'Line {token.line_no}: Cannot cast {cast.type} to {type}'
         super().__init__(type, token)
         self.cast = cast
     def reduce(self, n):
         return self.cast.reduce(n)
 
-class Binary(Expr):
+class Binary(OpExpr):
     OP = {'+' :Op.ADD,
           '++':Op.ADD,
           '+=':Op.ADD,
@@ -387,13 +392,13 @@ class Binary(Expr):
           '|=':Op.OR,
           '&' :Op.AND,
           '&=':Op.AND,}
-    def __init__(self, op, left, right): #TODO
+    def __init__(self, op, left, right):
         assert left.type == right.type, f'Line {op.line_no}: Cannot {left.type} {op.lexeme} {right.type}'
         super().__init__(left.type, op)
-        self.op, self.left, self.right = self.OP[op.lexeme], left, right
+        self.left, self.right = left, right
     def reduce(self, n):
         emit.inst(self.op, self.left.reduce(n), self.right.num_reduce(n+1))
-        return r[n]
+        return regs[n]
 
 class Compare(Binary):
     OP = {'==':Cond.JEQ,
@@ -432,8 +437,6 @@ class Compare(Binary):
 class Logic(Binary):
     OP = {'&&':Op.AND,
           '||':Op.OR}
-    def __init__(self, op, left, right):        
-        self.op, self.left, self.right = self.OP[op.lexeme], left, right
     def compare(self, n, label):
         if self.op == Op.AND:
             emit.inst(Op.CMP, self.left.reduce(n), 0)
@@ -479,7 +482,7 @@ class Assign(Expr):
         self.left.analyze_store(n)        
     def reduce(self, n):
         self.generate(n)
-        return r[n]
+        return regs[n]
     def generate(self, n):
         self.right.reduce(n)
         self.left.store(n)
@@ -519,8 +522,8 @@ class Glob(Local):
     def reduce(self, n):
         self.type.reduce(self, n, n)
     def address(self, n):
-        emit.load_glob(r[n], self.token.lexeme)
-        return r[n]
+        emit.load_glob(regs[n], self.token.lexeme)
+        return regs[n]
     def ret(self, n):
         self.address(n)
         self.type.ret(self, n, n)
@@ -539,14 +542,14 @@ class List(UserList, Expr):
     def reduce(self, n):
         for i, expr in enumerate(self):
             expr.reduce(n+i)
-        return r[n]
+        return regs[n]
 
 class Params(UserList, Expr):
     def types(self):
         return [param.type for param in self]
     def generate(self):
         for i, param in enumerate(self):
-            emit.store(r[i], Reg.SP, i, param.token.lexeme)
+            emit.store(regs[i], Reg.SP, i, param.token.lexeme)
     
 class Defn(Expr):
     def __init__(self, type, id, params, block, max_args, space):
@@ -554,7 +557,7 @@ class Defn(Expr):
         self.params, self.block, self.max_args, self.space = params, block, max_args, space
     def generate(self):
         emit.begin_func()
-        r.clear()
+        regs.clear()
         if self.space:
             emit.inst(Op.SUB, Reg.SP, self.space)
         if self.type.size: 
@@ -564,10 +567,10 @@ class Defn(Expr):
         if self.type.size: 
             emit.func.append(f'.L{env.return_label}:')
         if type(self.type) is not Struct and self.max_args is not None and self.max_args > 0 and self.type.size:
-            emit.inst(Op.MOV, Reg.A, r[self.max_args])
+            emit.inst(Op.MOV, Reg.A, regs[self.max_args])
         if self.space:
             emit.inst(Op.ADD, Reg.SP, self.space)
-        push = list(map(Reg, range(max(len(self.params), self.type.size), r.max+1))) 
+        push = list(map(Reg, range(max(len(self.params), self.type.size), regs.max+1))) 
         emit.push(self.max_args is not None, *push)
         emit.pop(self.max_args is not None, *push)
         emit.func.insert(0, f'{self.token.lexeme}:')
@@ -588,27 +591,33 @@ class Main(Expr):
         emit.halt()
         emit.end_func()
 
-class Post(Expr):
-    OPS = {'++':Op.ADD,
-           '--':Op.SUB}
+class Post(OpExpr):
+    OP = {'++':Op.ADD,
+          '--':Op.SUB}
     def __init__(self, op, postfix):
+        assert postfix.type == Type('int'), f'Line {op.line_no}: Cannot {op.lexeme} {postfix.type}' 
         super().__init__(postfix.type, op)
-        self.op, self.postfix = self.OPS[op.lexeme], postfix
+        self.postfix = postfix
     def reduce(self, n):
         self.generate(n)
-        return r[n]
+        return regs[n]
     def generate(self, n):
         self.postfix.reduce(n)
-        emit.inst4(self.op, r[n+1], r[n], 1)
+        emit.inst4(self.op, regs[n+1], regs[n], 1)
         self.postfix.store(n+1)
 
-class Dot(Expr):
+class Access(Expr):
+    def __init__(self, type, token, postfix):
+        super().__init__(type, token)
+        self.postfix = postfix
+
+class Dot(Access):
     def __init__(self, token, postfix, attr):
-        super().__init__(attr.type, token)
-        self.postfix, self.attr = postfix, attr
+        super().__init__(attr.type, token, postfix)
+        self.attr = attr
     def address(self, n):
         emit.inst(Op.ADD, self.postfix.address(n), self.attr.location)
-        return r[n]
+        return regs[n]
     def store(self, n):
         self.postfix.address(n+1)
         return self.attr.store(n)
@@ -619,7 +628,7 @@ class Dot(Expr):
 class Arrow(Dot):
     def address(self, n):
         emit.inst(Op.ADD, self.postfix.reduce(n), self.attr.location)
-        return r[n] 
+        return regs[n] 
     def store(self, n):
         self.postfix.reduce(n+1)
         return self.attr.store(n)
@@ -627,23 +636,59 @@ class Arrow(Dot):
         self.postfix.reduce(n)
         return self.attr.reduce(n)
 
-class SubScr(Expr): 
+class SubScr(Access): 
     def __init__(self, token, postfix, sub):
-        super().__init__(postfix.type.of, token)
-        self.postfix, self.sub = postfix, sub
+        super().__init__(postfix.type.of, token, postfix)
+        self.sub = sub
     def address(self, n):
         self.postfix.reduce(n)
         self.sub.reduce(n+1)
         if type(self.postfix.type) in [Array, Pointer] and self.postfix.type.of.size > 1:
-            emit.inst(Op.MUL, r[n+1], self.postfix.type.of.size)
-        emit.inst(Op.ADD, r[n], r[n+1])
-        return r[n]
+            emit.inst(Op.MUL, regs[n+1], self.postfix.type.of.size)
+        emit.inst(Op.ADD, regs[n], regs[n+1])
+        return regs[n]
     def store(self, n):
-        emit.store(r[n], self.address(n+1))
-        return r[n]
+        emit.store(regs[n], self.address(n+1))
+        return regs[n]
     def reduce(self, n):
-        emit.load(self.address(n), r[n])
-        return r[n]
+        emit.load(self.address(n), regs[n])
+        return regs[n]
+
+class Args(UserList, Expr):
+    def generate(self, n):
+        for i, arg in enumerate(self, n):
+            arg.reduce(i)
+        if n > 0:
+            for i, arg in enumerate(self):
+                emit.inst(Op.MOV, regs[i], regs[n+i]) 
+
+class Call(Expr):
+    def __init__(self, primary, args):
+        if len(primary.params) == len(args):
+            for i, arg in enumerate(args):
+                assert primary.params[i] == arg.type, f'Line {primary.token.line_no}: Argument #{i+1} of {primary.token.lexeme} {primary.params[i]} != {arg.type}'
+        else:
+            pass #TODO error handle
+        super().__init__(primary.type, primary.token)
+        self.primary, self.args = primary, args
+    def reduce(self, n):
+        self.generate(n)
+        return regs[n]
+    def generate(self, n):
+        self.args.generate(n)
+        emit.call(self.primary.token.lexeme)
+        if n > 0 and type(self.primary.type) is not Struct:
+            emit.inst(Op.MOV, regs[n], Reg.A)
+
+class Return(Expr):
+    def __init__(self, token):
+        super().__init__(Type('void'), token)
+        self.expr = None
+    def generate(self, n):
+        # TODO assert type == func.type, f'{self.expr.type} != {func.type} in {env.func.id.name}'       
+        if self.expr:
+            self.expr.ret(n)
+        emit.jump(Cond.JR, f'.L{env.return_label}')
 
 class Statement(CNode):
     pass
@@ -693,7 +738,7 @@ class Switch(Statement):
         labels = []
         for case in self.cases:
             labels.append(env.next_label())
-            emit.inst(Op.CMP, r[n], case.const.num_reduce(n))
+            emit.inst(Op.CMP, regs[n], case.const.num_reduce(n))
             emit.jump(Cond.JEQ, f'.L{labels[-1]}')
         emit.jump(Cond.JR, f'.L{env.loop.end()}')
         for i, case in enumerate(self.cases):
@@ -762,45 +807,9 @@ class Label(Statement):
     def generate(self, n):
         emit.labels.append(self.target.lexeme)
 
-class Args(UserList, Expr):
-    def generate(self, n):
-        for i, arg in enumerate(self, n):
-            arg.reduce(i)
-        if n > 0:
-            for i, arg in enumerate(self):
-                emit.inst(Op.MOV, r[i], r[n+i]) 
-
-class Call(Expr):
-    def __init__(self, primary, args):
-        if len(primary.params) == len(args):
-            for i, arg in enumerate(args):
-                assert primary.params[i] == arg.type, f'Line {primary.token.line_no}: Argument #{i+1} of {primary.token.lexeme} {primary.params[i]} != {arg.type}'
-        else:
-            pass #TODO error handle
-        super().__init__(primary.type, primary.token)
-        self.primary, self.args = primary, args
-    def reduce(self, n):
-        self.generate(n)
-        return r[n]
-    def generate(self, n):
-        self.args.generate(n)
-        emit.call(self.primary.token.lexeme)
-        if n > 0 and type(self.primary.type) is not Struct:
-            emit.inst(Op.MOV, r[n], Reg.A)
-
-class Return(Expr):
-    def __init__(self, token):
-        super().__init__(Type('void'), token)
-        self.expr = None
-    def generate(self, n):
-        # assert self.type() == env.func.type_spec, f'{self.expr.type()} != {env.func.type_spec} in {env.func.id.name}'       
-        if self.expr:
-            self.expr.ret(n)
-        emit.jump(Cond.JR, f'.L{env.return_label}')
-
-class Program(UserList, Expr):
+class Program(UserList, CNode):
     def generate(self):
-        r.clear()
+        regs.clear()
         env.clear()
         emit.clear()
         for statement in self:
