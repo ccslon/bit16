@@ -6,42 +6,8 @@ Created on Wed Nov 15 12:18:26 2023
 """
 
 import re
+import os
 
-
-test1 = '''#define n 5
-#define m 6
-n n n nightn m
-'''
-'''(?P<args>\(\w+(,\s*\w+)*\))'''
-test = '''
-#include <stdio.h>
-#include "test.c"
-#define n 5
-#define BUFSIZE 10
-#define FILE struct _FILE_
-#define min(a, b) (a > b ? b : a)
-#define binary(a, op, b) (a op b)
-#define foo(bar) (bar + 1)
-#define thing() (*(++i))
-/*
-#define n 1111 
-*/
-
-int /* lol */ t; //#define t 2222
-
-char* lmao = "#define n 555";
-
-int m = min(4, n);
-int o = binary(h, +, j)
-int buffer[BUFSIZE];
-binary(BUFSIZE, **, n)
-FILE f;
-z = min(a +  28, * p);
-
-c = ( foo((2 * c)) + 55);
-
-int x = thing();
-'''
 ID = r'\w(\w|\d)*'
 ARG = r'(([^,]|"[^"]*")+'
 class CPreProc:
@@ -114,16 +80,16 @@ class CPreProc:
             file_name = match.group('file')[1:-1]
             text = regex.sub(self.repl_macro, text)
             if file_name not in self.included:
-                with open(f'{ext}{file_name}', 'r') as file:
-                    text = file.read() + '@\n' + text
+                with open(f'{ext}{os.path.sep}{file_name}') as file:
+                    text = file.read() + '\n@\n' + text
                 self.included.add(file_name)
         return text
     
     def includes(self, text):
         self.included = set()
         while self.STD.search(text) or self.INCLUDE.search(text):
-            text = self.include(self.STD, text, 'std\\')
-            text = self.include(self.INCLUDE, text, 'c\\')
+            text = self.include(self.STD, text, self.path+os.path.sep+'std')
+            text = self.include(self.INCLUDE, text, self.path)
         return text
     
     def defines(self, text):
@@ -142,7 +108,10 @@ class CPreProc:
                 text = re.sub(rf'\b(?P<name>{defn})\({args}\)', self.repl_define, text)
         return text
     
-    def preproc(self, text):
+    def preproc(self, file_name):        
+        with open(file_name) as file:
+            self.path = os.path.dirname(os.path.abspath(file.name))
+            text = file.read()
         text = self.comments(text)
         text = self.includes(text)
         text = self.defines(text)
@@ -158,57 +127,10 @@ class CPreProc:
         return expr
     
     def repl_macro(self, match):
-        return '\n'
+        return '\n' * match.group().count('\n')
     
 preproc = CPreProc()
 
-def preprocess(text):
-    return preproc.preproc(text)
+def preprocess(file_name):
+    return preproc.preproc(file_name)
 
-if __name__ == '__main__':
-    print(preprocess(test))
-    
-'''
-int a = 1;@
-
-struct _FILE_ {
-    int* buffer;
-    int read;
-    int write;
-};
-struct _FILE_ stdout = {0x7f00, 0, 0};
-int fputc(char c, struct _FILE_* stream) {
-    stream->buffer[stream->write++] = c;
-    return 0;
-}
-int putchar(char c) {
-    fputc(c, &stdout);
-    return 0;
-}
-int fputs(const char* str, struct _FILE_* stream) {
-    while (*str != '\0') {
-        fputc(*str, stream);
-        str++;
-    }
-    return 0;
-}
-int puts(const char* str) {
-    fputs(str, &stdout);
-    putchar('\5');
-    return 0;
-}@
-
-
-
-int  t; 
-
-char* lmao = "#define 5 555";
-
-int m = (4 > 5 ? 5 : 4);
-int o = (h + j)
-int buffer[10];
-(10 ** 5)
-struct _FILE_ f;
-z = min(a + 28, *p);
-int x = (*(++i));
-'''

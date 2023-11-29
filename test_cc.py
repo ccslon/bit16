@@ -4,7 +4,7 @@ Created on Fri Sep  8 14:37:22 2023
 
 @author: ccslon
 """
-
+import os
 from unittest import TestCase, main
 import cpreproc
 import cparser
@@ -671,13 +671,24 @@ test:
   RET
 '''
 
+INCLUDES_ASM = '''
+foo: 9
+test:
+  PUSH A, B
+  SUB SP, 1
+  MOV A, 10
+  LD B, 100
+  MUL A, B
+  LD [SP, 0], A ; num
+  ADD SP, 1
+  POP A, B
+  RET
+'''
+
 class TestCompiler(TestCase):
     
     def code_eq_asm(self, file_name, target):
-        if file_name.endswith('.c'):
-            with open(r'tests/' + file_name) as in_file:
-                text = in_file.read()
-        text = cpreproc.preprocess(text)
+        text = cpreproc.preprocess('tests'+os.path.sep+file_name)
         ast = cparser.parse(text)
         asm = ast.generate()
         self.assertEqual(asm, target.strip('\n'))
@@ -748,6 +759,9 @@ class TestCompiler(TestCase):
         
     def test_defines(self):
         self.code_eq_asm('define.c', DEFINES_ASM)
+    
+    def test_includes(self):
+        self.code_eq_asm('include.c', INCLUDES_ASM)
 
 if __name__ == '__main__':
     main()
