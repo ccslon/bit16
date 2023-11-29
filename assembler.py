@@ -8,32 +8,34 @@ Created on Fri Aug 25 10:49:03 2023
 import re
 from bit16 import Reg, Op, Cond, Data, Char, Jump, Inst1, Inst2, Inst3, Inst4, Load0, Load1, Imm, ESCAPE
 
-TOKENS = {'const': r'(-?\d+)|(x[0-9a-f]+)|(b[01]+)',
-          'string': r'"[^"]*"',
-          'char': r"'\\?[^']'",
-          'ldm': r'ldm',
-          'ld': r'ld',
-          'nop': r'nop',
-          'op': '|'.join(map(r'\b{}\b'.format, (op.name for op in Op))),
-          'cond': '|'.join(map(r'\b{}\b'.format, (cond.name for cond in Cond))),
-          'push': r'push',
-          'pop': r'pop',
-          'call': r'\bcall\b',
-          'ret': r'\bret\b',
-          'halt': r'halt',
-          'space': r'space',
-          'reg': r'|'.join(map(r'\b{}\b'.format, (reg.name for reg in Reg))),
-          'label': r'\.?\w(\w|\d)*',
-          'equal': r'=',
-          'colon': r':',
-          'dash': r'-',
-          'lbrace': r'\[',
-          'rbrace': r'\]',
-          'lbrack': r'\{',
-          'rbrack': r'\}',
-          'comma': r',',
-          'end': r'$',
-          'error': r'\S+'}
+TOKENS = {
+    'const': r'-?\d+|x[0-9a-f]+|b[01]+',
+    'string': r'"[^"]*"',
+    'char': r"'\\?[^']'",
+    'ldm': r'\bldm\b',
+    'ld': r'\bld\b',
+    'nop': r'\bnop\b',
+    'op': '|'.join(map(r'\b{}\b'.format, (op.name for op in Op))),
+    'cond': '|'.join(map(r'\b{}\b'.format, (cond.name for cond in Cond))),
+    'push': r'\bpush\b',
+    'pop': r'\bpop\b',
+    'call': r'\bcall\b',
+    'ret': r'\bret\b',
+    'halt': r'\bhalt\b',
+    'space': r'\bspace\b',
+    'reg': r'|'.join(map(r'\b{}\b'.format, (reg.name for reg in Reg))),
+    'label': r'\.?[a-z]\w*',
+    'equal': r'=',
+    'colon': r':',
+    'dash': r'-',
+    'lbrace': r'\[',
+    'rbrace': r'\]',
+    'lbrack': r'\{',
+    'rbrack': r'\}',
+    'comma': r',',
+    'end': r'$',
+    'error': r'\S+'
+}
 
 RE = re.compile('|'.join(rf'(?P<{token}>{pattern})' for token, pattern in TOKENS.items()), re.I)
 
@@ -114,8 +116,7 @@ class Assembler:
                 line, comment = map(str.strip, line.split(';', 1))
             if line:
                 self.tokens = lex(line)
-                self.index = 0
-                
+                self.index = 0                
                 if self.match('label'):
                     self.new_data(*self.values())
                 elif self.peek('label'):

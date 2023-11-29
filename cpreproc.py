@@ -8,7 +8,7 @@ Created on Wed Nov 15 12:18:26 2023
 import re
 import os
 
-ID = r'\w(\w|\d)*'
+ID = r'[A-Za-z]\w*'
 ARG = r'(([^,]|"[^"]*")+'
 class CPreProc:
     COMMENT = re.compile(r'''

@@ -378,7 +378,6 @@ puts:
   ADD SP, 1
   POP PC, B, C
 '''
-
 ARRAY_ASM = '''
 foo:
   PUSH A, B, C, D
@@ -399,7 +398,6 @@ foo:
   POP A, B, C, D
   RET
 '''
-
 STRUCTS_ASM = '''
 .S0: "Cloud\\0"
 .S1: "Colin\\0"
@@ -553,7 +551,6 @@ baz:
   ADD SP, 1
   RET
 '''
-
 RETURN_STRUCT_ASM = '''
 div:
   PUSH C
@@ -587,7 +584,6 @@ print_int:
   ADD SP, 3
   POP PC, B, C, D
 '''
-
 POINTERS_ASM = '''
 change:
   PUSH B
@@ -637,7 +633,6 @@ bar:
   ADD SP, 2
   POP PC, C
 '''
-
 DEFINES_ASM = '''
 test:
   PUSH A, B
@@ -670,7 +665,6 @@ test:
   POP A, B
   RET
 '''
-
 INCLUDES_ASM = '''
 foo: 9
 test:

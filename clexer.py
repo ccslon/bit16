@@ -34,14 +34,14 @@ class LexerBase(metaclass=MetaLexer):
 
 class CLexer(LexerBase):
     
-    RE_num = r'(0x[0-9a-f]+)|(0b[01]+)|(\d+)|(NULL)'
+    RE_num = r'0x[0-9a-f]+|0b[01]+|\d+|NULL'
     RE_char = r"'\\?[^']'"
     RE_string = r'"[^"]*"'
     def RE_eof(self, match):
         r'@\n'
         self.line_no = 1
     RE_const = r'const'
-    RE_type = r'\b((void)|(int)|(char))\b'
+    RE_type = r'\b(void|int|char)\b'
     RE_struct = r'\bstruct\b'
     RE_return = r'\breturn\b'
     RE_if = r'if'
@@ -56,7 +56,7 @@ class CLexer(LexerBase):
     RE_continue = r'continue'
     RE_goto = r'goto'
     RE_include = r'include'
-    RE_id = r'\w(\w|\d)*'
+    RE_id = r'[A-Za-z_]\w*'
     def RE_new_line(self, match):
         r'\n'
         self.line_no += 1
