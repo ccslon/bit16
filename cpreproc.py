@@ -77,7 +77,7 @@ class CPreProc:
     
     def include(self, regex, text, ext=''):
         for match in regex.finditer(text):
-            file_name = match.group('file')[1:-1]
+            file_name = match['file'][1:-1]
             text = regex.sub(self.repl_macro, text)
             if file_name not in self.included:
                 with open(f'{ext}{os.path.sep}{file_name}') as file:
@@ -95,7 +95,7 @@ class CPreProc:
     def defines(self, text):
         self.defined = {}
         for match in self.OBJ.finditer(text):
-            self.defined[match.group('name')] = None, match.group('expr')
+            self.defined[match['name']] = None, match.group('expr')
         text = self.OBJ.sub(self.repl_macro, text)
         for match in self.FUNC.finditer(text):
             self.defined[match.group('name')] = tuple(filter(len, map(str.strip, match.group('args').split(',')))), match.group('expr')
@@ -121,9 +121,9 @@ class CPreProc:
         return '\n' * match.group().count('\n')
     
     def repl_define(self, match):
-        args, expr = self.defined[match.group('name')]
+        args, expr = self.defined[match['name']]
         for arg in args:
-            expr = re.sub(rf'\b{arg}\b', match.group(arg), expr)
+            expr = re.sub(rf'\b{arg}\b', match[arg], expr)
         return expr
     
     def repl_macro(self, match):
