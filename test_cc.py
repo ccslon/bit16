@@ -86,7 +86,9 @@ PARAMS_ASM = '''
 params:
   SUB SP, 3
   LD [SP, 0], A ; foo
-  LD [SP, 1], B ; bar
+  LD C, [B, 0]
+  LD [SP, 1], C ; bar
+  LD C, [B, 1]
   LD [SP, 2], C ; baz
   LD A, [SP, 0] ; foo
   LD B, [SP, 1] ; bar
@@ -235,7 +237,9 @@ get:
 set:
   SUB SP, 3
   LD [SP, 0], A ; g
-  LD [SP, 1], B ; i
+  LD C, [B, 0]
+  LD [SP, 1], C ; i
+  LD C, [B, 1]
   LD [SP, 2], C ; t
   LD A, [SP, 2] ; t
   LD B, [SP, 0] ; g
@@ -306,7 +310,9 @@ foo:
   PUSH LR, D, E
   SUB SP, 3
   LD [SP, 0], A ; x
-  LD [SP, 1], B ; y
+  LD C, [B, 0]
+  LD [SP, 1], C ; y
+  LD C, [B, 1]
   LD [SP, 2], C ; z
   LD C, [SP, 0] ; x
   LD D, [SP, 1] ; y

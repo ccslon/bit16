@@ -273,7 +273,7 @@
       <a name="facing" val="south"/>
       <a name="incoming" val="16"/>
     </comp>
-    <comp lib="0" loc="(780,1350)" name="Pin">
+    <comp lib="0" loc="(790,1650)" name="Pin">
       <a name="appearance" val="NewPins"/>
       <a name="facing" val="west"/>
       <a name="output" val="true"/>
@@ -622,10 +622,10 @@
       <a name="color" val="#41ff00"/>
       <a name="trigger" val="falling"/>
     </comp>
-    <comp lib="5" loc="(590,1300)" name="Keyboard"/>
     <comp lib="5" loc="(590,690)" name="Button">
       <a name="facing" val="west"/>
     </comp>
+    <comp lib="5" loc="(600,1600)" name="Keyboard"/>
     <comp lib="8" loc="(1020,745)" name="Text">
       <a name="halign" val="left"/>
       <a name="text" val="0        1      2                4          6          3"/>
@@ -1083,14 +1083,14 @@
     <wire from="(720,650)" to="(830,650)"/>
     <wire from="(720,660)" to="(730,660)"/>
     <wire from="(720,670)" to="(740,670)"/>
-    <wire from="(730,1310)" to="(730,1350)"/>
-    <wire from="(730,1350)" to="(780,1350)"/>
     <wire from="(730,230)" to="(870,230)"/>
     <wire from="(730,270)" to="(880,270)"/>
     <wire from="(730,600)" to="(730,660)"/>
     <wire from="(730,600)" to="(860,600)"/>
     <wire from="(740,110)" to="(750,110)"/>
     <wire from="(740,160)" to="(850,160)"/>
+    <wire from="(740,1610)" to="(740,1650)"/>
+    <wire from="(740,1650)" to="(790,1650)"/>
     <wire from="(740,310)" to="(890,310)"/>
     <wire from="(740,630)" to="(740,670)"/>
     <wire from="(740,630)" to="(820,630)"/>
