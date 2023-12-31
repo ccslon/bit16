@@ -7,7 +7,7 @@ Created on Mon Jul  3 19:47:39 2023
 
 import re
 import clexer
-from cnodes import Program, Main, Defn, List, Params, Block, Label, Goto, Break, Continue, For, Do, While, Switch, Case, If, Return, Func, Glob, Attr, Local, Assign, Condition, Logic, Compare, Binary, Array, Struct, Pointer, Const, Type, Pre, Cast, SizeOf, Deref, AddrOf, Unary, Args, Call, Arrow, SubScr, Dot, Post, String, Char, Num, Frame
+from cnodes import Program, Main, Defn, List, Params, Block, Label, Goto, Break, Continue, For, Do, While, Switch, Case, If, Statement, Return, Func, Glob, Attr, Local, Assign, Condition, Logic, Compare, Binary, Array, Struct, Pointer, Const, Type, Pre, Cast, SizeOf, Deref, AddrOf, Not, Unary, Args, Call, Arrow, SubScr, Dot, Post, String, Char, Num, Frame
 
 '''
 TODO
@@ -119,6 +119,8 @@ class CParser:
         '''
         if self.peek('-','~',):
             return Unary(next(self), self.unary())
+        if self.peek('!'):
+            return Not(next(self), self.unary())
         elif self.peek('&'):
             return AddrOf(next(self), self.unary())
         elif self.peek('*'):
@@ -138,13 +140,16 @@ class CParser:
                |'(' ABSTRACT ')' CAST
         '''
         if self.peekn('(', ('type','struct','const')):
-            return Cast(next(self), self.abstract(), self.cast())
+            token = next(self)
+            type = self.abstract()
+            self.expect(')')
+            return Cast(type, token, self.cast())
         else:
             return self.unary()
     
     def specif(self):
         '''
-        TYPE_SPEC -> (type|(('struct'|'union') id)) {'*'}
+        TYPE_SPEC -> (type|(('struct'|'union') id))
         '''
         if self.peek('type'):
             specif = Type(next(self).lexeme)
@@ -175,9 +180,9 @@ class CParser:
         '''
         MUL -> UNARY {('*'|'/'|'%') UNARY}
         '''
-        mul = self.unary()
+        mul = self.cast()
         while self.peek('*'):
-            mul = Binary(next(self), mul, self.unary())
+            mul = Binary(next(self), mul, self.cast())
         return mul
     
     def add(self):
@@ -280,7 +285,7 @@ class CParser:
         '''
         assign = self.cond()
         if self.peek('='):
-            assert isinstance(assign, (Local,Glob,Dot,Arrow,SubScr,Deref))
+            assert isinstance(assign, (Local,Glob,Dot,Arrow,SubScr,Deref)), f'Line {self.tokens[self.index].line_no}'
             assign = Assign(next(self), assign, self.assign())
         elif self.peek('+=','-=','*=','/=','%=','<<=','>>=','^=','|=','&='):
             assert isinstance(assign, (Local,Glob,Dot,Arrow,SubScr,Deref))
@@ -319,7 +324,11 @@ class CParser:
                |'break' ';'
                |'continue' ';'
         '''
-        if self.accept('{'):            
+        
+        if self.accept(';'):
+            statement = Statement()
+        
+        elif self.accept('{'):            
             self.begin_scope()
             statement = self.block()
             self.end_scope()
@@ -388,7 +397,7 @@ class CParser:
         
         elif self.accept('goto'):
             statement = Goto(self.expect('id'))
-            self.expect(';') 
+            self.expect(';')        
         
         elif self.peekn('id',':'):
             statement = Label(next(self))
@@ -412,7 +421,6 @@ class CParser:
             self.expect(']')
         local = Local(type, id)
         self.scope[id.lexeme] = local
-        self.space += type.size
         return local
     
     def init(self):
@@ -453,9 +461,16 @@ class CParser:
         PARAMS -> [DECL {',' DECL}]
         '''
         params = Params()
+        params.va_list = None
         if self.peek('const','type','struct','union'):    
             params.append(self.decl())
             while self.accept(','):
+                if self.accept('...'):
+                    id = clexer.Token('id','_VARLIST_',0)
+                    local = Local(Pointer(Type('void')), id)
+                    self.scope[id.lexeme] = local
+                    params.va_list = local
+                    break
                 params.append(self.decl())
         return params
 
@@ -466,7 +481,7 @@ class CParser:
         block = Block()
         while self.peek('const','type','struct','union'):
             block.append(self.init())
-        while self.peek('{','(','id','*','++','--','return','if','switch','while','do','for','break','continue','goto'):
+        while self.peek(';','{','(','id','*','++','--','return','if','switch','while','do','for','break','continue','goto'):
             block.append(self.statement())
         if not (self.peek('}') or self.peek('end')):# or (len(block) > 0):
             block.extend(self.block())        
@@ -492,18 +507,17 @@ class CParser:
                 id = self.expect('id')
                 if self.accept('('):                    #Function
                     self.begin_func()
-                    self.begin_scope()
                     params = self.params()
                     self.expect(')')
-                    self.functions[id.lexeme] = Func(type, id, params.types())
+                    self.functions[id.lexeme] = Func(type, id, params)
                     self.expect('{')
                     block = self.block()
-                    self.end_scope()
+                    self.end_func()
                     self.expect('}')
                     if id.lexeme == 'main':
-                        program.insert(0, Main(block, self.space))
+                        program.insert(0, Main(block, self.space, (0 if self.calls is None or self.calls < 3 else self.calls-1)))
                     else:
-                        program.append(Defn(type, id, params, block, self.calls, self.space))
+                        program.append(Defn(type, id, params, block, self.calls, self.space, (0 if self.calls is None or self.calls < 3 else self.calls-1)))
                 else:                                   #Global
                     while self.accept('['):
                         type = Array(type, Num(self.expect('num')))
@@ -523,13 +537,20 @@ class CParser:
     def begin_func(self):
         self.space = 0
         self.calls = None
+        self.scope = None
+        self.stack = []
+        self.begin_scope()
+        
+    def end_func(self):
+        self.end_scope()
         
     def begin_scope(self):
         new = Scope(self.scope)
         self.stack.append(self.scope)
         self.scope = new
-        
+    
     def end_scope(self):
+        self.space = max(self.space, self.scope.size)
         self.scope = self.stack.pop() 
     
     def parse(self, text):

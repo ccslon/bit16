@@ -14,6 +14,7 @@ def ccompile(file_name, sflag=False, fflag=True, iflag=False):
         text = cpreproc.preprocess(file_name)
         if iflag:
             print(text)
+            return
         ast = cparser.parse(text)
         asm = ast.generate()
         if sflag:
@@ -30,9 +31,11 @@ def ccompile(file_name, sflag=False, fflag=True, iflag=False):
         print("Wrong file type")
 
 if __name__ == '__main__':
-    # ccompile('hello.c', sflag=True, oflag=False)    
-    # ccompile('tests//include.c', sflag=True, fflag=False, iflag=True)
+    # ccompile('hello.c', sflag=True, oflag=False)
+    # ccompile('tests//var.c', sflag=True, fflag=False, iflag=False)
     # ccompile('tests//globs.c')
-    # ccompile('std//ctype.h', sflag=True, fflag=False)
-    ccompile('c//hello.c')
-    # ccompile('c//cats.c', sflag=True, fflag=False)
+    ccompile('std//ctype.h', sflag=True, fflag=False)
+    # ccompile('c//strcat.c')
+    # ccompile('c//var.c')
+    # ccompile('c//test.c', sflag=True, fflag=False)
+    # ccompile('c//var.c', sflag=True, fflag=False, iflag=True)
