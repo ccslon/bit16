@@ -69,7 +69,11 @@ class CPreProc:
                       \s*
                       $
                       ''', re.M | re.X)
-      
+    CONCAT = re.compile('''
+                        "([^"]*)"
+                        \s*
+                        "([^"]*)"
+                        ''', re.X)
     ELIP = re.compile(r'^#define (?P<name>\w(\w|\d)*)\((?P<args>(\w+(,\s*\w+)*,)?)\s*(?P<elip>\.\.\.)\) (?P<expr>\(.+\))$', re.M)
     
     def comments(self, text):
@@ -88,7 +92,7 @@ class CPreProc:
     def includes(self, text):
         self.included = set()
         while self.STD.search(text) or self.INCLUDE.search(text):
-            text = self.include(self.STD, text, self.path+os.path.sep+'std')
+            text = self.include(self.STD, text, os.getcwd()+os.path.sep+'std')
             text = self.include(self.INCLUDE, text, self.path)
         return text
     
@@ -108,6 +112,9 @@ class CPreProc:
                 text = re.sub(rf'\b(?P<name>{defn})\({args}\)', self.repl_define, text)
         return text
     
+    def concat(self, text):
+        return self.CONCAT.sub(self.repl_concat, text)
+    
     def preproc(self, file_name):        
         with open(file_name) as file:
             self.path = os.path.dirname(os.path.abspath(file.name))
@@ -115,6 +122,7 @@ class CPreProc:
         text = self.comments(text)
         text = self.includes(text)
         text = self.defines(text)
+        text = self.concat(text)
         return text
     
     def repl_comment(self, match):
@@ -123,11 +131,15 @@ class CPreProc:
     def repl_define(self, match):
         args, expr = self.defined[match['name']]
         for arg in args:
+            expr = re.sub(rf'#\s*\b{arg}\b', f'"{match[arg]}"', expr)
             expr = re.sub(rf'\b{arg}\b', match[arg], expr)
         return expr
     
     def repl_macro(self, match):
         return '\n' * match.group().count('\n')
+    
+    def repl_concat(self, match):
+        return f'"{match[1]}{match[2]}"'
     
 preproc = CPreProc()
 
