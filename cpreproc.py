@@ -119,8 +119,8 @@ class CPreProc:
         with open(file_name) as file:
             self.path = os.path.dirname(os.path.abspath(file.name))
             text = file.read()
-        text = self.comments(text)
         text = self.includes(text)
+        text = self.comments(text)
         text = self.defines(text)
         text = self.concat(text)
         return text

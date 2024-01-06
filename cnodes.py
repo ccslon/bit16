@@ -690,11 +690,13 @@ class SubScr(Access):
 class Args(UserList, Expr):
     def generate(self, n, is_var):
         if len(self) > 2 or is_var:
-            self[0].reduce(Reg.A)
+            # self[0].reduce(Reg.D if is_var else Reg.A)
             emit.inst4(Op.ADD, Reg.B, Reg.SP, env.space if env.space < 7 else print("WARNING: too much stack space"))
             for i, arg in enumerate(self[1:]):
                 arg.reduce(Reg.C)
                 emit.store(Reg.C, Reg.B, i)
+            self[0].reduce(Reg.C)
+            emit.inst(Op.MOV, Reg.A, Reg.C)
         else:
             for i, arg in enumerate(self):
                 arg.reduce(n+i)

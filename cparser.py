@@ -5,7 +5,6 @@ Created on Mon Jul  3 19:47:39 2023
 @author: Colin
 """
 
-import re
 import clexer
 from cnodes import Program, Main, Defn, List, Params, Block, Label, Goto, Break, Continue, For, Do, While, Switch, Case, If, Statement, Return, Func, Glob, Attr, Local, Assign, Condition, Logic, Compare, Binary, Array, Struct, Pointer, Const, Type, Pre, Cast, SizeOf, Deref, AddrOf, Not, Unary, Args, Call, Arrow, SubScr, Dot, Post, String, Char, Num, Frame
 
@@ -28,7 +27,7 @@ TODO
 [X] Scope in Parser
 [X] Line numbers in errors
 [X] Returning local structs
-[ ] PREPROCESSING
+[X] PREPROCESSING
     [X] include header files
     [X] Macros
 '''
@@ -514,10 +513,11 @@ class CParser:
                     block = self.block()
                     self.end_func()
                     self.expect('}')
+                    stack = 0 if self.calls is None or self.calls < 3 else self.calls-1
                     if id.lexeme == 'main':
-                        program.insert(0, Main(block, self.space, (0 if self.calls is None or self.calls < 3 else self.calls-1)))
+                        program.insert(0, Main(block, self.space, stack))
                     else:
-                        program.append(Defn(type, id, params, block, self.calls, self.space, (0 if self.calls is None or self.calls < 3 else self.calls-1)))
+                        program.append(Defn(type, id, params, block, self.calls, self.space, stack))
                 else:                                   #Global
                     while self.accept('['):
                         type = Array(type, Num(self.expect('num')))

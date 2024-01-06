@@ -253,7 +253,9 @@ GETSET2_ASM = '''
 get2:
   SUB SP, 3
   LD [SP, 0], A ; g
-  LD [SP, 1], B ; i
+  LD C, [B, 0]
+  LD [SP, 1], C ; i
+  LD C, [B, 1]
   LD [SP, 2], C ; j
   LD A, [SP, 0] ; g
   LD B, [SP, 1] ; i
@@ -269,9 +271,12 @@ get2:
 set2:
   SUB SP, 4
   LD [SP, 0], A ; g
-  LD [SP, 1], B ; i
+  LD C, [B, 0]
+  LD [SP, 1], C ; i
+  LD C, [B, 1]
   LD [SP, 2], C ; j
-  LD [SP, 3], D ; t
+  LD C, [B, 2]
+  LD [SP, 3], C ; t
   LD A, [SP, 3] ; t
   LD B, [SP, 0] ; g
   LD C, [SP, 1] ; i
