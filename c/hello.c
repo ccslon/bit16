@@ -1,5 +1,5 @@
-#include "bit16lib.h"
+#include <stdio.h>
 
 void main() {
-    println("Hello world!");
+    printf("Hello world!");
 }
