@@ -14,9 +14,6 @@ div_t div(int num, int den) {
     ans.rem = num;
     return ans;
 }
-int not_(int num) {
-    return num == 0;
-}
 int abs(int num) {
     if (num < 0) return -num;
     return num;
