@@ -200,7 +200,6 @@ class CParser:
         shift = self.add()
         while self.peek('<<','>>'):
             shift = Binary(next(self), shift, self.add())
-            self.add()
         return shift
     
     def relation(self):
@@ -284,7 +283,7 @@ class CParser:
         '''
         assign = self.cond()
         if self.peek('='):
-            assert isinstance(assign, (Local,Glob,Dot,Arrow,SubScr,Deref)), f'Line {self.tokens[self.index].line_no}'
+            assert isinstance(assign, (Local,Glob,Dot,Arrow,SubScr,Deref)), f'Line {self.tokens[self.index].line_no}: {type(assign)}'
             assign = Assign(next(self), assign, self.assign())
         elif self.peek('+=','-=','*=','/=','%=','<<=','>>=','^=','|=','&='):
             assert isinstance(assign, (Local,Glob,Dot,Arrow,SubScr,Deref))

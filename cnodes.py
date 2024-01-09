@@ -127,7 +127,12 @@ class Type(CNode):
         self.type = type
         self.size = 0 if type == 'void' else 1
     def store(self, local, n, base):
-        emit.store(regs[n], regs[base], local.location, local.token.lexeme)
+        if local.location is None:
+            emit.load_glob(regs[n+1], local.token.lexeme)
+            emit.store(regs[n], regs[n+1])
+        else:
+            emit.store(regs[n], regs[base], local.location, local.token.lexeme)
+        return regs[n]
     def address(self, local, n, base):
         emit.inst4(Op.ADD, regs[n], regs[base], local.location)
         return regs[n]
@@ -449,8 +454,6 @@ class Compare(Binary):
         label = env.next_label()
         sublabel = env.next_label()
         self.compare(n, sublabel)
-        # emit.inst(Op.CMP, self.left.reduce(n), self.right.num_reduce(n+1))
-        # emit.jump(self.inv, f'.L{sublabel}')
         emit.inst(Op.MOV, Reg(n), 1)
         emit.jump(Cond.JR, f'.L{label}')
         emit.labels.append(f'.L{sublabel}')
@@ -543,14 +546,13 @@ class Glob(Local):
         self.location = None
         self.init = None
     def store(self, n):
-        self.type.store(self, n, n+1)
+        return self.type.store(self, n, n+1)
     def reduce(self, n):
-        self.type.reduce(self, n, n)
+        return self.type.reduce(self, n, n)
     def address(self, n):
         emit.load_glob(regs[n], self.token.lexeme)
         return regs[n]
     def ret(self, n):
-        self.address(n)
         self.type.ret(self, n, n)
     def generate(self):
         self.type.glob(self)
@@ -595,11 +597,11 @@ class Defn(Expr):
         if self.params.va_list:
             self.params.va_list.store(Reg.C)            
         self.params.generate()
-        self.block.generate(0 if self.max_args is None else min(self.max_args, 3))
+        self.block.generate(0 if self.max_args is None else min(self.max_args, 2))
         if self.type.size: 
             emit.func.append(f'.L{env.return_label}:')
         if type(self.type) is not Struct and self.max_args is not None and self.max_args > 0 and self.type.size:
-            emit.inst(Op.MOV, Reg.A, regs[min(self.max_args, 3)])
+            emit.inst(Op.MOV, Reg.A, regs[min(self.max_args, 2)])
         if self.space+self.stack:
             emit.inst(Op.ADD, Reg.SP, self.space+self.stack)
         push = list(map(Reg, range(max(len(self.params), self.type.size), regs.max+1))) 
@@ -782,7 +784,8 @@ class Switch(Statement):
         labels = []
         for case in self.cases:
             labels.append(env.next_label())
-            emit.inst(Op.CMP, regs[n], case.const.num_reduce(n))
+            # case.const.compare(n, labels[-1])
+            emit.inst(Op.CMP, regs[n], case.const.num_reduce(n+1))
             emit.jump(Cond.JEQ, f'.L{labels[-1]}')
         if self.default:
             default = env.next_label()
