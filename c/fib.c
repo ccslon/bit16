@@ -20,11 +20,9 @@ int dofib(const int n, const int a, const int b) {
 int tailfib(const int n) {
     return dofib(n, 0, 1);
 }
-
 void main() {
     int i;
     printf("Fib!\n");
-    for (i = 1; i <= 10; i++) {
-        printf("%d\n", tailfib(i));
-    }
+    for (i = 1; i <= 10; i++)
+        printf("%d\n", tailfib(i));    
 }

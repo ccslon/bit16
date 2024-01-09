@@ -10,18 +10,17 @@ int fputc(char c, FILE* stream) {
     return 0;
 }
 int putchar(char c) {
-    fputc(c, &stdout);
-    return 0;
+    return fputc(c, &stdout);
 }
-int fputs(const char* str, FILE* stream) {
-    while (*str != '\0') {
-        fputc(*str, stream);
-        str++;
+int fputs(const char* s, FILE* stream) {
+    while (*s != '\0') {
+        fputc(*s, stream);
+        s++;
     }
     return 0;
 }
-int puts(const char* str) {
-    fputs(str, &stdout);
+int puts(const char* s) {
+    fputs(s, &stdout);
     putchar('\n');
     return 0;
 }
@@ -32,19 +31,31 @@ void printd(int n) {
     }
     int div = 0;
     int mod = n;
+    while (mod >= 10000) {
+        mod -= 10000;
+        div += 1000;
+    }
+    while (mod >= 1000) {
+        mod -= 1000;
+        div += 100;
+    }
+    while (mod >= 100) {
+        mod -= 100;
+        div += 10;
+    }
     while (mod >= 10) { // "division"
         mod -= 10;
         div++;
     }
-    if (div) 
+    if (div)
         printd(div);
     putchar(mod + '0');
 }
-void printf(char* fmt, ...) {
+void printf(const char* format, ...) {
     int* ap;
     (ap = _VARLIST_);
     char* c;
-    for (c = fmt; *c; c++) {
+    for (c = format; *c; c++) {
         if (*c == '%') {
             switch (*++c) {
                 case 'd': {
@@ -52,7 +63,7 @@ void printf(char* fmt, ...) {
                     break;
                 }
                 case 's': {
-                    fputs(((char*)*ap++), &stdout);
+                     printf(((char*)*ap++));
                     break;
                 }
                 default: putchar(*c);

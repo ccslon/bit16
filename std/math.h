@@ -1,8 +1,8 @@
-int pow(int base, int exp) {
-    int pow = 1;
-    while (exp > 0) {
-        pow *= base;
-        exp--;
+int pow(int b, int e) {
+    int p = 1;
+    while (e > 0) {
+        p *= b;
+        e--;
     }
-    return pow;
+    return p;
 }
