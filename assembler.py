@@ -80,6 +80,8 @@ class Assembler:
     def imm_char(self, rd, value):
         self.new_inst(Imm, rd)
         self.new_imm_char(value)
+    def unary(self, op, rd):
+        self.new_inst(Inst1, op, rd, rd)
     def inst1(self, op, rd, rs):
         self.new_inst(Inst1, op, rd, rs)
     def inst2(self, op, rd, const6):
@@ -162,7 +164,7 @@ class Assembler:
                     elif self.match('ld', 'reg', ',', '=', 'label'):
                         self.imm(*self.values())
                     elif self.match('op', 'reg'):
-                        self.inst1(*self.values(), Reg.A)
+                        self.unary(*self.values())
                     elif self.match('op', 'reg', ',', 'reg'):                    
                         self.inst1(*self.values())
                     elif self.match('op', 'reg', ',', 'const'):
