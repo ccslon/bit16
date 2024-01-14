@@ -78,7 +78,7 @@ class Data:
 
 class Char(Data):
     def __init__(self, char):
-        self.str = INV_ESCAPE.get(char, char)
+        self.str = f"'{INV_ESCAPE.get(char, char)}'"
         char = ESCAPE.get(char, char)
         assert 0 <= ord(char) < 128
         self._dec = 0,ord(char)
