@@ -4,3 +4,4 @@ bkp/
 c/*.bit16
 tests/*.bit16
 *.pyc
+*.s
