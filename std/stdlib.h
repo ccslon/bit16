@@ -14,29 +14,43 @@ div_t div(int num, int den) {
     ans.rem = num;
     return ans;
 }
-int abs(int num) {
-    if (num < 0) return -num;
-    return num;
+int abs(int n) {
+    if (n < 0) return -n;
+    return n;
 }
-//bsearch(...)
+int bsearch(int x, int* v, int n) {
+    int low = 0;
+    int mid;
+    int high = n - 1;
+    while (low <= high) {
+        mid = low + ((high - low) >> 1);
+        if (x < v[mid])
+            high = mid - 1;
+        else if (x > v[mid]) 
+            low = mid + 1;
+        else
+            return mid;
+    }
+    return -1;
+}
 void swap(int* v, int i, int j) {
     int t;
     t = v[i];
     v[i] = v[j];
     v[j] = t;
 }
-void qsort(int* v, int l, int r) {
-    int i; int t;
-    if (l >= r)
+void qsort(int* v, int left, int right) {
+    int i; int last;
+    if (left >= right)
         return;
-    swap(v, l, (l + r) >> 1); // (l+r) / 2 
-    t = l;
-    for (i = l+1; i <= r; i++)
-        if (v[i] < v[l])
-            swap(v, ++t, i);
-    swap(v, l, t);
-    qsort(v, l, t-1);
-    qsort(v, t+1, r);
+    swap(v, left, (left + right) >> 1); // (l+r) / 2 
+    last = left;
+    for (i = left+1; i <= right; i++)
+        if (v[i] < v[left])
+            swap(v, ++last, i);
+    swap(v, left, last);
+    qsort(v, left, last-1);
+    qsort(v, last+1, right);
 }
 int next = 0;
 int rand() {

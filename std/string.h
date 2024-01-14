@@ -39,3 +39,15 @@ int strcmp(const char* s, const char* t) {
             return 0;
     return s[i] - t[i];
 }
+char* strchr(const char* s, char c) {
+
+}
+char* strrchr(const char* s, char c) {
+
+}
+void memcpy(char* s, const char* t, int n) {
+
+}
+int memcmp(const char* s, const char* t, int n) {
+    
+}
