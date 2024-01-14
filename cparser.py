@@ -380,6 +380,7 @@ class CParser:
             statement = For(init, cond, step, self.statement())
         
         elif self.peek('return'):
+            self.returns = True
             statement = Return(next(self))
             if not self.accept(';'):
                 statement.expr = self.expr()
@@ -516,7 +517,7 @@ class CParser:
                     if id.lexeme == 'main':
                         program.insert(0, Main(block, self.space, stack))
                     else:
-                        program.append(Defn(type, id, params, block, self.calls, self.space, stack))
+                        program.append(Defn(type, id, params, block, self.returns, self.calls, self.space, stack))
                 else:                                   #Global
                     while self.accept('['):
                         type = Array(type, Num(self.expect('num')))
@@ -535,6 +536,7 @@ class CParser:
     
     def begin_func(self):
         self.space = 0
+        self.returns = False
         self.calls = None
         self.scope = None
         self.stack = []

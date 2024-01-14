@@ -583,22 +583,22 @@ class Params(UserList, Expr):
                 emit.store(regs[i], Reg.SP, i, param.token.lexeme)
     
 class Defn(Expr):
-    def __init__(self, type, id, params, block, max_args, space, stack):
+    def __init__(self, type, id, params, block, returns, max_args, space, stack):
         super().__init__(type, id)
-        self.params, self.block, self.max_args, self.space, self.stack = params, block, max_args, space, stack
+        self.params, self.block, self.returns, self.max_args, self.space, self.stack = params, block, returns, max_args, space, stack
     def generate(self):
         emit.begin_func()
         regs.clear()
         env.space = self.space
         if self.space+self.stack:
             emit.inst(Op.SUB, Reg.SP, self.space+self.stack)
-        if self.type.size: 
+        if self.type.size or self.returns: 
             env.return_label = env.next_label()
         if self.params.va_list:
             self.params.va_list.store(Reg.C)            
         self.params.generate()
         self.block.generate(0 if self.max_args is None else min(self.max_args, 2))
-        if self.type.size: 
+        if self.type.size or self.returns:
             emit.func.append(f'.L{env.return_label}:')
         if type(self.type) is not Struct and self.max_args is not None and self.max_args > 0 and self.type.size:
             emit.inst(Op.MOV, Reg.A, regs[min(self.max_args, 2)])
