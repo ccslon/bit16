@@ -21,6 +21,8 @@ TODO
 [ ] Enums
 [X] peekn
 [X] Labels and goto
+[ ] Division/Modulo
+[ ] Different calling convention
 [ ] Typedef
 [ ] Error handling
 [X] Generate vs Reduce

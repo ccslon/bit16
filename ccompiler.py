@@ -31,11 +31,11 @@ def ccompile(file_name, sflag=False, fflag=True, iflag=False):
         print("Wrong file type")
 
 if __name__ == '__main__':
-    # ccompile('hello.c', sflag=True, oflag=False)
-    # ccompile('tests//var.c', sflag=True, fflag=False, iflag=False)
+    ccompile('tests//fib.c', sflag=True, fflag=False, iflag=False)
     # ccompile('tests//globs.c')
-    ccompile('std//ctype.h', sflag=True, fflag=False)
+    # ccompile('std//stdio.h')
+    # ccompile('std//stdlib.h', sflag=True, fflag=False)
     # ccompile('c//strcat.c')
-    # ccompile('c//var.c')
-    # ccompile('c//test.c', sflag=True, fflag=False)
-    # ccompile('c//var.c', sflag=True, fflag=False, iflag=True)
+    # ccompile('c//bsearch.c')
+    # ccompile('c//calling.c', sflag=True, fflag=True)
+    # ccompile('c//fib.c', sflag=True, fflag=False, iflag=True)

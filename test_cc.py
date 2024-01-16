@@ -166,14 +166,14 @@ fib2:
   JEQ .L7
   CMP B, 2
   JEQ .L8
-  JR .L6
+  JR .L9
 .L7:
   MOV B, 0
   JR .L4
 .L8:
   MOV B, 1
   JR .L4
-.L6:
+.L9:
   LD B, [SP, 0] ; n
   SUB B, 1
   MOV A, B
@@ -187,6 +187,7 @@ fib2:
   ADD B, C
   JR .L4
 .L4:
+.L6:
   MOV A, B
   ADD SP, 1
   POP PC, B, C
@@ -735,7 +736,6 @@ class TestCompiler(TestCase):
         self.code_eq_asm('getset2.c', GETSET2_ASM)
     
     def test_calls(self):
-        self.maxDiff = None
         self.code_eq_asm('calls.c', CALLS_ASM)
         
     # def test_hello(self):
@@ -743,11 +743,9 @@ class TestCompiler(TestCase):
     #     self.code_eq_asm('hello.c', HELLO_ASM)
         
     def test_array(self):
-        self.maxDiff = None
         self.code_eq_asm('array.c', ARRAY_ASM)
         
     def test_structs(self):
-        self.maxDiff = None
         self.code_eq_asm('structs.c', STRUCTS_ASM)
         
     def test_glob_struct(self):
