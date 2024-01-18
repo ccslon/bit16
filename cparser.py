@@ -93,6 +93,8 @@ class CParser:
                 if self.calls is None:
                     self.calls = 0
                 self.calls = max(self.calls, len(postfix.args))
+                # if len(postfix.args) > 2:
+                #     self.args.append
             elif self.peek('++','--'):
                     postfix = Post(next(self), postfix)
             else:
@@ -150,7 +152,7 @@ class CParser:
     
     def specif(self):
         '''
-        TYPE_SPEC -> (type|(('struct'|'union') id))
+        TYPE_SPEC -> type|('struct'|'union') id
         '''
         if self.peek('type'):
             specif = Type(next(self).lexeme)
@@ -515,9 +517,9 @@ class CParser:
                     block = self.block()
                     self.end_func()
                     self.expect('}')
-                    stack = 0 if self.calls is None or self.calls < 3 else self.calls-1
+                    stack = 0 if self.calls is None or self.calls < 3 else self.calls
                     if id.lexeme == 'main':
-                        program.insert(0, Main(block, self.space, stack))
+                        program.insert(0, Main(block, self.calls, self.space, stack))
                     else:
                         program.append(Defn(type, id, params, block, self.returns, self.calls, self.space, stack))
                 else:                                   #Global
@@ -540,6 +542,7 @@ class CParser:
         self.space = 0
         self.returns = False
         self.calls = None
+        self.args = []
         self.scope = None
         self.stack = []
         self.begin_scope()

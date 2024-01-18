@@ -34,7 +34,7 @@ class LexerBase(metaclass=MetaLexer):
 
 class CLexer(LexerBase):
     
-    RE_num = r'0x[0-9a-f]+|0b[01]+|\d+|NULL'
+    RE_num = r'0x[0-9a-f]+|0b[01]+|\d+|\b(NULL)\b'
     RE_char = r"'\\?[^']'"
     RE_string = r'"[^"]*"'
     def RE_eof(self, match):

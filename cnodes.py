@@ -71,6 +71,10 @@ class Emitter:
         self.asm.append(f'{name}: space {size}')
     def glob(self, name, value):
         self.asm.append(f'{name}: {value}')
+    def push(self, reg):
+        self.add(f'PUSH {reg.name}')
+    def pop(self, reg):
+        self.add(f'POP {reg.name}')
     def pushm(self, lr, *regs):
         if lr:
             regs = (Reg.LR,) + regs
@@ -574,10 +578,9 @@ class List(UserList, Expr):
 class Params(UserList, Expr):
     def generate(self):
         if len(self) > 2 or self.va_list:
-            emit.store(Reg.A, Reg.SP, 0, self[0].token.lexeme)
-            for i, param in enumerate(self[1:]):
-                emit.load(Reg.C, Reg.B, i)
-                emit.store(Reg.C, Reg.SP, i+1, param.token.lexeme)
+            for i, param in enumerate(self):
+                emit.load(Reg.B, Reg.A, i)
+                emit.store(Reg.B, Reg.SP, i, param.token.lexeme)
         else:
             for i, param in enumerate(self[:2]):
                 emit.store(regs[i], Reg.SP, i, param.token.lexeme)
@@ -595,7 +598,7 @@ class Defn(Expr):
         if self.type.size or self.returns: 
             env.return_label = env.next_label()
         if self.params.va_list:
-            self.params.va_list.store(Reg.C)            
+            self.params.va_list.store(Reg.B)            
         self.params.generate()
         self.block.generate(0 if self.max_args is None else min(self.max_args, 2))
         if self.type.size or self.returns:
@@ -613,14 +616,14 @@ class Defn(Expr):
         emit.end_func()
 
 class Main(Expr):
-    def __init__(self, block, space, stack):
-        self.block, self.space, self.stack = block, space, stack
+    def __init__(self, block, max_args, space, stack):
+        self.block, self.max_args, self.space, self.stack = block, max_args, space, stack
     def generate(self):
         emit.begin_func()
         env.space = self.space
         if self.space+self.stack:
             emit.inst(Op.SUB, Reg.SP, self.space+self.stack)
-        self.block.generate(0)
+        self.block.generate(0 if self.max_args is None else min(self.max_args, 2))
         if self.space+self.stack:
             emit.inst(Op.ADD, Reg.SP, self.space+self.stack)
         emit.halt()
@@ -692,19 +695,17 @@ class SubScr(Access):
 class Args(UserList, Expr):
     def generate(self, n, is_var):
         if len(self) > 2 or is_var:
-            # self[0].reduce(Reg.D if is_var else Reg.A)
-            emit.inst4(Op.ADD, Reg.B, Reg.SP, env.space if env.space < 7 else print("WARNING: too much stack space"))
-            for i, arg in enumerate(self[1:]):
-                arg.reduce(Reg.C)
-                emit.store(Reg.C, Reg.B, i)
-            self[0].reduce(Reg.C)
-            emit.inst(Op.MOV, Reg.A, Reg.C)
+            emit.inst4(Op.ADD, regs[n], Reg.SP, env.space if env.space < 8 else print("WARNING: too much stack space"))
+            for i, arg in enumerate(self):
+                arg.reduce(n+1)
+                emit.store(regs[n+1], regs[n], i)
+                
         else:
             for i, arg in enumerate(self):
                 arg.reduce(n+i)
-            if n > 0:
-                for i, arg in enumerate(self[:2]):
-                    emit.inst(Op.MOV, regs[i], regs[n+i])                
+        if n > 0:
+            for i, arg in enumerate(self[:2]):
+                emit.inst(Op.MOV, regs[i], regs[n+i])          
 
 class Call(Expr):
     def __init__(self, func, args):
@@ -721,7 +722,7 @@ class Call(Expr):
     def generate(self, n):
         self.args.generate(n, self.func.params.va_list)
         if self.func.params.va_list:
-            emit.inst4(Op.ADD, Reg.C, Reg.B, len(self.func.params) - 1)
+            emit.inst4(Op.ADD, Reg.B, Reg.A, len(self.func.params))
         emit.call(self.func.token.lexeme)
         if n > 0 and type(self.func.type) is not Struct:
             emit.inst(Op.MOV, regs[n], Reg.A)
