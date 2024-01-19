@@ -385,9 +385,11 @@ class CParser:
         
         elif self.peek('return'):
             self.returns = True
-            statement = Return(next(self))
-            if not self.accept(';'):
-                statement.expr = self.expr()
+            token = next(self)
+            if self.accept(';'):
+                statement = Return(token, None)
+            else:                
+                statement = Return(token, self.expr())
                 self.expect(';')
             
         elif self.accept('break'):
@@ -542,7 +544,6 @@ class CParser:
         self.space = 0
         self.returns = False
         self.calls = None
-        self.args = []
         self.scope = None
         self.stack = []
         self.begin_scope()

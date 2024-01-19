@@ -593,6 +593,7 @@ class Defn(Expr):
         emit.begin_func()
         regs.clear()
         env.space = self.space
+        env.func = self
         if self.space+self.stack:
             emit.inst(Op.SUB, Reg.SP, self.space+self.stack)
         if self.type.size or self.returns: 
@@ -709,11 +710,8 @@ class Args(UserList, Expr):
 
 class Call(Expr):
     def __init__(self, func, args):
-        if len(func.params) == len(args):
-            for i, arg in enumerate(args):
-                pass#assert func.params[i] == arg.type, f'Line {func.token.line_no}: Argument #{i+1} of {func.token.lexeme} {func.params[i]} != {arg.type}'
-        else:
-            pass #TODO error handle
+        for i, param in enumerate(func.params):
+            assert param.type == args[i].type, f'Line {func.token.line_no}: Argument #{i+1} of {func.token.lexeme} {param} != {args[i].type}'
         super().__init__(func.type, func.token)
         self.func, self.args = func, args
     def reduce(self, n):
@@ -728,11 +726,11 @@ class Call(Expr):
             emit.inst(Op.MOV, regs[n], Reg.A)
 
 class Return(Expr):
-    def __init__(self, token):
-        super().__init__(Type('void'), token)
-        self.expr = None
+    def __init__(self, token, expr):
+        super().__init__(Type('void') if expr is None else expr.type, token)
+        self.expr = expr
     def generate(self, n):
-        # TODO assert type == func.type, f'{self.expr.type} != {func.type} in {env.func.id.name}'       
+        assert env.func.type == self.type, f'Line {self.token.line_no}: {env.func.type} != {self.type} in {env.func.id.name}'       
         if self.expr:
             self.expr.ret(n)
         emit.jump(Cond.JR, f'.L{env.return_label}')
