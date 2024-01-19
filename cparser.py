@@ -6,7 +6,7 @@ Created on Mon Jul  3 19:47:39 2023
 """
 
 import clexer
-from cnodes import Program, Main, Defn, List, Params, Block, Label, Goto, Break, Continue, For, Do, While, Switch, Case, If, Statement, Return, Func, Glob, Attr, Local, Assign, Condition, Logic, Compare, Binary, Array, Struct, Pointer, Const, Type, Pre, Cast, SizeOf, Deref, AddrOf, Not, Unary, Args, Call, Arrow, SubScr, Dot, Post, String, Char, Num, Frame
+from cnodes import Program, Main, Defn, List, Params, Block, Label, Goto, Break, Continue, For, Do, While, Switch, Case, If, Statement, Return, Func, Glob, Attr, Param, Local, Assign, Condition, Logic, Compare, Binary, Array, Struct, Pointer, Const, Type, Pre, Cast, SizeOf, Deref, AddrOf, Not, Unary, Args, Call, Arrow, SubScr, Dot, Post, String, Char, Num, Frame
 
 '''
 TODO
@@ -45,7 +45,9 @@ class Scope(Frame):
 class CParser:
     
     def resolve(self, name):
-        if name in self.scope:
+        if name in self.param_scope:
+            return self.param_scope[name]
+        elif name in self.scope:
             return self.scope[name]
         elif name in self.functions:
             return self.functions[name]
@@ -461,22 +463,35 @@ class CParser:
                 init.append(self.const_expr())
         return init
 
+    def param(self):
+        type = self.abstract()
+        id = self.expect('id')
+        while self.accept('['):
+            type = Pointer(type)
+            self.expect(']')
+        param = Param(type, id)
+        self.param_scope[id.lexeme] = param
+        return param
+
     def params(self):
         '''
         PARAMS -> [DECL {',' DECL}]
         '''
         params = Params()
         params.va_list = None
-        if self.peek('const','type','struct','union'):    
-            params.append(self.decl())
+        if self.peek('const','type','struct','union'):
+            params.append(self.param())
             while self.accept(','):
-                if self.accept('...'):
-                    id = clexer.Token('id','_VARLIST_',0)
-                    local = Local(Pointer(Type('void')), id)
-                    self.scope[id.lexeme] = local
-                    params.va_list = local
-                    break
-                params.append(self.decl())
+                params.append(self.param())
+        #     params.append(self.decl())
+        #     while self.accept(','):
+        #         if self.accept('...'):
+        #             id = clexer.Token('id','_VARLIST_',0)
+        #             local = Local(Pointer(Type('void')), id)
+        #             self.scope[id.lexeme] = local
+        #             params.va_list = local
+        #             break
+        #         params.append(self.decl())
         return params
 
     def block(self):
@@ -545,6 +560,7 @@ class CParser:
         self.returns = False
         self.calls = None
         self.scope = None
+        self.param_scope = Scope()
         self.stack = []
         self.begin_scope()
         

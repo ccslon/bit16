@@ -19,7 +19,9 @@ class Regs:
     def __getitem__(self, item):
         if item == 'SP':
             return Reg.SP
-        if item > Reg.E:
+        if item == 'BP':
+            return Reg.E
+        if item > Reg.D:
             print('\n'.join(emit.asm))
             raise SyntaxError('Not enough registers =(')
         self.max = max(self.max, item)
@@ -57,16 +59,13 @@ class Emitter:
     def clear(self):
         self.labels = []
         self.asm = []
-        self.func = []
-    def begin_func(self):
-        self.func = []
-    def end_func(self):
-        self.asm.extend(self.func)
+        self.preview = False
     def add(self, asm):
-        for label in self.labels:
-            self.func.append(f'{label}:')
-        self.func.append(f'  {asm}')
-        self.labels.clear()
+        if not self.preview:
+            for label in self.labels:
+                self.asm.append(f'{label}:')
+            self.asm.append(f'  {asm}')
+            self.labels.clear()
     def space(self, name, size):
         self.asm.append(f'{name}: space {size}')
     def glob(self, name, value):
@@ -79,12 +78,12 @@ class Emitter:
         if lr:
             regs = (Reg.LR,) + regs
         if regs:
-            self.func.insert(0, '  PUSH '+', '.join(reg.name for reg in regs))
+            self.asm.append('  PUSH '+', '.join(reg.name for reg in regs+(Reg.E,)))
     def popm(self, pc, *regs):
         if pc:
             regs = (Reg.PC,) + regs
         if regs:
-            self.add('POP '+', '.join(reg.name for reg in regs))
+            self.add('POP '+', '.join(reg.name for reg in regs+(Reg.E,)))
     def call(self, label):
         self.add(f'CALL {label}')
     def ret(self):
@@ -520,19 +519,29 @@ class Assign(Expr):
         self.left.store(n)
     
 class Block(UserList, Expr):
+    def preview(self, n):
+        emit.preview = True
+        for statement in self:
+            statement.generate(n)
+        emit.preview = False
+        emit.labels.clear()
+        return regs.max
     def generate(self, n):
         for statement in self:
             statement.generate(n)
 
 class Local(Expr):
     def store(self, n):
-        return self.type.store(self, n, 'SP')
+        return self.type.store(self, n, 'BP')
     def reduce(self, n):
-        return self.type.reduce(self, n, 'SP')
+        return self.type.reduce(self, n, 'BP')
     def address(self, n):
-        return self.type.address(self, n, 'SP')
+        return self.type.address(self, n, 'BP')
     def ret(self, n):
-        self.type.ret(self, n, 'SP')    
+        self.type.ret(self, n, 'BP')
+
+class Param(Local):
+    pass
 
 class Attr(Local):
     def store(self, n):
@@ -576,6 +585,8 @@ class List(UserList, Expr):
         return regs[0]
 
 class Params(UserList, Expr):
+    # def append(self, param):
+    #     self[param.id.lexeme] = param
     def generate(self):
         if len(self) > 2 or self.va_list:
             for i, param in enumerate(self):
@@ -590,45 +601,51 @@ class Defn(Expr):
         super().__init__(type, id)
         self.params, self.block, self.returns, self.max_args, self.space, self.stack = params, block, returns, max_args, space, stack
     def generate(self):
-        emit.begin_func()
         regs.clear()
         env.space = self.space
         env.func = self
-        if self.space+self.stack:
-            emit.inst(Op.SUB, Reg.SP, self.space+self.stack)
+        emit.asm.append(f'{self.token.lexeme}:')
         if self.type.size or self.returns: 
             env.return_label = env.next_label()
+        self.block.preview(0)
+        # push = list(map(Reg, range(max(len(self.params), self.type.size), regs.max+1)))
+        push = list(map(Reg, range(self.type.size, regs.max+1)))
+        param_offset = (self.max_args is not None) + len(push) + 1 #1 for LR, push, 1 for E
+        for param in self.params:
+            param.location = self.space + param_offset + len(self.params) - param.location
+        if self.space:
+            emit.inst(Op.SUB, Reg.SP, self.space)
+            emit.inst(Op.MOV, Reg.E, Reg.SP)
         if self.params.va_list:
-            self.params.va_list.store(Reg.B)            
-        self.params.generate()
-        self.block.generate(0 if self.max_args is None else min(self.max_args, 2))
-        if self.type.size or self.returns:
-            emit.func.append(f'.L{env.return_label}:')
-        if type(self.type) is not Struct and self.max_args is not None and self.max_args > 0 and self.type.size:
-            emit.inst(Op.MOV, Reg.A, regs[min(self.max_args, 2)])
-        if self.space+self.stack:
-            emit.inst(Op.ADD, Reg.SP, self.space+self.stack)
-        push = list(map(Reg, range(max(len(self.params), self.type.size), regs.max+1))) 
+            self.params.va_list.store(Reg.B)
+            
         emit.pushm(self.max_args is not None, *push)
+        # self.params.generate()
+        self.block.generate(0)# if self.max_args is None else min(self.max_args, 2))
+        if self.type.size or self.returns:
+            emit.asm.append(f'.L{env.return_label}:')
+        # if type(self.type) is not Struct and self.max_args is not None and self.max_args > 0 and self.type.size:
+        #     emit.inst(Op.MOV, Reg.A, regs[min(self.max_args, 2)])
+        if self.space:
+            emit.inst(Op.MOV, Reg.SP, Reg.E)
+            emit.inst(Op.ADD, Reg.SP, self.space)
+        
         emit.popm(self.max_args is not None, *push)
-        emit.func.insert(0, f'{self.token.lexeme}:')
+        
         if self.max_args is None:
             emit.ret()
-        emit.end_func()
 
 class Main(Expr):
     def __init__(self, block, max_args, space, stack):
         self.block, self.max_args, self.space, self.stack = block, max_args, space, stack
     def generate(self):
-        emit.begin_func()
         env.space = self.space
         if self.space+self.stack:
             emit.inst(Op.SUB, Reg.SP, self.space+self.stack)
-        self.block.generate(0 if self.max_args is None else min(self.max_args, 2))
+        self.block.generate(0)# if self.max_args is None else min(self.max_args, 2))
         if self.space+self.stack:
             emit.inst(Op.ADD, Reg.SP, self.space+self.stack)
         emit.halt()
-        emit.end_func()
 
 class Post(OpExpr):
     OP = {'++':Op.ADD,
@@ -695,18 +712,21 @@ class SubScr(Access):
 
 class Args(UserList, Expr):
     def generate(self, n, is_var):
-        if len(self) > 2 or is_var:
-            emit.inst4(Op.ADD, regs[n], Reg.SP, env.space if env.space < 8 else print("WARNING: too much stack space"))
-            for i, arg in enumerate(self):
-                arg.reduce(n+1)
-                emit.store(regs[n+1], regs[n], i)
+        for i, arg in enumerate(self):
+            arg.reduce(n)
+            emit.push(regs[n])#emit.store(regs[n+1], regs[n], i)
+        # if len(self) > 2 or is_var:
+        #     emit.inst4(Op.ADD, regs[n], Reg.SP, env.space if env.space < 8 else print("WARNING: too much stack space"))
+        #     for i, arg in enumerate(self):
+        #         arg.reduce(n+1)
+        #         emit.store(regs[n+1], regs[n], i)
                 
-        else:
-            for i, arg in enumerate(self):
-                arg.reduce(n+i)
-        if n > 0:
-            for i, arg in enumerate(self[:2]):
-                emit.inst(Op.MOV, regs[i], regs[n+i])          
+        # else:
+        #     for i, arg in enumerate(self):
+        #         arg.reduce(n+i)
+        # if n > 0:
+        #     for i, arg in enumerate(self[:2]):
+        #         emit.inst(Op.MOV, regs[i], regs[n+i])          
 
 class Call(Expr):
     def __init__(self, func, args):
@@ -719,11 +739,11 @@ class Call(Expr):
         return regs[n]
     def generate(self, n):
         self.args.generate(n, self.func.params.va_list)
-        if self.func.params.va_list:
-            emit.inst4(Op.ADD, Reg.B, Reg.A, len(self.func.params))
+        # if self.func.params.va_list:
+        #     emit.inst4(Op.ADD, Reg.B, Reg.A, len(self.func.params))
         emit.call(self.func.token.lexeme)
-        if n > 0 and type(self.func.type) is not Struct:
-            emit.inst(Op.MOV, regs[n], Reg.A)
+        # if n > 0 and type(self.func.type) is not Struct:
+        #     emit.inst(Op.MOV, regs[n], Reg.A)
 
 class Return(Expr):
     def __init__(self, token, expr):
