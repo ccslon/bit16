@@ -14,7 +14,7 @@ class Reg(IntEnum):
     B = 1
     C = 2
     D = 3
-    E = 4
+    FP = 4
     SP = 5
     LR = 6
     PC = 7
