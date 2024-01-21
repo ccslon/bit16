@@ -2,6 +2,5 @@ docs/
 __pycache__/
 bkp/
 *.bit16
-tests/*.bit16
 *.pyc
 *.s
