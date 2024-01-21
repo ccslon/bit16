@@ -557,7 +557,7 @@
     </comp>
     <comp lib="4" loc="(230,1150)" name="Register">
       <a name="appearance" val="logisim_evolution"/>
-      <a name="label" val="E"/>
+      <a name="label" val="FP"/>
       <a name="trigger" val="falling"/>
       <a name="width" val="16"/>
     </comp>
