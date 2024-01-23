@@ -4,9 +4,10 @@ struct _FILE_ {
     int read;
     int write;
 };
-FILE stdout = {0x7f00, 0, 0};
+FILE stdout = {(int*)0x7f00, 0, 0};
 int fputc(char c, FILE* stream) {
-    stream->buffer[stream->write++] = c;
+    stream->buffer[stream->write] = c;
+    stream->write++;
     return 0;
 }
 int putchar(char c) {
@@ -53,8 +54,8 @@ void printd(int n) {
 }
 void printf(const char* format, ...) {
     int* ap;
-    (ap = _VARLIST_);
-    char* c;
+    (ap = (int*)&(format)+1);
+    const char* c;
     for (c = format; *c; c++) {
         if (*c == '%') {
             switch (*++c) {
@@ -64,6 +65,10 @@ void printf(const char* format, ...) {
                 }
                 case 's': {
                      printf(((char*)*ap++));
+                    break;
+                }
+                case 'c': {
+                    putchar(((char)*ap++));
                     break;
                 }
                 default: putchar(*c);
