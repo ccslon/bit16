@@ -94,9 +94,8 @@ class CParser:
                 self.expect(')')
                 if self.calls is None:
                     self.calls = 0
-                self.calls = max(self.calls, len(postfix.args))
-                # if len(postfix.args) > 2:
-                #     self.args.append
+                if not postfix.func.params.on_stack():
+                    self.calls = max(self.calls, len(postfix.args))
             elif self.peek('++','--'):
                     postfix = Post(next(self), postfix)
             else:
@@ -470,7 +469,6 @@ class CParser:
             type = Pointer(type)
             self.expect(']')
         param = Param(type, id)
-        self.param_scope[id.lexeme] = param
         return param
 
     def params(self):
@@ -478,20 +476,20 @@ class CParser:
         PARAMS -> [DECL {',' DECL}]
         '''
         params = Params()
-        params.va_list = None
-        if self.peek('const','type','struct','union'):
+        params.variable = False
+        if not self.peek(')'):
             params.append(self.param())
             while self.accept(','):
-                params.append(self.param())
-        #     params.append(self.decl())
-        #     while self.accept(','):
-        #         if self.accept('...'):
-        #             id = clexer.Token('id','_VARLIST_',0)
-        #             local = Local(Pointer(Type('void')), id)
-        #             self.scope[id.lexeme] = local
-        #             params.va_list = local
-        #             break
-        #         params.append(self.decl())
+                if self.accept('...'):
+                    params.variable = True
+                    break
+                params.append(self.param())                
+        if params.on_stack():
+            for param in params:
+                self.param_scope[param.token.lexeme] = param
+        else:
+            for param in params:
+                self.scope[param.token.lexeme] = param            
         return params
 
     def block(self):
@@ -534,11 +532,10 @@ class CParser:
                     block = self.block()
                     self.end_func()
                     self.expect('}')
-                    stack = 0 if self.calls is None or self.calls < 3 else self.calls
                     if id.lexeme == 'main':
-                        program.insert(0, Main(block, self.calls, self.space, stack))
+                        program.insert(0, Main(block, self.calls, self.space))
                     else:
-                        program.append(Defn(type, id, params, block, self.returns, self.calls, self.space, stack))
+                        program.append(Defn(type, id, params, block, self.returns, self.calls, self.space))
                 else:                                   #Global
                     while self.accept('['):
                         type = Array(type, Num(self.expect('num')))

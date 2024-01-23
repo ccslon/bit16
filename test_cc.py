@@ -10,109 +10,134 @@ import cpreproc
 import cparser
 
 MAIN_ASM = '''
+main:
+  MOV FP, SP
+  MOV SP, FP
   HALT
 '''
 CONST_ASM = '''
 foo:
-  PUSH A
+  PUSH A, FP
   SUB SP, 1
+  MOV FP, SP
   MOV A, 3
-  LD [SP, 0], A ; foo
+  LD [FP, 0], A ; foo
+  MOV SP, FP
   ADD SP, 1
-  POP A
+  POP A, FP
   RET
 '''
 RCONST_ASM = '''
 rconst:
-  PUSH A, B
+  PUSH A, B, FP
   SUB SP, 2
+  MOV FP, SP
   MOV A, 3
-  LD [SP, 0], A ; foo
+  LD [FP, 0], A ; foo
   MOV A, 2
-  LD B, [SP, 0] ; foo
+  LD B, [FP, 0] ; foo
   SUB A, B
-  LD [SP, 1], A ; bar
+  LD [FP, 1], A ; bar
+  MOV SP, FP
   ADD SP, 2
-  POP A, B
+  POP A, B, FP
   RET
 '''
 MULTI_ASM = '''
 multi:
-  PUSH A, B
+  PUSH A, B, FP
   SUB SP, 3
+  MOV FP, SP
   MOV A, 3
-  LD [SP, 0], A ; foo
+  LD [FP, 0], A ; foo
   MOV A, 2
-  LD B, [SP, 0] ; foo
+  LD B, [FP, 0] ; foo
   SUB A, B
-  LD [SP, 1], A ; bar
-  LD A, [SP, 1] ; bar
-  LD B, [SP, 0] ; foo
+  LD [FP, 1], A ; bar
+  LD A, [FP, 1] ; bar
+  LD B, [FP, 0] ; foo
   MUL B, 4
   ADD A, B
-  LD [SP, 2], A ; baz
+  LD [FP, 2], A ; baz
+  MOV SP, FP
   ADD SP, 3
-  POP A, B
+  POP A, B, FP
   RET
 '''
 PAREN_ASM = '''
 paren:
-  PUSH A, B
+  PUSH A, B, FP
   SUB SP, 4
+  MOV FP, SP
   MOV A, 3
-  LD [SP, 0], A ; foo
+  LD [FP, 0], A ; foo
   MOV A, 2
-  LD B, [SP, 0] ; foo
+  LD B, [FP, 0] ; foo
   SUB A, B
-  LD [SP, 1], A ; bar
-  LD A, [SP, 1] ; bar
-  LD B, [SP, 0] ; foo
+  LD [FP, 1], A ; bar
+  LD A, [FP, 1] ; bar
+  LD B, [FP, 0] ; foo
   MUL B, 4
   ADD A, B
-  LD [SP, 2], A ; baz
-  LD A, [SP, 0] ; foo
-  LD B, [SP, 1] ; bar
+  LD [FP, 2], A ; baz
+  LD A, [FP, 0] ; foo
+  LD B, [FP, 1] ; bar
   ADD A, B
   NEG A
-  LD B, [SP, 2] ; baz
+  LD B, [FP, 2] ; baz
   ADD B, 10
   MUL A, B
-  LD [SP, 3], A ; bif
+  LD [FP, 3], A ; bif
+  MOV SP, FP
   ADD SP, 4
-  POP A, B
+  POP A, B, FP
   RET
 '''
 PARAMS_ASM = '''
-params:
-  SUB SP, 3
-  LD [SP, 0], A ; foo
-  LD C, [B, 0]
-  LD [SP, 1], C ; bar
-  LD C, [B, 1]
-  LD [SP, 2], C ; baz
-  LD A, [SP, 0] ; foo
-  LD B, [SP, 1] ; bar
-  ADD A, B
-  LD B, [SP, 2] ; baz
+params2:
+  PUSH FP
+  SUB SP, 2
+  MOV FP, SP
+  LD [FP, 0], A ; foo
+  LD [FP, 1], B ; bar
+  LD A, [FP, 0] ; foo
+  LD B, [FP, 1] ; bar
   ADD A, B
   JR .L0
 .L0:
+  MOV SP, FP
+  ADD SP, 2
+  POP FP
+  RET
+params3:
+  PUSH B, FP
+  MOV FP, SP
+  LD A, [FP, 2] ; foo
+  LD B, [FP, 3] ; bar
+  ADD A, B
+  LD B, [FP, 4] ; baz
+  ADD A, B
+  JR .L1
+.L1:
+  MOV SP, FP
+  POP B, FP
   ADD SP, 3
   RET
 '''
 FACT_ASM = '''
 fact:
-  PUSH LR, B, C
+  PUSH LR, B, C, FP
   SUB SP, 1
-  LD [SP, 0], A ; n
-  LD B, [SP, 0] ; n
+  MOV FP, SP
+  LD [FP, 0], A ; n
+  LD B, [FP, 0] ; n
   CMP B, 0
   JNE .L1
   MOV B, 1
   JR .L0
 .L1:
-  LD B, [SP, 0] ; n
-  LD C, [SP, 0] ; n
+  LD B, [FP, 0] ; n
+  LD C, [FP, 0] ; n
   SUB C, 1
   MOV A, C
   CALL fact
@@ -121,32 +146,34 @@ fact:
   JR .L0
 .L0:
   MOV A, B
+  MOV SP, FP
   ADD SP, 1
-  POP PC, B, C
+  POP PC, B, C, FP
 '''
 FIB_ASM = '''
 fib:
-  PUSH LR, B, C
+  PUSH LR, B, C, FP
   SUB SP, 1
-  LD [SP, 0], A ; n
-  LD B, [SP, 0] ; n
+  MOV FP, SP
+  LD [FP, 0], A ; n
+  LD B, [FP, 0] ; n
   CMP B, 1
   JNE .L2
   MOV B, 0
   JR .L0
 .L2:
-  LD B, [SP, 0] ; n
+  LD B, [FP, 0] ; n
   CMP B, 2
   JNE .L3
   MOV B, 1
   JR .L0
 .L3:
-  LD B, [SP, 0] ; n
+  LD B, [FP, 0] ; n
   SUB B, 1
   MOV A, B
   CALL fib
   MOV B, A
-  LD C, [SP, 0] ; n
+  LD C, [FP, 0] ; n
   SUB C, 2
   MOV A, C
   CALL fib
@@ -155,13 +182,15 @@ fib:
   JR .L0
 .L0:
   MOV A, B
+  MOV SP, FP
   ADD SP, 1
-  POP PC, B, C
+  POP PC, B, C, FP
 fib2:
-  PUSH LR, B, C
+  PUSH LR, B, C, FP
   SUB SP, 1
-  LD [SP, 0], A ; n
-  LD B, [SP, 0] ; n
+  MOV FP, SP
+  LD [FP, 0], A ; n
+  LD B, [FP, 0] ; n
   CMP B, 1
   JEQ .L7
   CMP B, 2
@@ -174,79 +203,84 @@ fib2:
   MOV B, 1
   JR .L4
 .L9:
-  LD B, [SP, 0] ; n
+  LD B, [FP, 0] ; n
   SUB B, 1
   MOV A, B
   CALL fib
   MOV B, A
-  LD C, [SP, 0] ; n
+  LD C, [FP, 0] ; n
   SUB C, 2
   MOV A, C
   CALL fib
   MOV C, A
   ADD B, C
   JR .L4
-.L4:
 .L6:
+.L4:
   MOV A, B
+  MOV SP, FP
   ADD SP, 1
-  POP PC, B, C
+  POP PC, B, C, FP
 '''
 SUM_ASM = '''
 sum:
-  PUSH B
+  PUSH B, FP
   SUB SP, 3
-  LD [SP, 0], A ; n
+  MOV FP, SP
+  LD [FP, 0], A ; n
   MOV A, 0
-  LD [SP, 1], A ; s
+  LD [FP, 1], A ; s
   MOV A, 0
-  LD [SP, 2], A ; i
+  LD [FP, 2], A ; i
 .L1:
-  LD A, [SP, 2] ; i
-  LD B, [SP, 0] ; n
+  LD A, [FP, 2] ; i
+  LD B, [FP, 0] ; n
   CMP A, B
   JGE .L2
-  LD A, [SP, 1] ; s
-  LD B, [SP, 2] ; i
+  LD A, [FP, 1] ; s
+  LD B, [FP, 2] ; i
   ADD A, B
-  LD [SP, 1], A ; s
-  LD A, [SP, 2] ; i
+  LD [FP, 1], A ; s
+  LD A, [FP, 2] ; i
   ADD B, A, 1
-  LD [SP, 2], B ; i
+  LD [FP, 2], B ; i
   JR .L1
 .L2:
-  LD A, [SP, 1] ; s
+  LD A, [FP, 1] ; s
   JR .L0
 .L0:
+  MOV SP, FP
   ADD SP, 3
-  POP B
+  POP B, FP
   RET
 '''
 GETSET_ASM = '''
 get:
+  PUSH FP
   SUB SP, 2
-  LD [SP, 0], A ; g
-  LD [SP, 1], B ; i
-  LD A, [SP, 0] ; g
-  LD B, [SP, 1] ; i
+  MOV FP, SP
+  LD [FP, 0], A ; g
+  LD [FP, 1], B ; i
+  LD A, [FP, 0] ; g
+  LD B, [FP, 1] ; i
   ADD A, B
   LD A, [A]
   JR .L0
 .L0:
+  MOV SP, FP
   ADD SP, 2
+  POP FP
   RET
 set:
-  SUB SP, 3
-  LD [SP, 0], A ; g
-  LD C, [B, 0]
-  LD [SP, 1], C ; i
-  LD C, [B, 1]
-  LD [SP, 2], C ; t
-  LD A, [SP, 2] ; t
-  LD B, [SP, 0] ; g
-  LD C, [SP, 1] ; i
+  PUSH A, B, C, FP
+  MOV FP, SP
+  LD A, [FP, 6] ; t
+  LD B, [FP, 4] ; g
+  LD C, [FP, 5] ; i
   ADD B, C
   LD [B], A
+  MOV SP, FP
+  POP A, B, C, FP
   ADD SP, 3
   RET
 '''
