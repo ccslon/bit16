@@ -94,20 +94,36 @@ paren:
   RET
 '''
 PARAMS_ASM = '''
-params2:
-  PUSH FP
-  SUB SP, 2
+params0:
+  PUSH A, FP
   MOV FP, SP
-  LD [FP, 0], A ; foo
-  LD [FP, 1], B ; bar
-  LD A, [FP, 0] ; foo
-  LD B, [FP, 1] ; bar
-  ADD A, B
+  MOV A, 0
   JR .L0
 .L0:
   MOV SP, FP
-  ADD SP, 2
+  POP A, FP
+  RET
+params1:
+  PUSH FP
+  MOV FP, SP
+  LD A, [FP, 1] ; foo
+  JR .L1
+.L1:
+  MOV SP, FP
   POP FP
+  ADD SP, 1
+  RET
+params2:
+  PUSH B, FP
+  MOV FP, SP
+  LD A, [FP, 2] ; foo
+  LD B, [FP, 3] ; bar
+  ADD A, B
+  JR .L2
+.L2:
+  MOV SP, FP
+  POP B, FP
+  ADD SP, 2
   RET
 params3:
   PUSH B, FP
@@ -117,8 +133,8 @@ params3:
   ADD A, B
   LD B, [FP, 4] ; baz
   ADD A, B
-  JR .L1
-.L1:
+  JR .L3
+.L3:
   MOV SP, FP
   POP B, FP
   ADD SP, 3
@@ -127,19 +143,17 @@ params3:
 FACT_ASM = '''
 fact:
   PUSH LR, B, C, FP
-  SUB SP, 1
   MOV FP, SP
-  LD [FP, 0], A ; n
-  LD B, [FP, 0] ; n
+  LD B, [FP, 4] ; n
   CMP B, 0
   JNE .L1
   MOV B, 1
   JR .L0
 .L1:
-  LD B, [FP, 0] ; n
-  LD C, [FP, 0] ; n
+  LD B, [FP, 4] ; n
+  LD C, [FP, 4] ; n
   SUB C, 1
-  MOV A, C
+  PUSH C
   CALL fact
   MOV C, A
   MUL B, C
@@ -147,8 +161,9 @@ fact:
 .L0:
   MOV A, B
   MOV SP, FP
+  POP LR, B, C, FP
   ADD SP, 1
-  POP PC, B, C, FP
+  RET
 '''
 FIB_ASM = '''
 fib:
@@ -225,51 +240,48 @@ fib2:
 SUM_ASM = '''
 sum:
   PUSH B, FP
-  SUB SP, 3
+  SUB SP, 2
   MOV FP, SP
-  LD [FP, 0], A ; n
   MOV A, 0
-  LD [FP, 1], A ; s
+  LD [FP, 0], A ; s
   MOV A, 0
-  LD [FP, 2], A ; i
+  LD [FP, 1], A ; i
 .L1:
-  LD A, [FP, 2] ; i
-  LD B, [FP, 0] ; n
+  LD A, [FP, 1] ; i
+  LD B, [FP, 4] ; n
   CMP A, B
   JGE .L2
-  LD A, [FP, 1] ; s
-  LD B, [FP, 2] ; i
+  LD A, [FP, 0] ; s
+  LD B, [FP, 1] ; i
   ADD A, B
-  LD [FP, 1], A ; s
-  LD A, [FP, 2] ; i
+  LD [FP, 0], A ; s
+  LD A, [FP, 1] ; i
   ADD B, A, 1
-  LD [FP, 2], B ; i
+  LD [FP, 1], B ; i
   JR .L1
 .L2:
-  LD A, [FP, 1] ; s
+  LD A, [FP, 0] ; s
   JR .L0
 .L0:
   MOV SP, FP
-  ADD SP, 3
+  ADD SP, 2
   POP B, FP
+  ADD SP, 1
   RET
 '''
 GETSET_ASM = '''
 get:
-  PUSH FP
-  SUB SP, 2
+  PUSH B, FP
   MOV FP, SP
-  LD [FP, 0], A ; g
-  LD [FP, 1], B ; i
-  LD A, [FP, 0] ; g
-  LD B, [FP, 1] ; i
+  LD A, [FP, 2] ; g
+  LD B, [FP, 3] ; i
   ADD A, B
   LD A, [A]
   JR .L0
 .L0:
   MOV SP, FP
+  POP B, FP
   ADD SP, 2
-  POP FP
   RET
 set:
   PUSH A, B, C, FP
@@ -325,53 +337,52 @@ set2:
 '''
 CALLS_ASM = '''
 baz:
-  SUB SP, 2
-  LD [SP, 0], A ; y
-  LD [SP, 1], B ; z
-  LD A, [SP, 0] ; y
-  LD B, [SP, 1] ; z
+  PUSH B, FP
+  MOV FP, SP
+  LD A, [FP, 2] ; y
+  LD B, [FP, 3] ; z
   MUL A, B
   JR .L0
 .L0:
+  MOV SP, FP
+  POP B, FP
   ADD SP, 2
   RET
 bar:
-  SUB SP, 2
-  LD [SP, 0], A ; x
-  LD [SP, 1], B ; y
-  LD A, [SP, 0] ; x
-  LD B, [SP, 1] ; y
+  PUSH B, FP
+  MOV FP, SP
+  LD A, [FP, 2] ; x
+  LD B, [FP, 3] ; y
   MUL A, B
   JR .L1
 .L1:
+  MOV SP, FP
+  POP B, FP
   ADD SP, 2
   RET
 foo:
-  PUSH LR, D, E
-  SUB SP, 3
-  LD [SP, 0], A ; x
-  LD C, [B, 0]
-  LD [SP, 1], C ; y
-  LD C, [B, 1]
-  LD [SP, 2], C ; z
-  LD C, [SP, 0] ; x
-  LD D, [SP, 1] ; y
-  MOV A, C
-  MOV B, D
+  PUSH LR, B, C, FP
+  MOV FP, SP
+  LD B, [FP, 5] ; y
+  PUSH B
+  LD B, [FP, 4] ; x
+  PUSH B
   CALL bar
-  MOV C, A
-  LD D, [SP, 1] ; y
-  LD E, [SP, 2] ; z
-  MOV A, D
-  MOV B, E
+  MOV B, A
+  LD C, [FP, 6] ; z
+  PUSH C
+  LD C, [FP, 5] ; y
+  PUSH C
   CALL baz
-  MOV D, A
-  ADD C, D
+  MOV C, A
+  ADD B, C
   JR .L2
 .L2:
-  MOV A, C
+  MOV A, B
+  MOV SP, FP
+  POP LR, B, C, FP
   ADD SP, 3
-  POP PC, D, E
+  RET
 '''
 HELLO_ASM = '''
 .S0: "Hello world!\\0"
@@ -426,22 +437,24 @@ puts:
 '''
 ARRAY_ASM = '''
 foo:
-  PUSH A, B, C, D
+  PUSH A, B, C, D, FP
   SUB SP, 9
+  MOV FP, SP
   MOV A, 2
-  LD [SP, 5], A ; i
+  LD [FP, 5], A ; i
   MOV A, 2
-  ADD B, SP, 0
-  LD C, [SP, 5] ; i
+  ADD B, FP, 0
+  LD C, [FP, 5] ; i
   ADD B, C
   LD [B], A
   MOV A, 1
   MOV B, 2
   MOV C, 3
-  ADD D, SP, 6
+  ADD D, FP, 6
   LDM D, {A, B, C}
+  MOV SP, FP
   ADD SP, 9
-  POP A, B, C, D
+  POP A, B, C, D, FP
   RET
 '''
 STRUCTS_ASM = '''

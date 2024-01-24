@@ -23,6 +23,7 @@ TODO
 [X] Labels and goto
 [ ] Division/Modulo
 [X] Different calling convention. Went with stdcall-like
+[ ] Fix void and void*
 [ ] Typedef
 [ ] Error handling
 [X] Generate vs Reduce

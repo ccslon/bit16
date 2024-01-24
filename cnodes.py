@@ -22,7 +22,7 @@ class Regs:
         elif item == 'FP':
             return Reg.FP
         elif item > Reg.D:
-            print('\n'.join(emit.asm))
+            # print('\n'.join(emit.asm))
             raise SyntaxError('Not enough registers =(')
         self.max = max(self.max, item)
         return Reg(item)
@@ -595,9 +595,7 @@ class List(UserList, Expr):
         return regs[0]
 
 class Params(UserList, Expr):
-    def generate(self):
-        for i, param in enumerate(self[:2]):
-            emit.store(regs[i], Reg.FP, i, param.token.lexeme)
+    pass
     
 class Defn(Expr):
     def __init__(self, type, id, params, block, returns, calls, space):
@@ -618,7 +616,6 @@ class Defn(Expr):
         if self.space:
             emit.inst(Op.SUB, Reg.SP, self.space)
         emit.inst(Op.MOV, Reg.FP, Reg.SP)
-        self.params.generate()
         #body
         self.block.generate(self.calls)
         #epilogue
@@ -630,7 +627,8 @@ class Defn(Expr):
         if self.space:
             emit.inst(Op.ADD, Reg.SP, self.space)
         emit.popm(self.calls, *push)
-        emit.inst(Op.ADD, Reg.SP, len(self.params))
+        if self.params:
+            emit.inst(Op.ADD, Reg.SP, len(self.params))
         emit.ret()
 
 class Main(Expr):
