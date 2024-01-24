@@ -227,7 +227,7 @@ class Assembler:
                         self.inst1(Op.MOV, Reg.PC, Reg.PC)
                     else:
                         self.error()                    
-        objects = []
+        objects = [([], Jump, (Cond.JNV, 0))]
         objects.extend(self.inst)
         objects.extend(self.data)
         return objects
