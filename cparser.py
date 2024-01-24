@@ -22,7 +22,7 @@ TODO
 [X] peekn
 [X] Labels and goto
 [ ] Division/Modulo
-[ ] Different calling convention
+[X] Different calling convention. Went with stdcall-like
 [ ] Typedef
 [ ] Error handling
 [X] Generate vs Reduce
@@ -92,10 +92,7 @@ class CParser:
                 assert type(postfix) is Func
                 postfix = Call(postfix, self.args())
                 self.expect(')')
-                if self.calls is None:
-                    self.calls = 0
-                if not postfix.func.params.on_stack():
-                    self.calls = max(self.calls, len(postfix.args))
+                self.calls = True
             elif self.peek('++','--'):
                     postfix = Post(next(self), postfix)
             else:
@@ -151,31 +148,31 @@ class CParser:
         else:
             return self.unary()
     
-    def specif(self):
+    def spec(self):
         '''
         TYPE_SPEC -> type|('struct'|'union') id
         '''
         if self.peek('type'):
-            specif = Type(next(self).lexeme)
+            spec = Type(next(self).lexeme)
         elif self.accept('struct'):
-            specif = self.structs[self.expect('id').lexeme]
+            spec = self.structs[self.expect('id').lexeme]
         else:
-            self.error('TYPE SPECIFIER')
-        return specif
+            self.error('TYPE specIER')
+        return spec
     
-    def qualif(self):
+    def qual(self):
         '''
         TYPE_QUAL -> 'const' TYPE_SPEC
         '''
         if self.accept('const'):
-            return Const(self.specif())
-        return self.specif()
+            return Const(self.spec())
+        return self.spec()
     
     def abstract(self):
         '''
         ABSTRACT -> TYPE_QUAL {'*'}
         '''
-        abstract = self.qualif()
+        abstract = self.qual()
         while self.accept('*'):
             abstract = Pointer(abstract)
         return abstract
@@ -469,6 +466,7 @@ class CParser:
             type = Pointer(type)
             self.expect(']')
         param = Param(type, id)
+        self.param_scope[id.lexeme] = param
         return param
 
     def params(self):
@@ -483,13 +481,7 @@ class CParser:
                 if self.accept('...'):
                     params.variable = True
                     break
-                params.append(self.param())                
-        if params.on_stack():
-            for param in params:
-                self.param_scope[param.token.lexeme] = param
-        else:
-            for param in params:
-                self.scope[param.token.lexeme] = param            
+                params.append(self.param())
         return params
 
     def block(self):
@@ -555,7 +547,7 @@ class CParser:
     def begin_func(self):
         self.space = 0
         self.returns = False
-        self.calls = None
+        self.calls = False
         self.scope = None
         self.param_scope = Scope()
         self.stack = []
