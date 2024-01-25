@@ -198,10 +198,9 @@ class Pointer(Type):
         return regs[n]
     def __eq__(self, other):
         return type(other) is Type and other.type == 'int' or \
-            type(other) is Const and other.type.type == 'int' or \
-                type(other) is Pointer and (self.to == other.to or \
-                    type(other.to) is Type and other.to.type == 'void') or \
-                        type(other) is Array and self.of == other.of
+            type(other) is Pointer and (self.to == other.to or \
+                type(other.to) is Type and other.to.type == 'void') or \
+                    type(other) is Array and self.of == other.of
     def __str__(self):
         return f'{self.to}*'
 
@@ -282,7 +281,7 @@ class Expr(CNode):
     
 class NumBase(Expr):
     def __init__(self, token):
-        super().__init__(Const(Type('int')), token)
+        super().__init__(Type('int'), token)
     def data(self):
         return self.value
     def reduce(self, n):
@@ -317,7 +316,7 @@ class SizeOf(NumBase):
 
 class Char(Expr):
     def __init__(self, token):
-        super().__init__(Const(Type('char')), token)
+        super().__init__(Type('char'), token)
     def data(self):
         return self.token.lexeme
     def reduce(self, n):
@@ -326,7 +325,7 @@ class Char(Expr):
 
 class String(Expr):
     def __init__(self, token):
-        super().__init__(Pointer(Const(Type('char'))), token)
+        super().__init__(Pointer(Type('char')), token)
         self.value = f'"{token.lexeme[1:-1]}\\0"'
     def data(self):
         if self.value not in env.strings:
@@ -527,8 +526,11 @@ class Assign(Expr):
         self.generate(n)
         return regs[n]
     def generate(self, n):
-        self.right.reduce(n)
-        self.left.store(n)
+        if self.type.size > 1:
+            pass
+        else:
+            self.right.reduce(n)
+            self.left.store(n)
     
 class Block(UserList, Expr):
     def preview(self, n):
