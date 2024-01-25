@@ -95,13 +95,13 @@ paren:
 '''
 PARAMS_ASM = '''
 params0:
-  PUSH A, FP
+  PUSH FP
   MOV FP, SP
   MOV A, 0
   JR .L0
 .L0:
   MOV SP, FP
-  POP A, FP
+  POP FP
   RET
 params1:
   PUSH FP
@@ -298,40 +298,34 @@ set:
 '''
 GETSET2_ASM = '''
 get2:
-  SUB SP, 3
-  LD [SP, 0], A ; g
-  LD C, [B, 0]
-  LD [SP, 1], C ; i
-  LD C, [B, 1]
-  LD [SP, 2], C ; j
-  LD A, [SP, 0] ; g
-  LD B, [SP, 1] ; i
+  PUSH B, FP
+  MOV FP, SP
+  LD A, [FP, 2] ; g
+  LD B, [FP, 3] ; i
   ADD A, B
   LD A, [A]
-  LD B, [SP, 2] ; j
+  LD B, [FP, 4] ; j
   ADD A, B
   LD A, [A]
   JR .L0
 .L0:
+  MOV SP, FP
+  POP B, FP
   ADD SP, 3
   RET
 set2:
-  SUB SP, 4
-  LD [SP, 0], A ; g
-  LD C, [B, 0]
-  LD [SP, 1], C ; i
-  LD C, [B, 1]
-  LD [SP, 2], C ; j
-  LD C, [B, 2]
-  LD [SP, 3], C ; t
-  LD A, [SP, 3] ; t
-  LD B, [SP, 0] ; g
-  LD C, [SP, 1] ; i
+  PUSH A, B, C, FP
+  MOV FP, SP
+  LD A, [FP, 7] ; t
+  LD B, [FP, 4] ; g
+  LD C, [FP, 5] ; i
   ADD B, C
   LD B, [B]
-  LD C, [SP, 2] ; j
+  LD C, [FP, 6] ; j
   ADD B, C
   LD [B], A
+  MOV SP, FP
+  POP A, B, C, FP
   ADD SP, 4
   RET
 '''
@@ -536,28 +530,6 @@ array:
 '''
 GLOB_STRUCT_ASM = '''
 .S0: "Cloud\\0"
-  SUB SP, 1
-  LD A, =cats
-  MOV B, 0
-  MUL B, 3
-  ADD A, B
-  LD [SP, 0], A ; cat1
-  LD A, =.S0
-  LD B, [SP, 0] ; cat1
-  LD [B, 0], A ; name
-  MOV A, 10
-  LD B, [SP, 0] ; cat1
-  LD [B, 1], A ; age
-  LD A, =owners
-  MOV B, 0
-  MUL B, 2
-  ADD A, B
-  LD B, [SP, 0] ; cat1
-  LD [B, 2], A ; owner
-  LD A, [SP, 0] ; cat1
-  CALL print_cat
-  ADD SP, 1
-  HALT
 .S1: "Colin\\0"
 .S2: "Mom\\0"
 owners:
@@ -568,25 +540,56 @@ owners:
 cats: space 9
 name: "Cats Ya!\\0"
 num: 69
+main:
+  SUB SP, 1
+  MOV FP, SP
+  LD B, =cats
+  MOV C, 0
+  MUL C, 3
+  ADD B, C
+  LD [FP, 0], B ; cat1
+  LD B, =.S0
+  LD C, [FP, 0] ; cat1
+  LD [C, 0], B ; name
+  MOV B, 10
+  LD C, [FP, 0] ; cat1
+  LD [C, 1], B ; age
+  LD B, =owners
+  MOV C, 0
+  MUL C, 2
+  ADD B, C
+  LD C, [FP, 0] ; cat1
+  LD [C, 2], B ; owner
+  LD B, [FP, 0] ; cat1
+  PUSH B
+  CALL print_cat
+  MOV B, A
+  MOV SP, FP
+  ADD SP, 1
+  HALT
 print_cat:
-  SUB SP, 6
-  LD [SP, 0], A ; cat
+  PUSH A, FP
+  SUB SP, 5
+  MOV FP, SP
   LD A, =name
-  LD [SP, 1], A ; store
+  LD [FP, 0], A ; store
   LD A, =num
   LD A, [A]
-  LD [SP, 2], A ; n
-  LD A, [SP, 0] ; cat
+  LD [FP, 1], A ; n
+  LD A, [FP, 7] ; cat
   LD A, [A, 0] ; name
-  LD [SP, 3], A ; mycat
-  LD A, [SP, 0] ; cat
+  LD [FP, 2], A ; mycat
+  LD A, [FP, 7] ; cat
   LD A, [A, 1] ; age
-  LD [SP, 4], A ; age
-  LD A, [SP, 0] ; cat
+  LD [FP, 3], A ; age
+  LD A, [FP, 7] ; cat
   LD A, [A, 2] ; owner
   LD A, [A, 0] ; name
-  LD [SP, 5], A ; owner
-  ADD SP, 6
+  LD [FP, 4], A ; owner
+  MOV SP, FP
+  ADD SP, 5
+  POP A, FP
+  ADD SP, 1
   RET
 '''
 GOTO_ASM = '''
@@ -645,96 +648,105 @@ print_int:
 '''
 POINTERS_ASM = '''
 change:
-  PUSH B
-  SUB SP, 1
-  LD [SP, 0], A ; n
-  LD A, [SP, 0] ; n
+  PUSH A, B, FP
+  MOV FP, SP
+  LD A, [FP, 3] ; n
   LD A, [A]
   ADD A, 10
-  LD B, [SP, 0] ; n
+  LD B, [FP, 3] ; n
   LD [B], A
+  MOV SP, FP
+  POP A, B, FP
   ADD SP, 1
-  POP B
   RET
 foo:
-  PUSH LR, B
-  SUB SP, 2
-  LD [SP, 0], A ; m
-  LD B, [SP, 0] ; m
+  PUSH LR, A, B, FP
+  SUB SP, 1
+  MOV FP, SP
+  LD B, [FP, 5] ; m
   MUL B, 5
-  LD [SP, 1], B ; n
-  ADD B, SP, 1
-  MOV A, B
+  LD [FP, 0], B ; n
+  ADD B, FP, 0
+  PUSH B
   CALL change
   MOV B, A
-  ADD SP, 2
-  POP PC, B
+  MOV SP, FP
+  ADD SP, 1
+  POP LR, A, B, FP
+  ADD SP, 1
+  RET
 print:
-  SUB SP, 1
-  LD [SP, 0], A ; str
+  PUSH FP
+  MOV FP, SP
+  MOV SP, FP
+  POP FP
   ADD SP, 1
   RET
 bar:
-  PUSH LR, C
-  SUB SP, 2
-  LD [SP, 0], A ; str
-  LD [SP, 1], B ; i
-  LD B, [SP, 0] ; str
-  MOV A, B
+  PUSH LR, A, B, C, FP
+  MOV FP, SP
+  LD B, [FP, 5] ; str
+  PUSH B
   CALL print
   MOV B, A
-  LD B, [SP, 0] ; str
-  LD C, [SP, 1] ; i
+  LD B, [FP, 5] ; str
+  LD C, [FP, 6] ; i
   ADD B, C
-  MOV A, B
+  PUSH B
   CALL print
   MOV B, A
+  MOV SP, FP
+  POP LR, A, B, C, FP
   ADD SP, 2
-  POP PC, C
+  RET
 '''
 DEFINES_ASM = '''
 test:
-  PUSH A, B
+  PUSH A, B, FP
   SUB SP, 2
+  MOV FP, SP
   MOV A, 0
-  LD [SP, 0], A ; i
+  LD [FP, 0], A ; i
 .L0:
-  LD A, [SP, 0] ; i
+  LD A, [FP, 0] ; i
   CMP A, 10
   JGE .L1
-  LD A, [SP, 1] ; minN
-  LD B, [SP, 0] ; i
+  LD A, [FP, 1] ; minN
+  LD B, [FP, 0] ; i
   CMP A, B
   JLE .L3
-  LD A, [SP, 0] ; i
+  LD A, [FP, 0] ; i
   JR .L2
 .L3:
-  LD A, [SP, 1] ; minN
+  LD A, [FP, 1] ; minN
 .L2:
-  LD [SP, 1], A ; minN
-  LD A, [SP, 1] ; minN
+  LD [FP, 1], A ; minN
+  LD A, [FP, 1] ; minN
   ADD B, A, 1
-  LD [SP, 1], B ; minN
-  LD A, [SP, 0] ; i
+  LD [FP, 1], B ; minN
+  LD A, [FP, 0] ; i
   ADD B, A, 1
-  LD [SP, 0], B ; i
+  LD [FP, 0], B ; i
   JR .L0
 .L1:
+  MOV SP, FP
   ADD SP, 2
-  POP A, B
+  POP A, B, FP
   RET
 '''
 INCLUDES_ASM = '''
 foo: 9
 test:
-  PUSH A, B
+  PUSH A, B, FP
   SUB SP, 1
+  MOV FP, SP
   MOV A, 10
   LD B, 100
   MUL A, B
-  LD [SP, 0], A ; num
+  LD [FP, 0], A ; num
+  MOV SP, FP
   ADD SP, 1
-  POP A, B
+  POP A, B, FP
   RET
 '''
 
@@ -765,6 +777,7 @@ class TestCompiler(TestCase):
         self.code_eq_asm('paren.c', PAREN_ASM)
         
     def test_params(self):
+        self.maxDiff = None
         self.code_eq_asm('params.c', PARAMS_ASM)
         
     def test_fact(self):
