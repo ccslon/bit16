@@ -173,22 +173,23 @@ class Assembler:
                         self.inst3(*self.values())                    
                     elif self.match('op', 'reg', ',', 'reg', ',', 'const'):
                         self.inst4(*self.values())
-                    elif self.accept('push'):
+                    elif self.accept('push'): #TODO Optimize push and pop
                         args = [self.expect('reg')]
                         while self.accept(','):
                             args.append(self.expect('reg'))
                         self.expect('end')
-                        for reg in args:
-                            self.inst2(Op.SUB, Reg.SP, 1)
-                            self.store(Reg.SP, reg)                                            
+                        self.inst2(Op.SUB, Reg.SP, len(args))
+                        for i, reg in enumerate(args):
+                            self.store1(Reg.SP, len(args)-1-i, reg)   
                     elif self.accept('pop'):
                         args = [self.expect('reg')]
                         while self.accept(','):
                             args.append(self.expect('reg'))
                         self.expect('end')
-                        for reg in reversed(args):
-                            self.inst2(Op.ADD, Reg.SP, 1)
-                            self.load1(reg, Reg.SP , -1)                                                        
+                        for i, reg in enumerate(reversed(args)):
+                            self.load1(reg, Reg.SP , i)
+                        self.inst2(Op.ADD, Reg.SP, len(args))
+                                                     
                     elif self.match('jump', 'label'):
                         self.imm(Reg.PC, *self.values())
                     elif self.match('call', 'label'):
