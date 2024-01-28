@@ -431,7 +431,7 @@ puts:
 '''
 ARRAY_ASM = '''
 foo:
-  PUSH A, B, C, D, FP
+  PUSH A, B, C, FP
   SUB SP, 9
   MOV FP, SP
   MOV A, 2
@@ -441,14 +441,16 @@ foo:
   LD C, [FP, 5] ; i
   ADD B, C
   LD [B], A
-  MOV A, 1
+  ADD A, FP, 6
+  MOV B, 1
+  LD [A, 0], B
   MOV B, 2
-  MOV C, 3
-  ADD D, FP, 6
-  LDM D, {A, B, C}
+  LD [A, 1], B
+  MOV B, 3
+  LD [A, 2], B
   MOV SP, FP
   ADD SP, 9
-  POP A, B, C, D, FP
+  POP A, B, C, FP
   RET
 '''
 STRUCTS_ASM = '''
@@ -615,36 +617,43 @@ baz:
 '''
 RETURN_STRUCT_ASM = '''
 div:
-  PUSH C
-  SUB SP, 4
-  LD [SP, 0], A ; num
-  LD [SP, 1], B ; den
+  PUSH B, FP
+  SUB SP, 2
+  MOV FP, SP
   MOV A, 3
-  ADD B, SP, 2
+  ADD B, FP, 0
   LD [B, 0], A ; quot
   MOV A, 4
-  ADD B, SP, 2
+  ADD B, FP, 0
   LD [B, 1], A ; rem
-  ADD C, SP, 2
-  LDM {A, B}, C
+  ADD A, FP, 0
   JR .L0
 .L0:
-  ADD SP, 4
-  POP C
+  MOV SP, FP
+  ADD SP, 2
+  POP B, FP
+  ADD SP, 2
   RET
 print_int:
-  PUSH LR, B, C, D
-  SUB SP, 3
-  LD [SP, 0], A ; num
-  LD C, [SP, 0] ; num
-  MOV D, 10
-  MOV A, C
-  MOV B, D
+  PUSH LR, A, B, C, D, FP
+  SUB SP, 2
+  MOV FP, SP
+  MOV B, 10
+  PUSH B
+  LD B, [FP, 8] ; num
+  PUSH B
   CALL div
-  ADD C, SP, 1
-  LDM C, {A, B}
-  ADD SP, 3
-  POP PC, B, C, D
+  MOV B, A
+  ADD C, FP, 0
+  LD D, [B, 0]
+  LD [C, 0], D
+  LD D, [B, 1]
+  LD [C, 1], D
+  MOV SP, FP
+  ADD SP, 2
+  POP LR, A, B, C, D, FP
+  ADD SP, 1
+  RET
 '''
 POINTERS_ASM = '''
 change:
