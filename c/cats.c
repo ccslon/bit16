@@ -1,4 +1,4 @@
-#include "bit16lib.h"
+#include <stdio.h>
 #define Cat struct _Cat_
 #define Owner struct _Owner_
 Owner {
@@ -18,13 +18,11 @@ char* name = "Cats Ya!";
 int num = 69;
 
 void print_cat(Cat* cat) {
-    println(name);
-    printint(num);
-    put('\n');
-    println(cat->name);    
-    printint(cat->age);
-    put('\n');
-    println(cat->owner->name);
+    printf("%s\n", name);
+    printd(num);
+    putchar('\n');
+    printf("%s %d\n", cat->name, cat->age);
+    printf("%s\n", cat->owner->name);
 }
 void main() {
     Cat* cat1 = &cats[0];
