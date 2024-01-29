@@ -17,9 +17,7 @@ class Regs:
     def clear(self):
         self.max = -1
     def __getitem__(self, item):
-        if item == 'SP':
-            return Reg.SP
-        elif item == 'FP':
+        if item == 'FP':
             return Reg.FP
         elif item > Reg.D:
             # print('\n'.join(emit.asm))
@@ -163,8 +161,6 @@ class Type(CNode):
         else:
             emit.load(regs[n], regs[base], local.location, local.token.lexeme)
         return regs[n]
-    def ret(self, local, n, base):
-        self.reduce(local, n, base)
     def glob(self, glob):
         if glob.init:
             emit.glob(glob.token.lexeme, glob.init.value)
@@ -216,21 +212,19 @@ class Struct(Type, Frame):
             emit.inst4(Op.ADD, regs[n], regs[base], local.location)
         return regs[n]
     def store(self, local, n, base):
-        self.address(local, self.size, base)
-        emit.storem(regs[0], self.size)
+        self.address(local, n+1, base)
+        for i in range(self.size):
+            emit.load(regs[n+2], regs[n], i)
+            emit.store(regs[n+2], regs[n+1], i)
     def reduce(self, local, n, base):
-        self.address(local, self.size, base)
-        emit.loadm(regs[0], self.size)
-        return regs[n]
-    def ret(self, local, n, base):
-        self.reduce(local, 0, base)
+        return self.address(local, n, base)
     def glob(self, glob):
         if glob.init:
             emit.datas(glob.token.lexeme, [expr.data() for expr in glob.init])
         else:
             emit.space(glob.token.lexeme, self.size)       
     def __eq__(self, other):
-        return type(other) is Struct and self.name == other.name or other == 'list'
+        return type(other) is Struct and self.name == other.name
     def __str__(self):
         return f'struct {self.name}'
     
@@ -245,9 +239,6 @@ class Array(Type):
         else:
             emit.inst4(Op.ADD, regs[n], regs[base], local.location)
         return regs[n]
-    def store(self, local, n, base):
-        self.address(local, self.size, base)
-        emit.storem(regs[0], self.size)
     def reduce(self, local, n, base):
         return self.address(local, n, base)
     def glob(self, glob):
@@ -256,7 +247,7 @@ class Array(Type):
         else:
             emit.space(glob.token.lexeme, self.size)
     def __eq__(self, other):
-        return type(other) is Array and self.of == other.of or other == 'list'
+        return type(other) is Array and self.of == other.of
     def __str__(self):
         return f'{self.of}[]'
 
@@ -274,8 +265,6 @@ class Expr(CNode):
     def compare_false(self, n, label):
         emit.inst(Op.CMP, self.reduce(n), 0)
         emit.jump(Cond.JNE, f'.L{label}')
-    def ret(self, n):
-        self.reduce(n)
     def num_reduce(self, n):
         return self.reduce(n)
     
@@ -328,10 +317,11 @@ class String(Expr):
         super().__init__(Pointer(Type('char')), token)
         self.value = f'"{token.lexeme[1:-1]}\\0"'
     def data(self):
-        if self.value not in env.strings:
-            env.strings.append(self.value)
-            emit.glob(f'.S{env.strings.index(self.value)}', self.value)
-        return f'.S{env.strings.index(self.value)}'
+        if not env.preview:
+            if self.value not in env.strings:
+                env.strings.append(self.value)
+                emit.glob(f'.S{env.strings.index(self.value)}', self.value)
+            return f'.S{env.strings.index(self.value)}'
     def reduce(self, n):
         emit.load_glob(regs[n], self.data())
         return regs[n]
@@ -516,22 +506,26 @@ class Condition(Expr):
 
 class Assign(Expr):
     def __init__(self, token, left, right):
-        assert left.type == right.type, f'Line {token.line_no}: {left.type} != {right.type}'
+        left.type == right.type, f'Line {token.line_no}: {left.type} != {right.type}'
         super().__init__(left.type, token)
-        self.left, self.right = left, right
-    def analyze(self, n):
-        self.right.analyze(n)
-        self.left.analyze_store(n)        
+        self.left, self.right = left, right      
     def reduce(self, n):
         self.generate(n)
         return regs[n]
     def generate(self, n):
-        if self.type.size > 1:
-            pass
-        else:
-            self.right.reduce(n)
-            self.left.store(n)
-    
+        self.right.reduce(n)
+        self.left.store(n)
+
+class InitList(Expr):
+    def __init__(self, token, left, right):
+        super().__init__(left.type, token)
+        self.left, self.right = left, right 
+    def generate(self, n):
+        self.left.address(n)
+        for i in range(self.left.type.size):
+            self.right[i].reduce(n+1)
+            emit.store(regs[n+1], regs[n], i)        
+
 class Block(UserList, Expr):
     def preview(self, n):
         emit.preview = env.preview = True
@@ -549,8 +543,6 @@ class Local(Expr):
         return self.type.reduce(self, n, 'FP')
     def address(self, n):
         return self.type.address(self, n, 'FP')
-    def ret(self, n):
-        self.type.ret(self, n, 'FP')
 
 class Param(Local):
     pass
@@ -562,8 +554,6 @@ class Attr(Local):
         return self.type.reduce(self, n, n)
     def address(self, n):
         return self.type.address(self, n, n)
-    def ret(self, n):
-        self.type.ret(self, n, n)
 
 class Glob(Local):
     def __init__(self, type, token):
@@ -577,8 +567,6 @@ class Glob(Local):
     def address(self, n):
         emit.load_glob(regs[n], self.token.lexeme)
         return regs[n]
-    def ret(self, n):
-        self.type.ret(self, n, n)
     def generate(self):
         self.type.glob(self)
         
@@ -586,15 +574,6 @@ class Func(Local):
     def __init__(self, type, token, params):
         super().__init__(type, token)
         self.params = params
-
-class List(UserList, Expr):
-    def __init__(self):
-        self.type = 'list'
-        super().__init__()
-    def reduce(self, n):
-        for i, expr in enumerate(self):
-            expr.reduce(i)
-        return regs[0]
 
 class Params(UserList, Expr):
     pass
@@ -609,7 +588,7 @@ class Defn(Expr):
         if self.type.size or self.returns: 
             env.return_label = env.next_label()
         self.block.preview(self.calls)
-        push = list(map(Reg, range(self.type.size, regs.max+1))) + [Reg.FP]
+        push = list(map(Reg, range(bool(self.type.size), regs.max+1))) + [Reg.FP]
         for param in self.params:
             param.location += self.space + self.calls + len(push)
         emit.append_label(self.token.lexeme)
@@ -623,7 +602,7 @@ class Defn(Expr):
         #epilogue
         if self.type.size or self.returns:
             emit.append_label(f'.L{env.return_label}')
-        if type(self.type) is not Struct and self.calls and self.type.size:
+        if self.calls and self.type.size:
             emit.inst(Op.MOV, Reg.A, regs[self.calls])
         emit.inst(Op.MOV, Reg.SP, Reg.FP)
         if self.space:
@@ -734,7 +713,7 @@ class Call(Expr):
         emit.call(self.func.token.lexeme)
         if self.func.params.variable:
             emit.inst(Op.ADD, Reg.SP, len(self.args)-len(self.func.params))
-        if n > 0 and type(self.func.type) is not Struct:
+        if n > 0:
             emit.inst(Op.MOV, regs[n], Reg.A)        
 
 class Return(Expr):
@@ -744,7 +723,7 @@ class Return(Expr):
     def generate(self, n):
         assert env.defn.type == self.type, f'Line {self.token.line_no}: {env.defn.type} != {self.type} in {env.defn.id.name}'       
         if self.expr:
-            self.expr.ret(n)
+            self.expr.reduce(n)
         emit.jump(Cond.JR, f'.L{env.return_label}')
 
 class Statement(CNode):

@@ -6,7 +6,7 @@ Created on Mon Jul  3 19:47:39 2023
 """
 
 import clexer
-from cnodes import Program, Main, Defn, List, Params, Block, Label, Goto, Break, Continue, For, Do, While, Switch, Case, If, Statement, Return, Func, Glob, Attr, Param, Local, Assign, Condition, Logic, Compare, Binary, Array, Struct, Pointer, Const, Type, Pre, Cast, SizeOf, Deref, AddrOf, Not, Unary, Args, Call, Arrow, SubScr, Dot, Post, String, Char, Num, Frame
+from cnodes import Program, Main, Defn, Params, Block, Label, Goto, Break, Continue, For, Do, While, Switch, Case, If, Statement, Return, Func, Glob, Attr, Param, Local, InitList, Assign, Condition, Logic, Compare, Binary, Array, Struct, Pointer, Const, Type, Pre, Cast, SizeOf, Deref, AddrOf, Not, Unary, Args, Call, Arrow, SubScr, Dot, Post, String, Char, Num, Frame
 
 '''
 TODO
@@ -435,29 +435,30 @@ class CParser:
         if self.peek('='):
             token = next(self)
             if self.accept('{'):
-                init = Assign(token, init, self.init_list())
+                assert type(init.type) in [Array, Struct]
+                init = InitList(token, init, self.list())
                 self.expect('}')
             else:
                 init = Assign(token, init, self.expr())
         self.expect(';')
         return init
     
-    def init_list(self):
+    def list(self):
         '''
         INIT_LIST -> CONST|'{' INIT_LIST {',' INIT_LIST} '}'
         '''
-        init = List()
+        init = []
         if self.accept('{'):    
-            init.extend(self.init_list())
+            init.extend(self.list())
             self.expect('}')
         else:
-            init.append(self.const_expr())
+            init.append(self.expr())
         while self.accept(','):
             if self.accept('{'):
-                init.extend(self.init_list())
+                init.extend(self.list())
                 self.expect('}')
             else:
-                init.append(self.const_expr())
+                init.append(self.expr())
         return init
 
     def param(self):
@@ -536,7 +537,7 @@ class CParser:
                     glob = Glob(type, id)
                     if self.accept('='):
                         if self.accept('{'):
-                            glob.init = self.init_list()
+                            glob.init = self.list()
                             self.expect('}')
                         else:
                             glob.init = self.expr()
