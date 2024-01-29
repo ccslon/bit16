@@ -41,7 +41,6 @@ class Environment:
         self.labels = 0
         self.loop = Loop()
         self.if_jump_end = False
-        self.strings = []
         self.preview = False
     def begin_func(self, defn):
         self.defn = defn
@@ -63,7 +62,14 @@ class Emitter:
         self.labels = []
         self.asm = []
         self.data = []
+        self.strings = []
         self.preview = False
+    def string(self, string):
+        if not self.preview:
+            if string not in self.strings:
+                self.strings.append(string)
+                emit.glob(f'.S{self.strings.index(string)}', string)
+            return f'.S{self.strings.index(string)}'
     def append_label(self, label):
         if not self.preview:
             self.labels.append(label)
@@ -317,11 +323,7 @@ class String(Expr):
         super().__init__(Pointer(Type('char')), token)
         self.value = f'"{token.lexeme[1:-1]}\\0"'
     def data(self):
-        if not env.preview:
-            if self.value not in env.strings:
-                env.strings.append(self.value)
-                emit.glob(f'.S{env.strings.index(self.value)}', self.value)
-            return f'.S{env.strings.index(self.value)}'
+        return emit.string(self.value)
     def reduce(self, n):
         emit.load_glob(regs[n], self.data())
         return regs[n]
