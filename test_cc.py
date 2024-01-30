@@ -801,7 +801,6 @@ class TestCompiler(TestCase):
         self.code_eq_asm('paren.c', PAREN_ASM)
         
     def test_params(self):
-        self.maxDiff = None
         self.code_eq_asm('params.c', PARAMS_ASM)
         
     def test_fact(self):
@@ -830,7 +829,6 @@ class TestCompiler(TestCase):
         self.code_eq_asm('array.c', ARRAY_ASM)
         
     def test_structs(self):
-        self.maxDiff = None
         self.code_eq_asm('structs.c', STRUCTS_ASM)
         
     def test_glob_struct(self):

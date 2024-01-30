@@ -6,7 +6,7 @@ Created on Mon Jul  3 19:47:39 2023
 """
 
 import clexer
-from cnodes import Program, Main, Defn, Params, Block, Label, Goto, Break, Continue, For, Do, While, Switch, Case, If, Statement, Return, Func, Glob, Attr, Param, Local, InitList, Assign, Condition, Logic, Compare, Binary, Array, Struct, Pointer, Const, Type, Pre, Cast, SizeOf, Deref, AddrOf, Not, Unary, Args, Call, Arrow, SubScr, Dot, Post, String, Char, Num, Frame
+from cnodes import Program, Main, Defn, Params, Block, Label, Goto, Break, Continue, For, Do, While, Switch, Case, If, Statement, Return, Func, Glob, Attr, Param, Local, InitList, Assign, Condition, Logic, Compare, Binary, Array, Struct, Pointer, Const, VoidPtr, Type, Void, Pre, Cast, SizeOf, Deref, AddrOf, Not, Unary, Args, Call, Arrow, SubScr, Dot, Post, String, Char, Num, Frame
 
 '''
 TODO
@@ -23,7 +23,7 @@ TODO
 [X] Labels and goto
 [ ] Division/Modulo
 [X] Different calling convention. Went with stdcall-like
-[ ] Fix void and void*
+[X] Fix void and void*
 [ ] Typedef
 [ ] Error handling
 [X] Generate vs Reduce
@@ -141,7 +141,7 @@ class CParser:
         CAST -> UNARY
                |'(' ABSTRACT ')' CAST
         '''
-        if self.peekn('(', ('type','struct','const')):
+        if self.peekn('(', ('type','voidptr','struct','union','enum','const')):
             token = next(self)
             type = self.abstract()
             self.expect(')')
@@ -155,8 +155,14 @@ class CParser:
         '''
         if self.peek('type'):
             spec = Type(next(self).lexeme)
+        elif self.accept('voidptr'):
+            spec = VoidPtr(None)
         elif self.accept('struct'):
             spec = self.structs[self.expect('id').lexeme]
+        elif self.accept('union') :
+            spec = ...
+        elif self.accept('enum') :
+            spec = ...
         else:
             self.error('TYPE specIER')
         return spec
@@ -491,7 +497,7 @@ class CParser:
         BLOCK -> {DECL} {STATE} [BLOCK]
         '''
         block = Block()
-        while self.peek('const','type','struct','union'):
+        while self.peek('const','type','voidptr','struct','union','enum'):
             block.append(self.init())
         while self.peek(';','{','(','id','*','++','--','return','if','switch','while','do','for','break','continue','goto'):
             block.append(self.statement())
@@ -501,7 +507,7 @@ class CParser:
     
     def program(self):
         program = Program()
-        while self.peek('type','const','struct'):
+        while self.peek('const','voidptr','void','type','struct','union','enum'):
             if self.peekn('struct','id','{'):
                 next(self)
                 id = next(self)
@@ -515,7 +521,10 @@ class CParser:
                     self.expect(';')
                 self.expect(';')
             else:
-                type = self.abstract()
+                if self.accept('void'):
+                    type = Void()
+                else:
+                    type = self.abstract()
                 id = self.expect('id')
                 if self.accept('('):                    #Function
                     self.begin_func()

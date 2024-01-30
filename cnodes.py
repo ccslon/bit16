@@ -142,10 +142,18 @@ class CNode:
     def generate(self, n):
         pass
 
+class Void(CNode):
+    def __init__(self):
+        self.size = 0
+    def __eq__(self, other):
+        return type(other) is Void
+    def __str__(self):
+        return 'void'
+
 class Type(CNode):
     def __init__(self, type):
         self.type = type
-        self.size = 0 if type == 'void' else 1
+        self.size = 1
     def store(self, local, n, base):
         if local.location is None:
             emit.load_glob(regs[n+1], local.token.lexeme)
@@ -172,18 +180,30 @@ class Type(CNode):
             emit.glob(glob.token.lexeme, glob.init.value)
         else:
             emit.space(glob.token.lexeme, 1)
+    def cast(self, other):
+        return type(other) in [Pointer, VoidPtr, Type] \
+            or type(other) is Const and self.cast(other.type)
     def __eq__(self, other):
-        return type(other) is type(self)
+        return type(other) is Type
     def __str__(self):
         return self.type
+
+class VoidPtr(Type):
+    def cast(self, other):
+        return type(other) in [Pointer, VoidPtr, Type] \
+            or type(other) is Const and self.cast(other.type)
+    def __eq__(self, other):
+        return type(other) in [VoidPtr, Pointer]
 
 class Const(Type):
     def __init__(self, type):
         super().__init__(type)
         self.size = type.size
+    def cast(self, other):
+        return self == other
     def __eq__(self, other):
-        return self.type == other or \
-            (type(other) is Const and self.type == other.type)
+        return self.type == other \
+            or type(other) is Const and self.type == other.type
     def __str__(self):
         return f'const {self.type}'
         
@@ -198,11 +218,13 @@ class Pointer(Type):
         else:
             emit.load(regs[n], regs[base], local.location, local.token.lexeme)
         return regs[n]
+    def cast(self, other):
+        return type(other) in [Pointer, VoidPtr, Type] \
+            or type(other) is Const and self.cast(other.type)
     def __eq__(self, other):
-        return type(other) is Type and other.type == 'int' or \
-            type(other) is Pointer and (self.to == other.to or \
-                type(other.to) is Type and other.to.type == 'void') or \
-                    type(other) is Array and self.of == other.of
+        return type(other) is Pointer and self.to == other.to \
+            or type(other) is Array and self.of == other.of \
+            or type(other) is VoidPtr
     def __str__(self):
         return f'{self.to}*'
 
@@ -228,7 +250,9 @@ class Struct(Type, Frame):
         if glob.init:
             emit.datas(glob.token.lexeme, [expr.data() for expr in glob.init])
         else:
-            emit.space(glob.token.lexeme, self.size)       
+            emit.space(glob.token.lexeme, self.size)
+    def cast(self, other):
+        return self == other
     def __eq__(self, other):
         return type(other) is Struct and self.name == other.name
     def __str__(self):
@@ -252,6 +276,8 @@ class Array(Type):
             emit.datas(glob.token.lexeme, [expr.data() for expr in glob.init])
         else:
             emit.space(glob.token.lexeme, self.size)
+    def cast(self, other):
+        return self == other
     def __eq__(self, other):
         return type(other) is Array and self.of == other.of
     def __str__(self):
@@ -338,7 +364,7 @@ class Unary(OpExpr):
     OP = {'-':Op.NEG,
           '~':Op.NOT}
     def __init__(self, op, unary):
-        assert unary.type == Type('int'), f'Line {op.line_no}: Cannot {op.lexeme} {unary.type}'
+        assert unary.type.cast(Type('int')), f'Line {op.line_no}: Cannot {op.lexeme} {unary.type}'
         super().__init__(unary.type, op)
         self.unary = unary
     def reduce(self, n):
@@ -378,7 +404,7 @@ class Deref(Expr):
 
 class Cast(Expr):
     def __init__(self, type, token, cast):
-        assert type == cast.type, f'Line {token.line_no}: Cannot cast {cast.type} to {type}'
+        assert type.cast(cast.type), f'Line {token.line_no}: Cannot cast {cast.type} to {type}'
         super().__init__(type, token)
         self.cast = cast
     def reduce(self, n):
@@ -427,7 +453,7 @@ class Binary(OpExpr):
           '&' :Op.AND,
           '&=':Op.AND,}
     def __init__(self, op, left, right):
-        assert left.type == right.type, f'Line {op.line_no}: Cannot {left.type} {op.lexeme} {right.type}'
+        assert left.type.cast(right.type), f'Line {op.line_no}: Cannot {left.type} {op.lexeme} {right.type}'
         super().__init__(left.type, op)
         self.left, self.right = left, right
     def reduce(self, n):
@@ -636,7 +662,7 @@ class Post(OpExpr):
     OP = {'++':Op.ADD,
           '--':Op.SUB}
     def __init__(self, op, postfix):
-        assert postfix.type == Type('int'), f'Line {op.line_no}: Cannot {op.lexeme} {postfix.type}' 
+        assert postfix.type.cast(Type('int')), f'Line {op.line_no}: Cannot {op.lexeme} {postfix.type}' 
         super().__init__(postfix.type, op)
         self.postfix = postfix
     def reduce(self, n):
@@ -720,10 +746,10 @@ class Call(Expr):
 
 class Return(Expr):
     def __init__(self, token, expr):
-        super().__init__(Type('void') if expr is None else expr.type, token)
+        super().__init__(Void() if expr is None else expr.type, token)
         self.expr = expr
     def generate(self, n):
-        assert env.defn.type == self.type, f'Line {self.token.line_no}: {env.defn.type} != {self.type} in {env.defn.id.name}'       
+        assert env.defn.type == self.type, f'Line {self.token.line_no}: {env.defn.type} != {self.type} in {env.defn.token.lexeme}'       
         if self.expr:
             self.expr.reduce(n)
         emit.jump(Cond.JR, f'.L{env.return_label}')

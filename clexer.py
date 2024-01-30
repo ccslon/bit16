@@ -41,7 +41,9 @@ class CLexer(LexerBase):
         r'@\n'
         self.line_no = 1
     RE_const = r'\b(const)\b'
-    RE_type = r'\b(void|int|char)\b'
+    RE_voidptr = r'void\s*\*'
+    RE_void = r'\b(void)\b'
+    RE_type = r'\b(int|char)\b'
     RE_struct = r'\b(struct)\b'
     RE_return = r'\b(return)\b'
     RE_if = r'\b(if)\b'
