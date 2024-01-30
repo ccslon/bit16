@@ -141,14 +141,12 @@ class Load0(Inst):
         self._bin = '110',str(int(storing)),'0','XX',f'{ro:03b}',f'{rb:03b}',f'{rd:03b}'
 class Load1(Inst):
     def __init__(self, storing, rd, rb, offset5):
-        assert -16 <= offset5 < 16
+        assert 0 <= offset5 < 32
         if storing:
             self.str = f'LD [{rb.name}, {offset5}], {rd.name}'
         else:
             self.str = f'LD {rd.name}, [{rb.name}, {offset5}]'
         self._dec = 6,int(storing),1,offset5,rb,rd
-        if offset5 < 0:
-            offset5 = negative(offset5, 5)
         self._bin = '110',str(int(storing)),'1',f'{offset5:05b}',f'{rb:03b}',f'{rd:03b}'    
 class Imm(Inst):
     def __init__(self, rd):

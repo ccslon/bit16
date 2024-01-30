@@ -24,6 +24,8 @@ TODO
 [ ] Division/Modulo
 [X] Different calling convention. Went with stdcall-like
 [X] Fix void and void*
+[ ] Fix compile function
+[ ] Update Docs
 [ ] Typedef
 [ ] Error handling
 [X] Generate vs Reduce

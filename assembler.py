@@ -219,8 +219,7 @@ class Assembler:
                             self.expect(',')
                             dest = self.expect('reg')
                             for i, reg in enumerate(regs):
-                                self.load1(reg, dest, i)
-                            
+                                self.load1(reg, dest, i)                            
                         else:
                             self.error()
                         
