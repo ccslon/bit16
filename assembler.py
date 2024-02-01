@@ -24,7 +24,7 @@ TOKENS = {
     'halt': r'\bhalt\b',
     'space': r'\bspace\b',
     'reg': r'|'.join(map(r'\b{}\b'.format, (reg.name for reg in Reg))),
-    'label': r'\.?[a-z]\w*',
+    'label': r'\.?[a-z_]\w*',
     'equal': r'=',
     'colon': r':',
     'dash': r'-',
