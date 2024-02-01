@@ -21,11 +21,11 @@ TODO
 [ ] Enums
 [X] peekn
 [X] Labels and goto
-[ ] Division/Modulo
+[X] Division/Modulo
 [X] Different calling convention. Went with stdcall-like
 [X] Fix void and void*
-[ ] Fix compile function
-[ ] Update Docs
+[ ] Fix compile function?
+[X] Update Docs
 [ ] Typedef
 [ ] Error handling
 [X] Generate vs Reduce
@@ -58,7 +58,7 @@ class CParser:
             return self.globs[name]
         else:
             self.error(f'Name "{name}" not found')
-            
+    
     def primary(self):
         '''
         PRIMARY -> id|num|char|string|'(' EXPR ')'
@@ -166,12 +166,12 @@ class CParser:
         elif self.accept('enum') :
             spec = ...
         else:
-            self.error('TYPE specIER')
+            self.error('TYPE SPECIFIER')
         return spec
     
     def qual(self):
         '''
-        TYPE_QUAL -> 'const' TYPE_SPEC
+        TYPE_QUAL -> ['const'] TYPE_SPEC
         '''
         if self.accept('const'):
             return Const(self.spec())
@@ -191,7 +191,15 @@ class CParser:
         MUL -> UNARY {('*'|'/'|'%') UNARY}
         '''
         mul = self.cast()
-        while self.peek('*'):
+        while self.peek('*','/','%'):
+            if self.peek('/') and not self.div:
+                with open('std//div.h') as file:
+                    self.tokens[-1:] = clexer.lex(file.read())
+                self.div = True
+            elif self.peek('%') and not self.mod:
+                with open('std//mod.h') as file:
+                    self.tokens[-1:] = clexer.lex(file.read())
+                self.mod = True
             mul = Binary(next(self), mul, self.cast())
         return mul
     
@@ -296,8 +304,16 @@ class CParser:
         if self.peek('='):
             assert isinstance(assign, (Local,Glob,Dot,Arrow,SubScr,Deref)), f'Line {self.tokens[self.index].line_no}: {type(assign)}'
             assign = Assign(next(self), assign, self.assign())
-        elif self.peek('+=','-=','*=','/=','%=','<<=','>>=','^=','|=','&='):
+        elif self.peek('+=','-=','*=','/=','%=','<<=','>>=','^=','|=','&=','/=','%='):
             assert isinstance(assign, (Local,Glob,Dot,Arrow,SubScr,Deref))
+            if self.peek('/=') and not self.div:
+                with open('std//div.h') as file:
+                    self.tokens[-1:] = clexer.lex(file.read())
+                self.div = True
+            elif self.peek('%=') and not self.mod:
+                with open('std//mod.h') as file:
+                    self.tokens[-1:] = clexer.lex(file.read())
+                self.mod = True            
             token = next(self)
             assign = Assign(token, assign, Binary(token, assign, self.assign()))
         return assign
@@ -555,6 +571,7 @@ class CParser:
                     self.expect(';')
                     self.globs[id.lexeme] = glob
                     program.append(glob)
+        for i, t in enumerate(self.tokens): print(i, t.type, t.lexeme)
         return program
     
     def begin_func(self):
@@ -584,6 +601,8 @@ class CParser:
         self.functions = {}
         self.structs = {}
         self.globs = {}
+        self.div = False
+        self.mod = False
         self.tokens = clexer.lex(text)
         # for i, t in enumerate(self.tokens): print(i, t.type, t.lexeme)
         self.index = 0

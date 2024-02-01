@@ -6,12 +6,18 @@ div_t {
 div_t div(int num, int den) {
     div_t ans;
     int quot = 0;
-    while (num >= den) {
-        num -= den;
-        quot++;
+    int rem = 0;
+    int i;
+    for (i = 15; i >= 0; i--) {
+        rem <<= 1;
+        rem |= (num >> i) & 1;
+        if (rem >= den) {
+            rem -= den;
+            quot |= (1 << i);
+        }
     }
     ans.quot = quot;
-    ans.rem = num;
+    ans.rem = rem;
     return ans;
 }
 int abs(int n) {

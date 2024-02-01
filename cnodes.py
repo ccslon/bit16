@@ -432,7 +432,7 @@ class Not(Expr):
         emit.inst(Op.MOV, Reg(n), 1)
         emit.append_label(f'.L{label}')
         return regs[n]
-    
+
 class Binary(OpExpr):
     OP = {'+' :Op.ADD,
           '++':Op.ADD,
@@ -451,13 +451,26 @@ class Binary(OpExpr):
           '|' :Op.OR,
           '|=':Op.OR,
           '&' :Op.AND,
-          '&=':Op.AND,}
+          '&=':Op.AND,
+          '/': '_div',
+          '/=':'_div',
+          '%': '_mod',
+          '%=':'_mod'}
     def __init__(self, op, left, right):
         assert left.type.cast(right.type), f'Line {op.line_no}: Cannot {left.type} {op.lexeme} {right.type}'
         super().__init__(left.type, op)
         self.left, self.right = left, right
     def reduce(self, n):
-        emit.inst(self.op, self.left.reduce(n), self.right.num_reduce(n+1))
+        if self.op in ['_div','_mod']:
+            self.right.reduce(n)
+            emit.push(regs[n])
+            self.left.reduce(n)
+            emit.push(regs[n])
+            emit.call(self.op)
+            if n > 0:
+                emit.inst(Op.MOV, regs[n], Reg.A)    
+        else:
+            emit.inst(self.op, self.left.reduce(n), self.right.num_reduce(n+1))
         return regs[n]
 
 class Compare(Binary):
