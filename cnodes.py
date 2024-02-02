@@ -318,6 +318,11 @@ class NumBase(Expr):
             emit.imm(regs[n], self.value)
             return regs[n]
 
+class EnumConst(NumBase):
+    def __init__(self, token, value):
+        super().__init__(token)
+        self.value = value
+
 class Num(NumBase):
     def __init__(self, token):
         super().__init__(token)

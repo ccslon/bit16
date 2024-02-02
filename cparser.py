@@ -6,7 +6,7 @@ Created on Mon Jul  3 19:47:39 2023
 """
 
 import clexer
-from cnodes import Program, Main, Defn, Params, Block, Label, Goto, Break, Continue, For, Do, While, Switch, Case, If, Statement, Return, Func, Glob, Attr, Param, Local, InitList, Assign, Condition, Logic, Compare, Binary, Array, Struct, Pointer, Const, VoidPtr, Type, Void, Pre, Cast, SizeOf, Deref, AddrOf, Not, Unary, Args, Call, Arrow, SubScr, Dot, Post, String, Char, Num, Frame
+from cnodes import Program, Main, Defn, Params, Block, Label, Goto, Break, Continue, For, Do, While, Switch, Case, If, Statement, Return, Func, Glob, Attr, Param, Local, InitList, Assign, Condition, Logic, Compare, Binary, Array, Struct, Pointer, Const, VoidPtr, Type, Void, Pre, Cast, SizeOf, Deref, AddrOf, Not, Unary, Args, Call, Arrow, SubScr, Dot, Post, String, Char, EnumConst, Num, Frame
 
 '''
 TODO
@@ -56,6 +56,8 @@ class CParser:
             return self.functions[name]
         elif name in self.globs:
             return self.globs[name]
+        elif name in self.enum_consts:
+            return self.enum_consts[name]
         else:
             self.error(f'Name "{name}" not found')
     
@@ -153,7 +155,7 @@ class CParser:
     
     def spec(self):
         '''
-        TYPE_SPEC -> type|('struct'|'union') id
+        TYPE_SPEC -> type|('struct'|'union'|'enum') id
         '''
         if self.peek('type'):
             spec = Type(next(self).lexeme)
@@ -161,10 +163,11 @@ class CParser:
             spec = VoidPtr(None)
         elif self.accept('struct'):
             spec = self.structs[self.expect('id').lexeme]
-        elif self.accept('union') :
+        elif self.accept('union'):
             spec = ...
-        elif self.accept('enum') :
-            spec = ...
+        elif self.accept('enum'):
+            assert self.expect('id').lexeme in self.enums
+            spec = Type('int')
         else:
             self.error('TYPE SPECIFIER')
         return spec
@@ -524,9 +527,7 @@ class CParser:
         program = Program()
         while self.peek('const','voidptr','void','type','struct','union','enum'):
             if self.peekn('struct','id','{'):
-                next(self)
-                id = next(self)
-                next(self)
+                next(self); id = next(self); next(self)
                 struct = Struct(id.lexeme)
                 self.structs[id.lexeme] = struct
                 while not self.accept('}'):
@@ -534,6 +535,25 @@ class CParser:
                     id = self.expect('id')
                     struct[id.lexeme] = Attr(type, id)
                     self.expect(';')
+                self.expect(';')
+            elif self.peekn('union','id','{'):
+                pass
+            elif self.peekn('enum','id','{'):
+                next(self); id = next(self); next(self)
+                self.enums.append(id.lexeme)
+                value = 0
+                id = self.expect('id')
+                if self.accept('='):
+                    value = Num(self.expect('num')).value
+                self.enum_consts[id.lexeme] = EnumConst(id, value)
+                value += 1
+                while self.accept(','):
+                    id = self.expect('id')
+                    if self.accept('='):
+                        value = Num(self.expect('num')).value
+                    self.enum_consts[id.lexeme] = EnumConst(id, value)
+                    value += 1
+                self.expect('}')
                 self.expect(';')
             else:
                 if self.accept('void'):
@@ -597,6 +617,8 @@ class CParser:
         self.functions = {}
         self.structs = {}
         self.globs = {}
+        self.enums = []
+        self.enum_consts = {}
         self.div = False
         self.mod = False
         self.tokens = clexer.lex(text)
