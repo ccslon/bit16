@@ -52,6 +52,33 @@ void printd(int n) {
         printd(div);
     putchar(mod + '0');
 }
+void printx(int n) {
+    if (n < 0) {
+        putchar('-');
+        n = -n;
+    }
+    int div = 0;
+    int mod = n;
+    while (mod >= 4096) { //16^3
+        mod -= 4096;
+        div += 256;
+    }
+    while (mod >= 256) { //16^2
+        mod -= 256;
+        div += 16;
+    }
+    while (mod >= 16) { //16^1
+        mod -= 16;
+        div++;
+    }
+    if (div)
+        printx(div);
+    if (mod > 9) 
+        putchar(mod - 10 + 'a');
+    else
+        putchar(mod + '0');
+}
+
 void printf(const char* format, ...) {
     int* ap;
     (ap = (int*)&(format)+1);
@@ -61,6 +88,10 @@ void printf(const char* format, ...) {
             switch (*++c) {
                 case 'd': {
                     printd(((int)*ap++));
+                    break;
+                }
+                case 'x': {
+                    printx(((int)*ap++));
                     break;
                 }
                 case 's': {
