@@ -186,21 +186,24 @@ class CParser:
             abstract = Pointer(abstract)
         return abstract
     
+    def include_divmod(self, op):
+        op = {'/':'div',
+              '%':'mod'}.get(op[0])
+        if not getattr(self, op):
+            with open(f'std//{op}.h') as file:
+                self.tokens[-1:] = clexer.lex(file.read())
+            setattr(self, op, True)
+    
     def mul(self):
         '''
         MUL -> UNARY {('*'|'/'|'%') UNARY}
         '''
         mul = self.cast()
         while self.peek('*','/','%'):
-            if self.peek('/') and not self.div:
-                with open('std//div.h') as file:
-                    self.tokens[-1:] = clexer.lex(file.read())
-                self.div = True
-            elif self.peek('%') and not self.mod:
-                with open('std//mod.h') as file:
-                    self.tokens[-1:] = clexer.lex(file.read())
-                self.mod = True
-            mul = Binary(next(self), mul, self.cast())
+            token = next(self)
+            if token.lexeme in ['/','%']:
+                self.include_divmod(token.lexeme)
+            mul = Binary(token, mul, self.cast())
         return mul
     
     def add(self):
@@ -306,15 +309,9 @@ class CParser:
             assign = Assign(next(self), assign, self.assign())
         elif self.peek('+=','-=','*=','/=','%=','<<=','>>=','^=','|=','&=','/=','%='):
             assert isinstance(assign, (Local,Glob,Dot,Arrow,SubScr,Deref))
-            if self.peek('/=') and not self.div:
-                with open('std//div.h') as file:
-                    self.tokens[-1:] = clexer.lex(file.read())
-                self.div = True
-            elif self.peek('%=') and not self.mod:
-                with open('std//mod.h') as file:
-                    self.tokens[-1:] = clexer.lex(file.read())
-                self.mod = True            
             token = next(self)
+            if token.lexeme in ['/=','%=']:
+                self.include_divmod(token.lexeme)
             assign = Assign(token, assign, Binary(token, assign, self.assign()))
         return assign
     
@@ -571,7 +568,6 @@ class CParser:
                     self.expect(';')
                     self.globs[id.lexeme] = glob
                     program.append(glob)
-        for i, t in enumerate(self.tokens): print(i, t.type, t.lexeme)
         return program
     
     def begin_func(self):
