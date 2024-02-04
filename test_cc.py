@@ -168,29 +168,27 @@ fact:
 FIB_ASM = '''
 fib:
   PUSH LR, B, C, FP
-  SUB SP, 1
   MOV FP, SP
-  LD [FP, 0], A ; n
-  LD B, [FP, 0] ; n
+  LD B, [FP, 4] ; n
   CMP B, 1
   JNE .L2
   MOV B, 0
   JR .L0
 .L2:
-  LD B, [FP, 0] ; n
+  LD B, [FP, 4] ; n
   CMP B, 2
   JNE .L3
   MOV B, 1
   JR .L0
 .L3:
-  LD B, [FP, 0] ; n
+  LD B, [FP, 4] ; n
   SUB B, 1
-  MOV A, B
+  PUSH B
   CALL fib
   MOV B, A
-  LD C, [FP, 0] ; n
+  LD C, [FP, 4] ; n
   SUB C, 2
-  MOV A, C
+  PUSH C
   CALL fib
   MOV C, A
   ADD B, C
@@ -198,14 +196,13 @@ fib:
 .L0:
   MOV A, B
   MOV SP, FP
+  POP LR, B, C, FP
   ADD SP, 1
-  POP PC, B, C, FP
+  RET
 fib2:
   PUSH LR, B, C, FP
-  SUB SP, 1
   MOV FP, SP
-  LD [FP, 0], A ; n
-  LD B, [FP, 0] ; n
+  LD B, [FP, 4] ; n
   CMP B, 1
   JEQ .L7
   CMP B, 2
@@ -218,14 +215,14 @@ fib2:
   MOV B, 1
   JR .L4
 .L9:
-  LD B, [FP, 0] ; n
+  LD B, [FP, 4] ; n
   SUB B, 1
-  MOV A, B
+  PUSH B
   CALL fib
   MOV B, A
-  LD C, [FP, 0] ; n
+  LD C, [FP, 4] ; n
   SUB C, 2
-  MOV A, C
+  PUSH C
   CALL fib
   MOV C, A
   ADD B, C
@@ -234,8 +231,9 @@ fib2:
 .L4:
   MOV A, B
   MOV SP, FP
+  POP LR, B, C, FP
   ADD SP, 1
-  POP PC, B, C, FP
+  RET
 '''
 SUM_ASM = '''
 sum:
