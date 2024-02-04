@@ -6,7 +6,7 @@ Created on Mon Jul  3 19:47:39 2023
 """
 
 import clexer
-from cnodes import Program, Main, Defn, Params, Block, Label, Goto, Break, Continue, For, Do, While, Switch, Case, If, Statement, Return, Func, Glob, Attr, Param, Local, InitList, Assign, Condition, Logic, Compare, Binary, Array, Struct, Pointer, Const, VoidPtr, Type, Void, Pre, Cast, SizeOf, Deref, AddrOf, Not, Unary, Args, Call, Arrow, SubScr, Dot, Post, String, Char, EnumConst, Num, Frame
+from cnodes import Program, Main, Defn, Params, Block, Label, Goto, Break, Continue, For, Do, While, Switch, Case, If, Statement, Return, Func, Glob, Attr, Local, InitList, Assign, Condition, Logic, Compare, Binary, Array, Union, Struct, Pointer, Const, VoidPtr, Type, Void, Pre, Cast, SizeOf, Deref, AddrOf, Not, Unary, Args, Call, Arrow, SubScr, Dot, Post, String, Char, EnumConst, Num, Frame
 
 '''
 TODO
@@ -17,8 +17,8 @@ TODO
 [X] Globals overhaul including global structs and arrays
 [X] Init lists 
 [X] Proper ++/--
-[ ] Unions
-[ ] Enums
+[X] Unions. But could be better
+[X] Enums
 [X] peekn
 [X] Labels and goto
 [X] Division/Modulo
@@ -37,13 +37,12 @@ TODO
     [X] Macros
 '''
 
-class Scope(Frame):
-    def __init__(self, old=None):
-        if old is None:
-            super().__init__()
-        else:            
-            self.size = old.size
-            self.data = old.data.copy()
+class Scope(Frame):            
+    def copy(self):
+        new = Scope()
+        new.size = self.size
+        new.data = self.data.copy()
+        return new
 
 class CParser:
     
@@ -82,19 +81,19 @@ class CParser:
     
     def postfix(self):
         '''
-        POST -> PRIMARY {'[' EXPR ']'|'(' ARGS ')'|'.' id|'->' id|'++'|'--'}
+        POST -> PRIMARY {'.' id|'->' id|'[' EXPR ']'|'(' ARGS ')'|'++'|'--'}
         '''
         postfix = self.primary()
         while self.peek('.','[','->','(','++','--'):
             if self.peek('.'):
                 postfix = Dot(next(self), postfix, postfix.type[self.expect('id').lexeme])
+            elif self.peek('->'):
+                postfix = Arrow(next(self), postfix, postfix.type.to[self.expect('id').lexeme])
             elif self.peek('['):
                 postfix = SubScr(next(self), postfix, self.expr())
                 self.expect(']')
-            elif self.peek('->'):
-                postfix = Arrow(next(self), postfix, postfix.type.to[self.expect('id').lexeme])
             elif self.accept('('):
-                assert type(postfix) is Func
+                assert isinstance(postfix, Func)
                 postfix = Call(postfix, self.args())
                 self.expect(')')
                 self.calls = True
@@ -118,19 +117,19 @@ class CParser:
     def unary(self):
         '''
         UNARY -> POSTFIX
+                |('-'|'~'|'*'|'&'|'!') CAST
                 |('++'|'--') UNARY
-                |('-'|'~'|'!'|'*'|'&') CAST
                 |'sizeof' UNARY
                 |'sizeof' '(' ABSTRACT ')'
         '''
         if self.peek('-','~',):
-            return Unary(next(self), self.unary())
-        if self.peek('!'):
-            return Not(next(self), self.unary())
-        elif self.peek('&'):
-            return AddrOf(next(self), self.unary())
+            return Unary(next(self), self.cast())
         elif self.peek('*'):
-            return Deref(next(self), self.unary())
+            return Deref(next(self), self.cast())
+        elif self.peek('&'):
+            return AddrOf(next(self), self.cast())
+        if self.peek('!'):
+            return Not(next(self), self.cast())
         elif self.peek('++','--'):
             return Pre(next(self), self.unary())
         elif self.accept('sizeof'):
@@ -145,28 +144,60 @@ class CParser:
         CAST -> UNARY
                |'(' ABSTRACT ')' CAST
         '''
-        if self.peekn('(', ('type','voidptr','struct','union','enum','const')):
+        if self.peekn('(', ('type','struct','voidptr','const','union','enum')):
             token = next(self)
             type = self.abstract()
             self.expect(')')
             return Cast(type, token, self.cast())
         else:
             return self.unary()
-    
+
     def spec(self):
         '''
-        TYPE_SPEC -> type|('struct'|'union'|'enum') id
+        TYPE_SPEC -> type
+                    |('struct'|'union') id '{' {ABSTRACT id ';'} '}'
+                    |'enum' id '{' id ['=' int] {',' id ['=' int]}'}'
         '''
         if self.peek('type'):
             spec = Type(next(self).lexeme)
         elif self.accept('voidptr'):
             spec = VoidPtr(None)
         elif self.accept('struct'):
-            spec = self.structs[self.expect('id').lexeme]
+            id = self.accept('id')
+            if self.accept('{'):
+                spec = Struct(id.lexeme)
+                if id:
+                    self.structs[id.lexeme] = spec
+                while not self.accept('}'):
+                    type = self.abstract()
+                    id = self.expect('id')
+                    spec[id.lexeme] = Attr(type, id)
+                    self.expect(';')
+            else:
+                spec = self.structs[id.lexeme]
         elif self.accept('union'):
-            spec = ...
+            id = self.accept('id')
+            if self.accept('{'):
+                spec = Union(id.lexeme)
+                if id:
+                    self.unions[id.lexeme] = spec
+                while not self.accept('}'):
+                    type = self.abstract()
+                    id = self.expect('id')
+                    spec[id.lexeme] = Attr(type, id)
+                    self.expect(';')
+            else:          
+                spec = self.unions[id.lexeme]
         elif self.accept('enum'):
-            assert self.expect('id').lexeme in self.enums
+            id = self.accept('id')
+            if self.accept('{'):
+                if id:    
+                    self.enums.append(id.lexeme)
+                value = self.enum(0)
+                while self.accept(','):
+                    value += 1
+                    value = self.enum(value)
+                self.expect('}')
             spec = Type('int')
         else:
             self.error('TYPE SPECIFIER')
@@ -189,17 +220,9 @@ class CParser:
             abstract = Pointer(abstract)
         return abstract
     
-    def include_divmod(self, op):
-        op = {'/':'div',
-              '%':'mod'}.get(op[0])
-        if not getattr(self, op):
-            with open(f'std//{op}.h') as file:
-                self.tokens[-1:] = clexer.lex(file.read())
-            setattr(self, op, True)
-    
     def mul(self):
         '''
-        MUL -> UNARY {('*'|'/'|'%') UNARY}
+        MUL -> CAST {('*'|'/'|'%') CAST}
         '''
         mul = self.cast()
         while self.peek('*','/','%'):
@@ -308,7 +331,7 @@ class CParser:
         '''
         assign = self.cond()
         if self.peek('='):
-            assert isinstance(assign, (Local,Glob,Dot,Arrow,SubScr,Deref)), f'Line {self.tokens[self.index].line_no}: {type(assign)}'
+            assert isinstance(assign, (Local,Glob,Dot,Arrow,SubScr,Deref)), f'Line {self.tokens[self.index].line}: {type(assign)}'
             assign = Assign(next(self), assign, self.assign())
         elif self.peek('+=','-=','*=','/=','%=','<<=','>>=','^=','|=','&=','/=','%='):
             assert isinstance(assign, (Local,Glob,Dot,Arrow,SubScr,Deref))
@@ -323,7 +346,7 @@ class CParser:
         EXPR -> ASSIGN
         '''
         return self.assign()
-        # while self.accept(','):
+        # while self.accept(','): #TODO
         #     self.assign()
     
     def const_expr(self):
@@ -334,22 +357,23 @@ class CParser:
              
     def statement(self):
         '''
-        STATE -> '{' BLOCK '}'
+        STATE -> ';'
+                |'{' BLOCK '}'
                 |SELECT
                 |LOOP
                 |JUMP
+                |id ':'
                 |ASSIGN ';'
         SELECT -> 'if' '(' EXPR ')' STATEMENT ['else' STATEMENT]
                  |'switch' '(' EXPR ')' '{' {'case' CONST_EXPR ':' STATEMENT} ['default' ':' STATEMENT] '}'
         LOOP -> 'while' '(' EXPR ')' STATEMENT
                |'for' '(' EXPR ';' EXPR ';' EXPR ')' STATEMENT
                |'do' STATEMENT 'while' '(' EXPR ')' ';'
-        JUMP -> 'goto' id ';'
-               |'return' [EXPR] ';'
+        JUMP -> 'return' [EXPR] ';'
                |'break' ';'
                |'continue' ';'
-        '''
-        
+               |'goto' id ';'
+        '''        
         if self.accept(';'):
             statement = Statement()
         
@@ -388,14 +412,6 @@ class CParser:
             self.expect(')')
             statement = While(expr, self.statement())
             
-        elif self.accept('do'):
-            statement = self.statement()
-            self.expect('while')
-            self.expect('(')
-            statement = Do(statement, self.expr())
-            self.expect(')')
-            self.expect(';')
-            
         elif self.accept('for'):
             self.expect('(')
             init = self.expr()
@@ -405,6 +421,14 @@ class CParser:
             step = self.expr()
             self.expect(')')
             statement = For(init, cond, step, self.statement())
+            
+        elif self.accept('do'):
+            statement = self.statement()
+            self.expect('while')
+            self.expect('(')
+            statement = Do(statement, self.expr())
+            self.expect(')')
+            self.expect(';')
         
         elif self.peek('return'):
             self.returns = True
@@ -440,7 +464,7 @@ class CParser:
     
     def decl(self):
         '''
-        DECL -> TYPE_QUAL id {'[' [num] ']'}
+        DECL -> ABSTRACT id {'[' [num] ']'}
         '''
         type = self.abstract()
         id = self.expect('id')
@@ -453,13 +477,13 @@ class CParser:
     
     def init(self):
         '''
-        INIT -> DECL ['=' (EXPR|INIT_LIST)] ';'
+        INIT -> DECL ['=' (EXPR|'{' INIT_LIST '}')] ';'
         '''
         init = self.decl()
         if self.peek('='):
             token = next(self)
             if self.accept('{'):
-                assert type(init.type) in [Array, Struct]
+                assert isinstance(init.type, (Array, Struct))
                 init = InitList(token, init, self.list())
                 self.expect('}')
             else:
@@ -469,7 +493,7 @@ class CParser:
     
     def list(self):
         '''
-        INIT_LIST -> CONST|'{' INIT_LIST {',' INIT_LIST} '}'
+        INIT_LIST -> EXPR|'{' INIT_LIST {',' INIT_LIST} '}'
         '''
         init = []
         if self.accept('{'):    
@@ -486,18 +510,22 @@ class CParser:
         return init
 
     def param(self):
+        '''
+        PARAM -> ABSTRACT ['id'] {'[' ']'}
+        '''
         type = self.abstract()
-        id = self.expect('id')
+        id = self.accept('id')
         while self.accept('['):
             type = Pointer(type)
             self.expect(']')
-        param = Param(type, id)
-        self.param_scope[id.lexeme] = param
+        param = Local(type, id)
+        if id:
+            self.param_scope[id.lexeme] = param
         return param
 
     def params(self):
         '''
-        PARAMS -> [DECL {',' DECL}]
+        PARAMS -> [PARAM {',' PARAM}]
         '''
         params = Params()
         params.variable = False
@@ -515,66 +543,50 @@ class CParser:
         BLOCK -> {DECL} {STATE} [BLOCK]
         '''
         block = Block()
-        while self.peek('const','type','voidptr','struct','union','enum'):
+        while self.peek('type','struct','voidptr','const','union','enum'):
             block.append(self.init())
         while self.peek(';','{','(','id','*','++','--','return','if','switch','while','do','for','break','continue','goto'):
             block.append(self.statement())
-        if not (self.peek('}') or self.peek('end')):# or (len(block) > 0):
+        if block:
             block.extend(self.block())        
         return block
     
+    def enum(self, value):
+        '''
+        ENUM -> id ['=' num]
+        '''
+        id = self.expect('id')
+        if self.accept('='):
+            value = Num(self.expect('num')).value
+        self.enum_consts[id.lexeme] = EnumConst(id, value)
+        return value
+    
     def program(self):
         program = Program()
-        while self.peek('const','voidptr','void','type','struct','union','enum'):
-            if self.peekn('struct','id','{'):
-                next(self); id = next(self); next(self)
-                struct = Struct(id.lexeme)
-                self.structs[id.lexeme] = struct
-                while not self.accept('}'):
-                    type = self.abstract()
-                    id = self.expect('id')
-                    struct[id.lexeme] = Attr(type, id)
-                    self.expect(';')
-                self.expect(';')
-            elif self.peekn('union','id','{'):
-                pass
-            elif self.peekn('enum','id','{'):
-                next(self); id = next(self); next(self)
-                self.enums.append(id.lexeme)
-                value = 0
-                id = self.expect('id')
-                if self.accept('='):
-                    value = Num(self.expect('num')).value
-                self.enum_consts[id.lexeme] = EnumConst(id, value)
-                value += 1
-                while self.accept(','):
-                    id = self.expect('id')
-                    if self.accept('='):
-                        value = Num(self.expect('num')).value
-                    self.enum_consts[id.lexeme] = EnumConst(id, value)
-                    value += 1
-                self.expect('}')
-                self.expect(';')
-            else:
-                if self.accept('void'):
-                    type = Void()
-                else:
-                    type = self.abstract()
-                id = self.expect('id')
-                if self.accept('('):                    #Function
-                    self.begin_func()
-                    params = self.params()
-                    self.expect(')')
-                    self.functions[id.lexeme] = Func(type, id, params)
-                    self.expect('{')
+        while self.peek('void','type','struct','voidptr','const','union','enum'):
+            type = Void() if self.accept('void') else self.abstract()
+            id = self.accept('id')
+            if self.accept('('):                    #Function
+                assert id is not None
+                self.begin_func()
+                params = self.params()
+                self.expect(')')
+                self.functions[id.lexeme] = Func(type, id, params)
+                if self.accept('{'):
+                    assert not any(param.token is None for param in params)
                     block = self.block()
-                    self.end_func()
                     self.expect('}')
+                    self.end_func()
                     if id.lexeme == 'main':
                         program.insert(0, Main(block, self.calls, self.space))
                     else:
                         program.append(Defn(type, id, params, block, self.returns, self.calls, self.space))
-                else:                                   #Global
+                else:
+                    self.expect(';')                     
+                    self.end_func()                    
+            else:
+                if id:                              #Global
+                    assert not isinstance(type, Void)
                     while self.accept('['):
                         type = Array(type, Num(self.expect('num')))
                         self.expect(']')
@@ -585,16 +597,24 @@ class CParser:
                             self.expect('}')
                         else:
                             glob.init = self.expr()
-                    self.expect(';')
                     self.globs[id.lexeme] = glob
                     program.append(glob)
+                self.expect(';')
         return program
+    
+    def include_divmod(self, op):
+        op = {'/':'div',
+              '%':'mod'}.get(op[0])
+        if not getattr(self, op):
+            with open(f'std//{op}.h') as file:
+                self.tokens[-1:] = clexer.lex(file.read())
+            setattr(self, op, True)
     
     def begin_func(self):
         self.space = 0
         self.returns = False
         self.calls = False
-        self.scope = None
+        self.scope = Scope()
         self.param_scope = Scope()
         self.stack = []
         self.begin_scope()
@@ -603,22 +623,25 @@ class CParser:
         self.end_scope()
         
     def begin_scope(self):
-        new = Scope(self.scope)
-        self.stack.append(self.scope)
-        self.scope = new
+        self.stack.append((self.scope, self.structs, self.unions, self.enums, self.enum_consts))
+        self.scope = self.scope.copy()
+        self.structs = self.structs.copy()
+        self.unions = self.unions.copy()
+        self.enums = self.enums.copy()
+        self.enum_consts = self.enum_consts.copy()
     
     def end_scope(self):
         self.space = max(self.space, self.scope.size)
-        self.scope = self.stack.pop() 
+        self.scope, self.structs, self.unions, self.enums, self.enum_consts = self.stack.pop() 
     
     def parse(self, text):
-        self.scope = None
         self.stack = []
         self.functions = {}
         self.structs = {}
-        self.globs = {}
-        self.enums = []
+        self.unions = {}
+        self.enums = []        
         self.enum_consts = {}
+        self.globs = {}
         self.div = False
         self.mod = False
         self.tokens = clexer.lex(text)
@@ -658,7 +681,7 @@ class CParser:
         
     def error(self, msg=None):
         error = self.tokens[self.index]
-        raise SyntaxError(f'Line {error.line_no}: Unexpected {error.type} token "{error.lexeme}".'+(f' {msg}.' if msg is not None else ''))
+        raise SyntaxError(f'Line {error.line}: Unexpected {error.type} token "{error.lexeme}".'+(f' {msg}.' if msg is not None else ''))
         
 parser = CParser()
 
