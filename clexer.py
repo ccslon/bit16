@@ -4,11 +4,13 @@ Created on Tue Nov 14 12:05:47 2023
 
 @author: Colin
 """
+from typing import NamedTuple
 import re
 
-class Token:
-    def __init__(self, type, lexeme, line_no):
-        self.type, self.lexeme, self.line_no = type, lexeme, line_no
+class Token(NamedTuple):
+    type: str
+    lexeme: str
+    line: int
 
 class MetaLexer(type):
     def __init__(self, name, bases, attrs):
@@ -29,8 +31,8 @@ class MetaLexer(type):
 
 class LexerBase(metaclass=MetaLexer):
     def lex(self, text):
-        self.line_no = 1
-        return [Token(match.lastgroup, result, self.line_no) for match in self.regex.finditer(text) if (result := self.action[match.lastgroup](self, match.group())) is not None] + [Token('end','',self.line_no)]
+        self.line = 1
+        return [Token(match.lastgroup, result, self.line) for match in self.regex.finditer(text) if (result := self.action[match.lastgroup](self, match.group())) is not None] + [Token('end','',self.line)]
 
 class CLexer(LexerBase):
     
@@ -39,9 +41,9 @@ class CLexer(LexerBase):
     RE_string = r'"[^"]*"'
     def RE_eof(self, match):
         r'@\n'
-        self.line_no = 1
+        self.line = 1
     RE_const = r'\b(const)\b'
-    RE_voidptr = r'void\s*\*'
+    RE_voidptr = r'\b(void)\s*\*'
     RE_void = r'\b(void)\b'
     RE_type = r'\b(int|char)\b'
     RE_struct = r'\b(struct)\b'
@@ -63,7 +65,7 @@ class CLexer(LexerBase):
     RE_id = r'[A-Za-z_]\w*'
     def RE_new_line(self, match):
         r'\n'
-        self.line_no += 1
+        self.line += 1
     RE_semi = r';'
     RE_colon = ':'
     RE_lparen = r'\('
@@ -112,7 +114,7 @@ class CLexer(LexerBase):
     RE_comma = r','
     def RE_error(self, match):
         r'\S'
-        raise SyntaxError(f'line {self.line_no}: Invalid symbol "{match}"')
+        raise SyntaxError(f'line {self.line}: Invalid symbol "{match}"')
 
 lexer = CLexer()
 

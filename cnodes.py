@@ -28,9 +28,9 @@ class Regs:
 regs = Regs()
 
 class Frame(UserDict):
-    def __init__(self):          
+    def __init__(self):
+        super().__init__()    
         self.size = 0
-        super().__init__()
     def __setitem__(self, name, local):
         local.location = self.size
         self.size += local.type.size
@@ -228,16 +228,12 @@ class Pointer(Type):
     def __str__(self):
         return f'{self.to}*'
 
-class Struct(Type, Frame):
+class Struct(Frame, Type):
     def __init__(self, name):
+        super().__init__()
         self.name = name
-        self.size = 0
-        self.data = {}
     def address(self, local, n, base):
-        if local.location is None:
-            emit.load_glob(regs[n], local.token.lexeme)
-        else:
-            emit.inst4(Op.ADD, regs[n], regs[base], local.location)
+        emit.inst4(Op.ADD, regs[n], regs[base], local.location)
         return regs[n]
     def store(self, local, n, base):
         self.address(local, n+1, base)
@@ -257,7 +253,17 @@ class Struct(Type, Frame):
         return type(other) is Struct and self.name == other.name
     def __str__(self):
         return f'struct {self.name}'
-    
+
+class Union(UserDict, Type): #TODO
+    def __init__(self, name):
+        super().__init__()
+        self.size = 0
+        self.name = name
+    def __setitem__(self, name, attr):
+        attr.location = 0
+        self.size = max(self.size, attr.type.size)
+        super().__setitem__(name, attr)
+
 class Array(Type):
     def __init__(self, of, length):
         self.size = of.size * length.value
@@ -369,7 +375,7 @@ class Unary(OpExpr):
     OP = {'-':Op.NEG,
           '~':Op.NOT}
     def __init__(self, op, unary):
-        assert unary.type.cast(Type('int')), f'Line {op.line_no}: Cannot {op.lexeme} {unary.type}'
+        assert unary.type.cast(Type('int')), f'Line {op.line}: Cannot {op.lexeme} {unary.type}'
         super().__init__(unary.type, op)
         self.unary = unary
     def reduce(self, n):
@@ -396,7 +402,7 @@ class AddrOf(Expr):
 
 class Deref(Expr):
     def __init__(self, token, unary):
-        assert hasattr(unary.type, 'to'), f'Line {token.line_no}: Cannot {token.lexeme} {unary.type}'
+        assert hasattr(unary.type, 'to'), f'Line {token.line}: Cannot {token.lexeme} {unary.type}'
         super().__init__(unary.type.to, token)
         self.unary = unary
     def store(self, n):
@@ -409,7 +415,7 @@ class Deref(Expr):
 
 class Cast(Expr):
     def __init__(self, type, token, cast):
-        assert type.cast(cast.type), f'Line {token.line_no}: Cannot cast {cast.type} to {type}'
+        assert type.cast(cast.type), f'Line {token.line}: Cannot cast {cast.type} to {type}'
         super().__init__(type, token)
         self.cast = cast
     def reduce(self, n):
@@ -462,7 +468,7 @@ class Binary(OpExpr):
           '%': '_mod',
           '%=':'_mod'}
     def __init__(self, op, left, right):
-        assert left.type.cast(right.type), f'Line {op.line_no}: Cannot {left.type} {op.lexeme} {right.type}'
+        assert left.type.cast(right.type), f'Line {op.line}: Cannot {left.type} {op.lexeme} {right.type}'
         super().__init__(left.type, op)
         self.left, self.right = left, right
     def reduce(self, n):
@@ -552,7 +558,7 @@ class Condition(Expr):
 
 class Assign(Expr):
     def __init__(self, token, left, right):
-        left.type == right.type, f'Line {token.line_no}: {left.type} != {right.type}'
+        left.type == right.type, f'Line {token.line}: {left.type} != {right.type}'
         super().__init__(left.type, token)
         self.left, self.right = left, right      
     def reduce(self, n):
@@ -589,9 +595,6 @@ class Local(Expr):
         return self.type.reduce(self, n, 'FP')
     def address(self, n):
         return self.type.address(self, n, 'FP')
-
-class Param(Local):
-    pass
 
 class Attr(Local):
     def store(self, n):
@@ -680,7 +683,7 @@ class Post(OpExpr):
     OP = {'++':Op.ADD,
           '--':Op.SUB}
     def __init__(self, op, postfix):
-        assert postfix.type.cast(Type('int')), f'Line {op.line_no}: Cannot {op.lexeme} {postfix.type}' 
+        assert postfix.type.cast(Type('int')), f'Line {op.line}: Cannot {op.lexeme} {postfix.type}' 
         super().__init__(postfix.type, op)
         self.postfix = postfix
     def reduce(self, n):
@@ -748,7 +751,7 @@ class Args(UserList, Expr):
 class Call(Expr):
     def __init__(self, func, args):
         for i, param in enumerate(func.params):
-            assert param.type == args[i].type, f'Line {func.token.line_no}: Argument #{i+1} of {func.token.lexeme} {param} != {args[i].type}'
+            assert param.type == args[i].type, f'Line {func.token.line}: Argument #{i+1} of {func.token.lexeme} {param} != {args[i].type}'
         super().__init__(func.type, func.token)
         self.func, self.args = func, args
     def reduce(self, n):
@@ -767,7 +770,7 @@ class Return(Expr):
         super().__init__(Void() if expr is None else expr.type, token)
         self.expr = expr
     def generate(self, n):
-        assert env.defn.type == self.type, f'Line {self.token.line_no}: {env.defn.type} != {self.type} in {env.defn.token.lexeme}'       
+        assert env.defn.type == self.type, f'Line {self.token.line}: {env.defn.type} != {self.type} in {env.defn.token.lexeme}'       
         if self.expr:
             self.expr.reduce(n)
         emit.jump(Cond.JR, f'.L{env.return_label}')
@@ -793,8 +796,6 @@ class If(Statement):
             if env.if_jump_end:
                 emit.append_label(f'.L{label}')
         else:
-            emit.append_label(f'.L{label}')
-        if env.if_jump_end:
             emit.append_label(f'.L{label}')
     def branch(self, n, root):
         sublabel = env.next_label()
