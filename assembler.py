@@ -108,11 +108,14 @@ class Assembler:
     def new_string(self, string): #TODO
         for char in string:
             self.new_char(char)
+    def name(self, name, value):
+        self.names[name] = value
         
     def assemble(self, asm):        
         self.inst = []
         self.data = []
         self.labels = []
+        self.names = {}
         for self.line_no, line in enumerate(map(str.strip, asm.strip().split('\n')), 1):
             if ';' in line:
                 line, comment = map(str.strip, line.split(';', 1))
@@ -121,6 +124,8 @@ class Assembler:
                 self.index = 0                
                 if self.match('label'):
                     self.new_data(*self.values())
+                elif self.match('label', '=', 'const'):
+                    self.name(*self.values())
                 elif self.peek('label'):
                     print(f'{self.line_no: >2}|{line}')
                     if self.match('label', ':'):
@@ -173,7 +178,7 @@ class Assembler:
                         self.inst3(*self.values())                    
                     elif self.match('op', 'reg', ',', 'reg', ',', 'const'):
                         self.inst4(*self.values())
-                    elif self.accept('push'): #TODO Optimize push and pop
+                    elif self.accept('push'):
                         args = [self.expect('reg')]
                         while self.accept(','):
                             args.append(self.expect('reg'))
@@ -253,6 +258,8 @@ class Assembler:
         elif type_ == 'op':
             return Op[value.upper()]
         elif type_ == 'label':
+            if value in self.names:
+                return self.names[value]
             return value
     
     def values(self):
