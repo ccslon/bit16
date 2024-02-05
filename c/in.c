@@ -1,10 +1,22 @@
-#include <stdio.h>
+#include "BIOS.c"
 
-void main() {
-    while (1) {
-        char c = getc(&stdin);
-        if (c) {
-            putchar(c);
+#define SIZE 0xff
+
+char buffer[SIZE];
+
+void iter(char c) {
+    if (c == '\n') {
+        gets(buffer);
+        int i; int j;
+        for (i = j = 0; buffer[i] != '\0'; i++) {
+            if (buffer[i] == '\b')
+                j--;
+            else {
+                buffer[j] = buffer[i];
+                j++;
+            }
         }
+        buffer[j] = '\0';
+        printf(buffer);
     }
 }

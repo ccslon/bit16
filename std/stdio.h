@@ -4,7 +4,7 @@ struct _FILE_ {
     int read;
     int write;
 };
-FILE stdin = {(char*)0x7e00, 0, 0};
+FILE stdin = {(char*)0x7e00, 1, 1};
 FILE stdout = {(char*)0x7f00, 0, 0};
 char fgetc(FILE* stream) {
     return stream->buffer[stream->read++];
@@ -16,14 +16,14 @@ char getchar() {
 char* fgets(char* s, int n, FILE* stream) {
     char c;
     char* cs = s;
-    while (--n > 0 && (c = getc(stream))) // "enter"
+    while (--n > 0 && (c = fgetc(stream))) // "enter"
         if ((*cs++ = c) == '\n')
             break;
     *cs = '\0';
-    return (c && c == c) ? 0 : s;
+    return s;
 }
 char* gets(char* s) {
-
+    return fgets(s, 0xff, &stdin);
 }
 int fputc(char c, FILE* stream) {
     stream->buffer[stream->write] = c;
