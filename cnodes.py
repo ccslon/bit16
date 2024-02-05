@@ -751,7 +751,7 @@ class Args(UserList, Expr):
 class Call(Expr):
     def __init__(self, func, args):
         for i, param in enumerate(func.params):
-            assert param.type == args[i].type, f'Line {func.token.line}: Argument #{i+1} of {func.token.lexeme} {param} != {args[i].type}'
+            assert param.type == args[i].type, f'Line {func.token.line}: Argument #{i+1} of {func.token.lexeme} {param.type} != {args[i].type}'
         super().__init__(func.type, func.token)
         self.func, self.args = func, args
     def reduce(self, n):
