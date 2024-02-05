@@ -1,15 +1,36 @@
 #define FILE struct _FILE_
 struct _FILE_ {
-    int* buffer;
+    char* buffer;
     int read;
     int write;
 };
-FILE stdout = {(int*)0x7f00, 0, 0};
+FILE stdin = {(char*)0x7e00, 0, 0};
+FILE stdout = {(char*)0x7f00, 0, 0};
+char fgetc(FILE* stream) {
+    return stream->buffer[stream->read++];
+}
+#define getc() (fgetc(&stdin))
+char getchar() {
+    return fgetc(&stdin);
+}
+char* fgets(char* s, int n, FILE* stream) {
+    char c;
+    char* cs = s;
+    while (--n > 0 && (c = getc(stream))) // "enter"
+        if ((*cs++ = c) == '\n')
+            break;
+    *cs = '\0';
+    return (c && c == c) ? 0 : s;
+}
+char* gets(char* s) {
+
+}
 int fputc(char c, FILE* stream) {
     stream->buffer[stream->write] = c;
     stream->write++;
     return 0;
 }
+#define putc(c) (fputc(c, &stdout))
 int putchar(char c) {
     return fputc(c, &stdout);
 }
