@@ -1,9 +1,8 @@
-#define FILE struct _FILE_
-struct _FILE_ {
+typedef struct _FILE_ {
     char* buffer;
     int read;
     int write;
-};
+} FILE;
 FILE stdin = {(char*)0x7e00, 1, 1};
 FILE stdout = {(char*)0x7f00, 0, 0};
 char fgetc(FILE* stream) {

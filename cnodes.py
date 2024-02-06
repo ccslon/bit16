@@ -232,9 +232,6 @@ class Struct(Frame, Type):
     def __init__(self, name):
         super().__init__()
         self.name = name
-    def address(self, local, n, base):
-        emit.inst4(Op.ADD, regs[n], regs[base], local.location)
-        return regs[n]
     def store(self, local, n, base):
         self.address(local, n+1, base)
         for i in range(self.size):
@@ -273,7 +270,7 @@ class Array(Type):
         if local.location is None:
             emit.load_glob(regs[n], local.token.lexeme)
         else:
-            emit.inst4(Op.ADD, regs[n], regs[base], local.location)
+            super().address(local, n, base)
         return regs[n]
     def reduce(self, local, n, base):
         return self.address(local, n, base)

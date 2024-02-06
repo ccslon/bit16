@@ -144,7 +144,7 @@ class CParser:
         CAST -> UNARY
                |'(' ABSTRACT ')' CAST
         '''
-        if self.peekn('(', ('type','struct','voidptr','const','union','enum')):
+        if self.peekn('(', ('type','struct','voidptr','const','union','enum')) or self.peek('(') and self.peek_typedefs(1):
             token = next(self)
             type = self.abstract()
             self.expect(')')
@@ -175,6 +175,8 @@ class CParser:
                     self.expect(';')
             else:
                 spec = self.structs[id.lexeme]
+        elif self.peek('id'):
+            spec = self.typedefs[next(self).lexeme]
         elif self.accept('union'):
             id = self.accept('id')
             if self.accept('{'):
@@ -543,12 +545,17 @@ class CParser:
         BLOCK -> {DECL} {STATE} [BLOCK]
         '''
         block = Block()
-        while self.peek('type','struct','voidptr','const','union','enum'):
+        while self.accept('typedef'):
+            type = Void() if self.accept('void') else self.abstract()
+            id = self.accept('id')
+            self.typedefs[id.lexeme] = type
+            self.expect(';')
+        while self.peek('type','struct','voidptr','const','union','enum') or self.peek_typedefs():
             block.append(self.init())
-        while self.peek(';','{','(','id','*','++','--','return','if','switch','while','do','for','break','continue','goto'):
+        while self.peek(';','{','(','id','*','++','--','return','if','switch','while','do','for','break','continue','goto') and not self.peek_typedefs():
             block.append(self.statement())
         if block:
-            block.extend(self.block())        
+            block.extend(self.block())
         return block
     
     def enum(self, value):
@@ -563,44 +570,53 @@ class CParser:
     
     def program(self):
         program = Program()
-        while self.peek('void','type','struct','voidptr','const','union','enum'):
-            type = Void() if self.accept('void') else self.abstract()
-            id = self.accept('id')
-            if self.accept('('):                    #Function
-                assert id is not None
-                self.begin_func()
-                params = self.params()
-                self.expect(')')
-                self.functions[id.lexeme] = Func(type, id, params)
-                if self.accept('{'):
-                    assert not any(param.token is None for param in params)
-                    block = self.block()
-                    self.expect('}')
-                    self.end_func()
-                    if id.lexeme == 'main':
-                        program.insert(0, Main(block, self.calls, self.space))
-                    else:
-                        program.append(Defn(type, id, params, block, self.returns, self.calls, self.space))
-                else:
-                    self.expect(';')                     
-                    self.end_func()                    
-            else:
-                if id:                              #Global
-                    assert not isinstance(type, Void)
-                    while self.accept('['):
-                        type = Array(type, Num(self.expect('num')))
-                        self.expect(']')
-                    glob = Glob(type, id)
-                    if self.accept('='):
-                        if self.accept('{'):
-                            glob.init = self.list()
-                            self.expect('}')
-                        else:
-                            glob.init = self.expr()
-                    self.globs[id.lexeme] = glob
-                    program.append(glob)
+        while self.peek('void','type','struct','voidptr','typedef','const','union','enum') or self.peek_typedefs():
+            if self.accept('typedef'):
+                type = Void() if self.accept('void') else self.abstract()
+                id = self.accept('id')
+                self.typedefs[id.lexeme] = type
                 self.expect(';')
-        return program
+            else:
+                type = Void() if self.accept('void') else self.abstract()
+                id = self.accept('id')
+                if self.accept('('):                    #Function
+                    assert id is not None
+                    self.begin_func()
+                    params = self.params()
+                    self.expect(')')
+                    self.functions[id.lexeme] = Func(type, id, params)
+                    if self.accept('{'):
+                        assert not any(param.token is None for param in params)
+                        block = self.block()
+                        self.expect('}')
+                        self.end_func()
+                        if id.lexeme == 'main':
+                            program.insert(0, Main(block, self.calls, self.space))
+                        else:
+                            program.append(Defn(type, id, params, block, self.returns, self.calls, self.space))
+                    else:
+                        self.expect(';')                     
+                        self.end_func()                    
+                else:
+                    if id:                              #Global
+                        assert not isinstance(type, Void)
+                        while self.accept('['):
+                            type = Array(type, Num(self.expect('num')))
+                            self.expect(']')
+                        glob = Glob(type, id)
+                        if self.accept('='):
+                            if self.accept('{'):
+                                glob.init = self.list()
+                                self.expect('}')
+                            else:
+                                glob.init = self.expr()
+                        self.globs[id.lexeme] = glob
+                        program.append(glob)
+                    self.expect(';')
+        return program    
+    
+    def peek_typedefs(self, offset=0):
+        return self.peek('id', offset=offset) and self.tokens[self.index+offset].lexeme in self.typedefs
     
     def include_divmod(self, op):
         op = {'/':'div',
@@ -623,21 +639,23 @@ class CParser:
         self.end_scope()
         
     def begin_scope(self):
-        self.stack.append((self.scope, self.structs, self.unions, self.enums, self.enum_consts))
+        self.stack.append((self.scope, self.structs, self.typedefs, self.unions, self.enums, self.enum_consts))
         self.scope = self.scope.copy()
         self.structs = self.structs.copy()
+        self.typedefs = self.typedefs.copy()
         self.unions = self.unions.copy()
         self.enums = self.enums.copy()
         self.enum_consts = self.enum_consts.copy()
     
     def end_scope(self):
         self.space = max(self.space, self.scope.size)
-        self.scope, self.structs, self.unions, self.enums, self.enum_consts = self.stack.pop() 
+        self.scope, self.structs, self.typedefs, self.unions, self.enums, self.enum_consts = self.stack.pop() 
     
     def parse(self, text):
         self.stack = []
         self.functions = {}
         self.structs = {}
+        self.typedefs = {}
         self.unions = {}
         self.enums = []        
         self.enum_consts = {}

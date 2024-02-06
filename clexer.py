@@ -42,6 +42,7 @@ class CLexer(LexerBase):
     def RE_eof(self, match):
         r'@\n'
         self.line = 1
+    RE_typedef  = r'\b(typedef)\b'
     RE_const = r'\b(const)\b'
     RE_voidptr = r'\b(void)\s*\*'
     RE_void = r'\b(void)\b'
