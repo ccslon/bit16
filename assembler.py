@@ -172,12 +172,16 @@ class Assembler:
                         self.unary(*self.values())
                     elif self.match('op', 'reg', ',', 'reg'):                    
                         self.inst2(*self.values())
+                        
                     elif self.match('op', 'reg', ',', 'const'):
-                        self.inst2c(*self.values())                    
+                        self.inst2c(*self.values())
+                        
                     elif self.match('op', 'reg', ',', 'reg', ',', 'reg'):
-                        self.inst3(*self.values())                    
+                        self.inst3(*self.values())        
+                        
                     elif self.match('op', 'reg', ',', 'reg', ',', 'const'):
                         self.inst3c(*self.values())
+                        
                     elif self.accept('push'):
                         args = [self.expect('reg')]
                         while self.accept(','):
@@ -197,13 +201,21 @@ class Assembler:
                                                      
                     elif self.match('jump', 'label'):
                         self.imm(Reg.PC, *self.values())
+                        
+                    elif self.match('call','reg'):
+                        self.inst3c(Op.ADD, Reg.LR, Reg.PC, 2)
+                        self.inst2(Op.MOV, Reg.PC, *self.values())
+                        
                     elif self.match('call', 'label'):
                         self.inst3c(Op.ADD, Reg.LR, Reg.PC, 3)
                         self.imm(Reg.PC, *self.values())
+                        
                     elif self.match('ret'):
                         self.inst2(Op.MOV, Reg.PC, Reg.LR)
+                        
                     elif self.match('out', 'reg'):
                         pass
+                    
                     elif self.accept('ldm'):
                         if self.peek('reg'): #ldm A, {B, C}
                             dest = next(self)

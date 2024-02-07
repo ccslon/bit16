@@ -26,7 +26,7 @@ TODO
 [X] Fix void and void*
 [ ] Fix compile function?
 [X] Update Docs
-[ ] Typedef
+[X] Typedef
 [ ] Error handling
 [X] Generate vs Reduce
 [X] Scope in Parser
@@ -201,6 +201,8 @@ class CParser:
                     value += 1
                     value = self.enum(value)
                 self.expect('}')
+            else:
+                assert id and id.lexeme in self.enums
             spec = Type('int')
         else:
             self.error('TYPE SPECIFIER')
@@ -467,15 +469,14 @@ class CParser:
     
     def decl(self):
         '''
-        DECL -> ABSTRACT id {'[' [num] ']'}
+        DECL -> ABSTRACT id {'[' num ']'}
         '''
         type = self.abstract()
         id = self.expect('id')
         while self.accept('['):
             type = Array(type, Num(self.expect('num')))
             self.expect(']')
-        local = Local(type, id)
-        self.scope[id.lexeme] = local
+        local = self.scope[id.lexeme] = Local(type, id)
         return local
     
     def init(self):
