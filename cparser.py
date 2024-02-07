@@ -155,8 +155,9 @@ class CParser:
     def spec(self):
         '''
         TYPE_SPEC -> type
+                    |voidptr
                     |('struct'|'union') id '{' {ABSTRACT id ';'} '}'
-                    |'enum' id '{' id ['=' int] {',' id ['=' int]}'}'
+                    |'enum' id '{' id ['=' num] {',' id ['=' num]}'}'
         '''
         if self.peek('type'):
             spec = Type(next(self).lexeme)
@@ -458,7 +459,7 @@ class CParser:
             next(self)
         
         else:
-            statement = self.assign()
+            statement = self.expr()
             assert isinstance(statement, (Assign, Call, Pre, Post))
             self.expect(';')
             
