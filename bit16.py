@@ -100,40 +100,40 @@ class Jump(Inst):
         if const10 < 0:
             const10 = negative(const10, 10)
         self._bin = '000', f'{cond:03b}', f'{const10:010b}'
-class Inst1(Inst):
+class Nop(Inst):
+    pass    
+class Inst2(Inst):
     def __init__(self, op, rd, rs):
         if op in [Op.NOT, Op.NEG]:
             self.str = f'{op.name} {rd.name}'
         else:
             self.str = f'{op.name} {rd.name}, {rs.name}'
-        self._dec = 1,op,0,rs,rd
-        self._bin = '001',f'{op:04b}','XXX',f'{rs:03b}',f'{rd:03b}'
-class Inst2(Inst):
+        self._dec = 2,op,0,rs,rd
+        self._bin = '010',f'{op:04b}','XXX',f'{rs:03b}',f'{rd:03b}'
+class Inst2c(Inst):
     def __init__(self, op, rd, const6):
         assert -32 <= const6 < 64
         self.str = f'{op.name} {rd.name}, {const6}'
-        self._dec = 2,op,const6,rd
+        self._dec = 3,op,const6,rd
         if const6 < 0:
             const6 = negative(const6, 6)
-        self._bin = '010',f'{op:04b}',f'{const6:06b}',f'{rd:03b}'
+        self._bin = '011',f'{op:04b}',f'{const6:06b}',f'{rd:03b}'
 class Inst3(Inst):
     def __init__(self, op, rd, rs, rs2):
         self.str = f'{op.name} {rd.name}, {rs.name}, {rs2.name}'
         op = op >> 1
-        self._dec = 3,op,0,rs2,rs,rd
-        self._bin = '011',f'{op:03b}','X',f'{rs2:03b}',f'{rs:03b}',f'{rd:03b}'
-class Inst4(Inst):
+        self._dec = 4,op,0,rs2,rs,rd
+        self._bin = '100',f'{op:03b}','X',f'{rs2:03b}',f'{rs:03b}',f'{rd:03b}'
+class Inst3c(Inst):
     def __init__(self, op, rd, rs, const4):
         assert -8 <= const4 < 8
         self.str = f'{op.name} {rd.name}, {rs.name}, {const4}'
         op = op >> 1
-        self._dec = 4,op,const4,rs,rd
+        self._dec = 5,op,const4,rs,rd
         if const4 < 0:
             const4 = negative(const4, 4)
-        self._bin = '100',f'{op:03b}',f'{const4:04b}',f'{rs:03b}',f'{rd:03b}'
-class Inst5(Inst):
-    pass      
-class Load0(Inst):
+        self._bin = '101',f'{op:03b}',f'{const4:04b}',f'{rs:03b}',f'{rd:03b}'
+class Load(Inst):
     def __init__(self, storing, rd, rb, ro):
         if storing:
             self.str = f'LD [{rb.name}, {ro.name}], {rd.name}'
@@ -141,7 +141,7 @@ class Load0(Inst):
             self.str = f'LD {rd.name}, [{rb.name}, {ro.name}]'
         self._dec = 6,int(storing),0,0,ro,rb,rd
         self._bin = '110',str(int(storing)),'0','XX',f'{ro:03b}',f'{rb:03b}',f'{rd:03b}'
-class Load1(Inst):
+class Loadc(Inst):
     def __init__(self, storing, rd, rb, offset5):
         assert 0 <= offset5 < 32
         if storing:

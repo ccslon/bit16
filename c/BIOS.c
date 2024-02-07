@@ -1,14 +1,17 @@
 #include <stdio.h>
 
-void iter(char c);
+void setup();
+void loop(char c);
 
 void main() {
+    setup();
+    char* in = (char*)INPORT;
     while (1) {
-        char c = *stdin.buffer;
+        char c = *in;
         if (c) {
-            fputc(c, &stdin);
             putchar(c);
-            iter(c);
+            fputc(c, &stdin);
+            loop(c);
         }
     }
 }

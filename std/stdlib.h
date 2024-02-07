@@ -1,8 +1,7 @@
-#define div_t struct div_t
-div_t {
+typedef struct div_t {
     int quot;
     int rem;
-};
+} div_t;
 div_t div(int num, int den) {
     div_t ans;
     int quot = 0;

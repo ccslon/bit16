@@ -125,10 +125,8 @@ class Emitter:
             if type(src) is Reg:
                 self.add(f'{op.name} {rd.name}, {src.name}')
             else:
-                self.add(f'{op.name} {rd.name}, {src}')    
-    def inst3(self, op, rd, rs, rs2):
-        self.add(f'{op.name} {rd.name}, {rs.name}, {rs2.name}')
-    def inst4(self, op, rd, rs, const4):
+                self.add(f'{op.name} {rd.name}, {src}')
+    def inst3c(self, op, rd, rs, const4):
         self.add(f'{op.name} {rd.name}, {rs.name}, {const4}')
     def jump(self, cond, target):
         self.add(f'{cond.name} {target}')
@@ -163,7 +161,7 @@ class Type(CNode):
         return regs[n]
     def address(self, local, n, base):
         if -8 <= local.location < 8:
-            emit.inst4(Op.ADD, regs[n], regs[base], local.location)
+            emit.inst3c(Op.ADD, regs[n], regs[base], local.location)
         elif -32 <= local.location < 32:
             emit.inst(Op.MOV, regs[n], regs[base])
             emit.inst(Op.ADD, regs[n], local.location)
@@ -688,7 +686,7 @@ class Post(OpExpr):
         return regs[n]
     def generate(self, n):
         self.postfix.reduce(n)
-        emit.inst4(self.op, regs[n+1], regs[n], 1)
+        emit.inst3c(self.op, regs[n+1], regs[n], 1)
         self.postfix.store(n+1)
 
 class Access(Expr):

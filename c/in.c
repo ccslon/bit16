@@ -4,7 +4,9 @@
 
 char buffer[SIZE];
 
-void iter(char c) {
+void setup() {}
+
+void loop(char c) {
     if (c == '\n') {
         gets(buffer);
         int i; int j;

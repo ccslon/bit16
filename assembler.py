@@ -6,7 +6,7 @@ Created on Fri Aug 25 10:49:03 2023
 """
 
 import re
-from bit16 import Reg, Op, Cond, Data, Char, Jump, Inst1, Inst2, Inst3, Inst4, Load0, Load1, Imm, ESCAPE
+from bit16 import Reg, Op, Cond, Data, Char, Jump, Inst2, Inst2c, Inst3, Inst3c, Load, Loadc, Imm, ESCAPE
 
 TOKENS = {
     'const': r'-?\d+|x[0-9a-f]+|b[01]+',
@@ -64,16 +64,16 @@ class Assembler:
             self.new_data(0)
     def jump(self, cond, label):
         self.new_inst(Jump, cond, label)
-    def load0(self, rd, rb, ro):
-        self.new_inst(Load0, False, rd, rb, ro)
-    def load1(self, rd, rb, offset5):
-        self.new_inst(Load1, False, rd, rb, offset5)
+    def load(self, rd, rb, ro):
+        self.new_inst(Load, False, rd, rb, ro)
+    def loadc(self, rd, rb, offset5):
+        self.new_inst(Loadc, False, rd, rb, offset5)
     def store(self, rb, rd):
-        self.new_inst(Load1, True, rd, rb, 0)
+        self.new_inst(Loadc, True, rd, rb, 0)
     def store0(self, rb, ro, rd):
-        self.new_inst(Load0, True, rd, rb, ro)
+        self.new_inst(Load, True, rd, rb, ro)
     def store1(self, rb, offset5, rd):
-        self.new_inst(Load1, True, rd, rb, offset5)
+        self.new_inst(Loadc, True, rd, rb, offset5)
     def imm(self, rd, value):
         self.new_inst(Imm, rd)
         self.new_imm(value)
@@ -81,15 +81,15 @@ class Assembler:
         self.new_inst(Imm, rd)
         self.new_imm_char(value)
     def unary(self, op, rd):
-        self.new_inst(Inst1, op, rd, rd)
-    def inst1(self, op, rd, rs):
-        self.new_inst(Inst1, op, rd, rs)
-    def inst2(self, op, rd, const6):
-        self.new_inst(Inst2, op, rd, const6)
+        self.new_inst(Inst2, op, rd, rd)
+    def inst2(self, op, rd, rs):
+        self.new_inst(Inst2, op, rd, rs)
+    def inst2c(self, op, rd, const6):
+        self.new_inst(Inst2c, op, rd, const6)
     def inst3(self, op, rd, rs, rs2):
         self.new_inst(Inst3, op, rd, rs, rs2)
-    def inst4(self, op, rd, rs, const4):
-        self.new_inst(Inst4, op, rd, rs, const4)
+    def inst3c(self, op, rd, rs, const4):
+        self.new_inst(Inst3c, op, rd, rs, const4)
     def new_inst(self, inst, *args):
         self.inst.append((self.labels, inst, args))
         self.labels = []
@@ -151,11 +151,11 @@ class Assembler:
                     elif self.match('cond', 'label'):
                         self.jump(*self.values())
                     elif self.match('ld', 'reg', ',', '[', 'reg', ',', 'reg', ']'):
-                        self.load0(*self.values())
+                        self.load(*self.values())
                     elif self.match('ld', 'reg', ',', '[', 'reg', ']'):
-                        self.load1(*self.values(), 0)
+                        self.loadc(*self.values(), 0)
                     elif self.match('ld', 'reg', ',', '[', 'reg', ',', 'const', ']'):
-                        self.load1(*self.values())
+                        self.loadc(*self.values())
                     elif self.match('ld', '[', 'reg', ',', 'reg', ']', ',', 'reg'):
                         self.store0(*self.values())
                     elif self.match('ld', '[', 'reg', ']', ',', 'reg'):
@@ -171,19 +171,23 @@ class Assembler:
                     elif self.match('op', 'reg'):
                         self.unary(*self.values())
                     elif self.match('op', 'reg', ',', 'reg'):                    
-                        self.inst1(*self.values())
+                        self.inst2(*self.values())
+                        
                     elif self.match('op', 'reg', ',', 'const'):
-                        self.inst2(*self.values())                    
+                        self.inst2c(*self.values())
+                        
                     elif self.match('op', 'reg', ',', 'reg', ',', 'reg'):
-                        self.inst3(*self.values())                    
+                        self.inst3(*self.values())        
+                        
                     elif self.match('op', 'reg', ',', 'reg', ',', 'const'):
-                        self.inst4(*self.values())
+                        self.inst3c(*self.values())
+                        
                     elif self.accept('push'):
                         args = [self.expect('reg')]
                         while self.accept(','):
                             args.append(self.expect('reg'))
                         self.expect('end')
-                        self.inst2(Op.SUB, Reg.SP, len(args))
+                        self.inst2c(Op.SUB, Reg.SP, len(args))
                         for i, reg in enumerate(args):
                             self.store1(Reg.SP, len(args)-1-i, reg)   
                     elif self.accept('pop'):
@@ -192,18 +196,26 @@ class Assembler:
                             args.append(self.expect('reg'))
                         self.expect('end')
                         for i, reg in enumerate(reversed(args)):
-                            self.load1(reg, Reg.SP , i)
-                        self.inst2(Op.ADD, Reg.SP, len(args))
+                            self.loadc(reg, Reg.SP , i)
+                        self.inst2c(Op.ADD, Reg.SP, len(args))
                                                      
                     elif self.match('jump', 'label'):
                         self.imm(Reg.PC, *self.values())
+                        
+                    elif self.match('call','reg'):
+                        self.inst3c(Op.ADD, Reg.LR, Reg.PC, 2)
+                        self.inst2(Op.MOV, Reg.PC, *self.values())
+                        
                     elif self.match('call', 'label'):
-                        self.inst4(Op.ADD, Reg.LR, Reg.PC, 3)
+                        self.inst3c(Op.ADD, Reg.LR, Reg.PC, 3)
                         self.imm(Reg.PC, *self.values())
+                        
                     elif self.match('ret'):
-                        self.inst1(Op.MOV, Reg.PC, Reg.LR)
+                        self.inst2(Op.MOV, Reg.PC, Reg.LR)
+                        
                     elif self.match('out', 'reg'):
                         pass
+                    
                     elif self.accept('ldm'):
                         if self.peek('reg'): #ldm A, {B, C}
                             dest = next(self)
@@ -224,12 +236,12 @@ class Assembler:
                             self.expect(',')
                             dest = self.expect('reg')
                             for i, reg in enumerate(regs):
-                                self.load1(reg, dest, i)                            
+                                self.loadc(reg, dest, i)                            
                         else:
                             self.error()
                         
                     elif self.match('halt'):
-                        self.inst1(Op.MOV, Reg.PC, Reg.PC)
+                        self.inst2(Op.MOV, Reg.PC, Reg.PC)
                     else:
                         self.error()                    
         objects = [([], Jump, (Cond.JNV, 0))]

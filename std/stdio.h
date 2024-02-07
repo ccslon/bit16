@@ -1,9 +1,10 @@
+#define INPORT 0x8000
 typedef struct _FILE_ {
     char* buffer;
     int read;
     int write;
 } FILE;
-FILE stdin = {(char*)0x7e00, 1, 1};
+FILE stdin = {(char*)0x7e00, 0, 0};
 FILE stdout = {(char*)0x7f00, 0, 0};
 char fgetc(FILE* stream) {
     return stream->buffer[stream->read++];
