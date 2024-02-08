@@ -189,7 +189,8 @@ class Assembler:
                         self.expect('end')
                         self.inst2c(Op.SUB, Reg.SP, len(args))
                         for i, reg in enumerate(args):
-                            self.store1(Reg.SP, len(args)-1-i, reg)   
+                            self.store1(Reg.SP, len(args)-1-i, reg)
+                            
                     elif self.accept('pop'):
                         args = [self.expect('reg')]
                         while self.accept(','):

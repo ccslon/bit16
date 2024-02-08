@@ -614,10 +614,13 @@ class Glob(Local):
     def generate(self):
         self.type.glob(self)
         
-class Func(Local):
+class Func(Expr):
     def __init__(self, type, token, params):
         super().__init__(type, token)
         self.params = params
+    def address(self, n):
+        emit.load_glob(regs[n], self.token.lexeme)
+        return regs[n]
 
 class Params(UserList, Expr):
     pass
