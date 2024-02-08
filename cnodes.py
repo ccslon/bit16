@@ -758,7 +758,7 @@ class Call(Expr):
     def generate(self, n):
         self.args.generate(n)
         emit.call(self.func.token.lexeme)
-        if self.func.params.variable:
+        if self.func.params.variable and len(self.args) > len(self.func.params):
             emit.inst(Op.ADD, Reg.SP, len(self.args)-len(self.func.params))
         if n > 0:
             emit.inst(Op.MOV, regs[n], Reg.A)        

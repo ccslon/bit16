@@ -377,55 +377,15 @@ foo:
   RET
 '''
 HELLO_ASM = '''
-.S0: "Hello world!\\0"
+.S0: "Hello world!\\n\\0"
+main:
+  MOV FP, SP
   LD B, =.S0
-  MOV A, B
-  CALL puts
+  PUSH B
+  CALL printf
   MOV B, A
+  MOV SP, FP
   HALT
-STDOUT: 32767
-putchar:
-  SUB SP, 1
-  LD [SP, 0], A
-  LD A, [SP, 0] ; c
-  LD B, =STDOUT
-  LD B, [B]
-  LD [B], A
-  MOV A, 0
-  JR .L0
-.L0:
-  ADD SP, 1
-  RET
-puts:
-  PUSH LR, B, C
-  SUB SP, 1
-  LD [SP, 0], A
-.L2:
-  LD B, [SP, 0] ; str
-  LD B, [B]
-  LD C, '\\0'
-  CMP B, C
-  JEQ .L3
-  LD B, [SP, 0] ; str
-  LD B, [B]
-  MOV A, B
-  CALL putchar
-  MOV B, A
-  LD B, [SP, 0] ; str
-  ADD C, B, 1
-  LD [SP, 0], C ; str
-  JR .L2
-.L3:
-  LD B, '\\n'
-  MOV A, B
-  CALL putchar
-  MOV B, A
-  MOV B, 0
-  JR .L1
-.L1:
-  MOV A, B
-  ADD SP, 1
-  POP PC, B, C
 '''
 ARRAY_ASM = '''
 foo:
@@ -942,9 +902,8 @@ class TestCompiler(TestCase):
     def test_calls(self):
         self.code_eq_asm('calls.c', CALLS_ASM)
         
-    # def test_hello(self):
-    #     self.maxDiff = None
-    #     self.code_eq_asm('hello.c', HELLO_ASM)
+    def test_hello(self):
+        self.code_eq_asm('hello.c', HELLO_ASM)
         
     def test_array(self):
         self.code_eq_asm('array.c', ARRAY_ASM)
