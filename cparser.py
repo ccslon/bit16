@@ -6,7 +6,7 @@ Created on Mon Jul  3 19:47:39 2023
 """
 
 import clexer
-from cnodes import Program, Main, Defn, Params, Block, Label, Goto, Break, Continue, For, Do, While, Switch, Case, If, Statement, Return, Func, Glob, Attr, Local, InitList, Assign, Condition, Logic, Compare, Binary, Array, Union, Struct, Pointer, Const, VoidPtr, Type, Void, Pre, Cast, SizeOf, Deref, AddrOf, Not, Unary, Args, Call, Arrow, SubScr, Dot, Post, String, Char, EnumConst, Num, Frame
+from cnodes import Program, Main, Defn, Params, Block, Label, Goto, Break, Continue, For, Do, While, Switch, Case, If, Statement, Return, FuncPtr, Func, Glob, Attr, Local, InitList, Assign, Condition, Logic, Compare, Binary, Array, Union, Struct, Pointer, Const, VoidPtr, Type, Void, Pre, Cast, SizeOf, Deref, AddrOf, Not, Unary, Args, Call, Arrow, SubScr, Dot, Post, String, Char, EnumConst, Num, Frame
 
 '''
 TODO
@@ -47,30 +47,7 @@ class Scope(Frame):
         copy.data = self.data.copy()
         return copy
 
-class CParser:
-    
-    def declarator(self):
-        if self.accept('*'):
-            return Deref(self.declarator())
-        return self.direct()
-    
-    def direct(self):
-        if self.peek('id'):
-            direct = next(self)
-        elif self.accept('('):
-            direct = self.declarator()
-            self.expect(')')
-        else:
-            self.error()
-        return direct           
-    
-    def declaration(self):
-        abstract = self.abstract()
-        if not self.accept(';'):
-            declarator = self.declarator()
-            while self.peek('[','('):
-                if self.accept('['):                
-                    self.expect(']')      
+class CParser: 
     
     def resolve(self, name):
         if name in self.param_scope:
@@ -115,7 +92,7 @@ class CParser:
                 postfix = SubScr(next(self), postfix, self.expr())
                 self.expect(']')
             elif self.accept('('):
-                assert isinstance(postfix, Func)
+                assert isinstance(postfix, (Func, FuncPtr))
                 postfix = Call(postfix, self.args())
                 self.expect(')')
                 self.calls = True
@@ -153,7 +130,11 @@ class CParser:
         if self.peek('-','~',):
             return Unary(next(self), self.cast())
         elif self.peek('*'):
-            return Deref(next(self), self.cast())
+            token = next(self)
+            cast = self.cast()
+            if isinstance(cast, FuncPtr):
+                return cast
+            return Deref(token, cast)
         elif self.peek('&'):
             return AddrOf(next(self), self.cast())
         elif self.peek('!'):
@@ -447,11 +428,20 @@ class CParser:
         PARAM -> ABSTRACT ['id'] {'[' ']'}
         '''
         type = self.abstract()
-        id = self.accept('id')
-        while self.accept('['):
-            type = Pointer(type)
-            self.expect(']')
-        param = Local(type, id)
+        if self.accept('('):
+            self.expect('*')
+            id = self.accept('id')
+            self.expect(')')
+            self.expect('(')
+            params = self.params()
+            self.expect(')')
+            param = FuncPtr(Pointer(type), id, params)
+        else:            
+            id = self.accept('id')
+            while self.accept('['):
+                type = Pointer(type)
+                self.expect(']')
+            param = Local(type, id)
         if id:
             self.param_scope[id.lexeme] = param
         return param

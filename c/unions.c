@@ -40,5 +40,4 @@ void main() {
     printToken(&t1);
     struct Token t2 = strToken("Hello!");
     printToken(&t2);
-    =
 }

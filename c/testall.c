@@ -1,16 +1,14 @@
 #include <stdio.h>
 #include <stdlib.h>
-#define Cat struct _Cat_
-#define Owner struct _Owner_
-Owner {
+typedef struct _Owner_ {
     char* name;
     int phone;
-};
-Cat {
+} Owner;
+typedef struct _Cat_ {
     char* name;
     int age;
     Owner* owner;
-};
+} Cat;
 int dofib(const int n, const int a, const int b) {
     switch (n) {
         case 1: return a;
@@ -41,11 +39,13 @@ Cat make_cat(char* name, int age, Owner* owner) {
     cat.owner = owner;
     return cat;
 }
+int mycmp(int a, int b) {
+    return a < b;
+}
 #define LEN 5
 int arr[LEN];
 #define N 7
 int sarr[6] = {1,2,3,4,4,6};
-
 void main() {
     //Hello
     printf("Hello world!\n");
@@ -72,7 +72,7 @@ void main() {
     for (i = 0; i < LEN; i++)
         printf("%d ", arr[i]);
     putchar('\n');
-    qsort(arr, 0, LEN-1);
+    qsort(arr, 0, LEN-1, &mycmp);
     for (i = 0; i < LEN; i++)
         printf("%d ", arr[i]);
     putchar('\n');

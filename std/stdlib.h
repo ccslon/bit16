@@ -1,4 +1,4 @@
-typedef struct div_t {
+typedef struct _div_t_ {
     int quot;
     int rem;
 } div_t;
@@ -44,18 +44,18 @@ void swap(int* v, int i, int j) {
     v[i] = v[j];
     v[j] = t;
 }
-void qsort(int* v, int left, int right) {
+void qsort(int* v, int left, int right, int (*cmp)(int, int)) {
     int i; int last;
     if (left >= right)
         return;
     swap(v, left, (left + right) >> 1); // (l+r) / 2 
     last = left;
     for (i = left+1; i <= right; i++)
-        if (v[i] < v[left])
+        if ((*cmp)(v[i], v[left]))
             swap(v, ++last, i);
     swap(v, left, last);
-    qsort(v, left, last-1);
-    qsort(v, last+1, right);
+    qsort(v, left, last-1, cmp);
+    qsort(v, last+1, right, cmp);
 }
 int next = 0;
 int rand() {

@@ -102,8 +102,11 @@ class Emitter:
         if calls:
             regs = (Reg.LR,) + regs
         self.add('POP '+', '.join(reg.name for reg in regs))
-    def call(self, label):
-        self.add(f'CALL {label}')
+    def call(self, proc):
+        if isinstance(proc, str):
+            self.add(f'CALL {proc}')
+        else:
+            self.add(f'CALL {proc.name}')
     def ret(self):
         self.add('RET')
     def load_glob(self, rd, name):
@@ -204,7 +207,7 @@ class Const(Type):
             or type(other) is Const and self.type == other.type
     def __str__(self):
         return f'const {self.type}'
-        
+    
 class Pointer(Type):
     def __init__(self, type):
         super().__init__(type)
@@ -613,14 +616,25 @@ class Glob(Local):
         return regs[n]
     def generate(self):
         self.type.glob(self)
-        
-class Func(Expr):
+
+class FuncBase(Expr):    
     def __init__(self, type, token, params):
         super().__init__(type, token)
         self.params = params
+        
+class Func(FuncBase):
     def address(self, n):
         emit.load_glob(regs[n], self.token.lexeme)
-        return regs[n]
+        return regs[n]      
+    def call(self, n):
+        emit.call(self.token.lexeme)
+
+class FuncPtr(FuncBase):
+    def reduce(self, n):
+        Type.reduce(None, self, n, 'FP')
+    def call(self, n):
+        Type.reduce(None, self, n, 'FP')
+        emit.call(regs[n])
 
 class Params(UserList, Expr):
     pass
@@ -757,7 +771,7 @@ class Call(Expr):
         return regs[n]
     def generate(self, n):
         self.args.generate(n)
-        emit.call(self.func.token.lexeme)
+        self.func.call(n) #emit.call(self.func.token.lexeme)
         if self.func.params.variable and len(self.args) > len(self.func.params):
             emit.inst(Op.ADD, Reg.SP, len(self.args)-len(self.func.params))
         if n > 0:

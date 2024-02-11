@@ -9,8 +9,6 @@ void main() {
     int i;
     int loc;
     for (i = 0; i < N; i++) {
-        loc = bsearch(i, arr, 6);
-        printf("%d\n", loc);
-        //printf("%d\n", bsearch(i, arr, 6));
+        printf("%d\n", bsearch(i, arr, 6));
     }
 }
