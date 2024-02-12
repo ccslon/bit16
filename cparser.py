@@ -6,7 +6,7 @@ Created on Mon Jul  3 19:47:39 2023
 """
 
 import clexer
-from cnodes import Program, Main, Defn, Params, Block, Label, Goto, Break, Continue, For, Do, While, Switch, Case, If, Statement, Return, FuncPtr, Func, Glob, Attr, Local, InitList, Assign, Condition, Logic, Compare, Binary, Array, Union, Struct, Pointer, Const, VoidPtr, Type, Void, Pre, Cast, SizeOf, Deref, AddrOf, Not, Unary, Args, Call, Arrow, SubScr, Dot, Post, String, Char, EnumConst, Num, Frame
+from cnodes import Program, Main, Defn, Params, Block, Label, Goto, Break, Continue, For, Do, While, Switch, Case, If, Statement, Return, FuncPtr, Func, Glob, Attr, Local, InitList, Assign, Condition, Logic, Compare, Binary, FuncType, Array, Union, Struct, Pointer, Const, VoidPtr, Type, Void, Pre, Cast, SizeOf, Deref, AddrOf, Not, Unary, Args, Call, Arrow, SubScr, Dot, Post, String, Char, EnumConst, Num, Frame
 
 '''
 TODO
@@ -599,6 +599,7 @@ class CParser:
                 id = self.accept('id')
                 if self.accept('('):                    #Function
                     assert id is not None
+                    type = FuncType(type)
                     self.begin_func()
                     params = self.params()
                     self.expect(')')

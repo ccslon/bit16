@@ -298,6 +298,19 @@ class Array(Type):
     def __str__(self):
         return f'{self.of}[]'
 
+class FuncType(Type):
+    def __init__(self, type):
+        super().__init__(type)
+        self.size = type.size
+    def cast(self, other):
+        return self.type.cast(other) \
+            or type(other) is FuncType and self.type.cast(other.type)
+    def __eq__(self, other):
+        return self.type == other \
+            or type(other) is FuncType and self.type == other.type
+    def __str__(self):
+        return str(self.type)
+
 class Expr(CNode):
     def __init__(self, type, token):
         self.type = type
