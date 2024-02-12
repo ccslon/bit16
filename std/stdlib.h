@@ -23,15 +23,16 @@ int abs(int n) {
     if (n < 0) return -n;
     return n;
 }
-int bsearch(int x, int* v, int n) {
+int bsearch(int x, int* v, int n, int (*cmp)(int, int)) {
     int low = 0;
     int mid;
     int high = n - 1;
     while (low <= high) {
         mid = low + ((high - low) >> 1);
-        if (x < v[mid])
+        int cond = (*cmp)(x, v[mid]);
+        if (cond < 0)
             high = mid - 1;
-        else if (x > v[mid]) 
+        else if (cond > 0) 
             low = mid + 1;
         else
             return mid;
@@ -51,7 +52,7 @@ void qsort(int* v, int left, int right, int (*cmp)(int, int)) {
     swap(v, left, (left + right) >> 1); // (l+r) / 2 
     last = left;
     for (i = left+1; i <= right; i++)
-        if ((*cmp)(v[i], v[left]))
+        if ((*cmp)(v[i], v[left]) < 0)
             swap(v, ++last, i);
     swap(v, left, last);
     qsort(v, left, last-1, cmp);

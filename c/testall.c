@@ -28,7 +28,6 @@ char* name = "Cats Ya!";
 int num = 69;
 
 void print_cat(Cat* cat) {    
-    
     printf("%s %d\n", cat->name, cat->age);
     printf("%s\n", cat->owner->name);
 }
@@ -39,8 +38,8 @@ Cat make_cat(char* name, int age, Owner* owner) {
     cat.owner = owner;
     return cat;
 }
-int mycmp(int a, int b) {
-    return a < b;
+int intcmp(int a, int b) {
+    return a - b;
 }
 #define LEN 5
 int arr[LEN];
@@ -72,12 +71,12 @@ void main() {
     for (i = 0; i < LEN; i++)
         printf("%d ", arr[i]);
     putchar('\n');
-    qsort(arr, 0, LEN-1, &mycmp);
+    qsort(arr, 0, LEN-1, &intcmp);
     for (i = 0; i < LEN; i++)
         printf("%d ", arr[i]);
     putchar('\n');
     //bsearch
     for (i = 0; i < N; i++) {
-        printf("%d\n", bsearch(i, sarr, 6));
+        printf("%d\n", bsearch(i, sarr, 6, &intcmp));
     }
 }

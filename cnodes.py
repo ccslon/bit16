@@ -155,32 +155,36 @@ class Type(CNode):
     def __init__(self, type):
         self.type = type
         self.size = 1
-    def store(self, local, n, base):
+    @staticmethod
+    def store(local, n, base):
         if local.location is None:
             emit.load_glob(regs[n+1], local.token.lexeme)
             emit.store(regs[n], regs[n+1])
         else:
             emit.store(regs[n], regs[base], local.location, local.token.lexeme)
         return regs[n]
-    def address(self, local, n, base):
+    @staticmethod
+    def address(local, n, base):
         if -8 <= local.location < 8:
             emit.inst3c(Op.ADD, regs[n], regs[base], local.location)
         elif -32 <= local.location < 32:
             emit.inst(Op.MOV, regs[n], regs[base])
             emit.inst(Op.ADD, regs[n], local.location)
         return regs[n]
-    def reduce(self, local, n, base):
+    @staticmethod
+    def reduce(local, n, base):
         if local.location is None:
             emit.load_glob(regs[n], local.token.lexeme)
             emit.load(regs[n], regs[n])
         else:
             emit.load(regs[n], regs[base], local.location, local.token.lexeme)
         return regs[n]
-    def glob(self, glob):
+    @staticmethod
+    def glob(glob):
         if glob.init:
             emit.glob(glob.token.lexeme, glob.init.value)
         else:
-            emit.space(glob.token.lexeme, 1)
+            emit.space(glob.token.lexeme, glob.type.size)
     def cast(self, other):
         return type(other) in [Pointer, VoidPtr, Type] \
             or type(other) is Const and self.cast(other.type)
@@ -213,7 +217,8 @@ class Pointer(Type):
         super().__init__(type)
         self.to = self.of = self.type
         self.size = 1
-    def reduce(self, local, n, base):
+    @staticmethod
+    def reduce(local, n, base):
         if local.location is None:
             emit.load_glob(regs[n], local.token.lexeme)
         else:
@@ -233,18 +238,21 @@ class Struct(Frame, Type):
     def __init__(self, name):
         super().__init__()
         self.name = name
-    def store(self, local, n, base):
-        self.address(local, n+1, base)
-        for i in range(self.size):
+    @staticmethod
+    def store(local, n, base):
+        Struct.address(local, n+1, base)
+        for i in range(local.type.size):
             emit.load(regs[n+2], regs[n], i)
             emit.store(regs[n+2], regs[n+1], i)
-    def reduce(self, local, n, base):
-        return self.address(local, n, base)
-    def glob(self, glob):
+    @staticmethod
+    def reduce(local, n, base):
+        return Struct.address(local, n, base)
+    @staticmethod
+    def glob(glob):
         if glob.init:
             emit.datas(glob.token.lexeme, [expr.data() for expr in glob.init])
         else:
-            emit.space(glob.token.lexeme, self.size)
+            emit.space(glob.token.lexeme, glob.type.size)
     def cast(self, other):
         return self == other
     def __eq__(self, other):
@@ -266,20 +274,23 @@ class Array(Type):
     def __init__(self, of, length):
         self.size = of.size * length.value
         self.of = of
-        self.length = length.value    
-    def address(self, local, n, base):
+        self.length = length.value
+    @staticmethod
+    def address(local, n, base):
         if local.location is None:
             emit.load_glob(regs[n], local.token.lexeme)
         else:
-            super().address(local, n, base)
+            Type.address(local, n, base)
         return regs[n]
-    def reduce(self, local, n, base):
-        return self.address(local, n, base)
-    def glob(self, glob):
+    @staticmethod
+    def reduce(local, n, base):
+        return Array.address(local, n, base)
+    @staticmethod
+    def glob(glob):
         if glob.init:
             emit.datas(glob.token.lexeme, [expr.data() for expr in glob.init])
         else:
-            emit.space(glob.token.lexeme, self.size)
+            emit.space(glob.token.lexeme, glob.type.size)
     def cast(self, other):
         return self == other
     def __eq__(self, other):
@@ -631,9 +642,9 @@ class Func(FuncBase):
 
 class FuncPtr(FuncBase):
     def reduce(self, n):
-        Type.reduce(None, self, n, 'FP')
+        Type.reduce(self, n, 'FP')
     def call(self, n):
-        Type.reduce(None, self, n, 'FP')
+        Type.reduce(self, n, 'FP')
         emit.call(regs[n])
 
 class Params(UserList, Expr):
