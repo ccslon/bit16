@@ -248,16 +248,17 @@ sum:
   LD A, [FP, 1] ; i
   LD B, [FP, 4] ; n
   CMP A, B
-  JGE .L2
+  JGE .L3
   LD A, [FP, 0] ; s
   LD B, [FP, 1] ; i
   ADD A, B
   LD [FP, 0], A ; s
+.L2:
   LD A, [FP, 1] ; i
   ADD B, A, 1
   LD [FP, 1], B ; i
   JR .L1
-.L2:
+.L3:
   LD A, [FP, 0] ; s
   JR .L0
 .L0:
@@ -692,25 +693,26 @@ test:
 .L0:
   LD A, [FP, 0] ; i
   CMP A, 10
-  JGE .L1
+  JGE .L2
   LD A, [FP, 1] ; minN
   LD B, [FP, 0] ; i
   CMP A, B
-  JLE .L3
+  JLE .L4
   LD A, [FP, 0] ; i
-  JR .L2
-.L3:
+  JR .L3
+.L4:
   LD A, [FP, 1] ; minN
-.L2:
+.L3:
   LD [FP, 1], A ; minN
   LD A, [FP, 1] ; minN
   ADD B, A, 1
   LD [FP, 1], B ; minN
+.L1:
   LD A, [FP, 0] ; i
   ADD B, A, 1
   LD [FP, 0], B ; i
   JR .L0
-.L1:
+.L2:
   MOV SP, FP
   ADD SP, 2
   POP A, B, FP
@@ -924,7 +926,7 @@ class TestCompiler(TestCase):
         self.code_eq_asm('pointers.c', POINTERS_ASM)
         
     def test_defines(self):
-        self.code_eq_asm('define.c', DEFINES_ASM)
+        self.code_eq_asm('defines.c', DEFINES_ASM)
     
     def test_includes(self):
         self.code_eq_asm('include.c', INCLUDES_ASM)

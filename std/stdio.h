@@ -1,3 +1,4 @@
+#define NULL (void*)0
 #define INPORT 0x8000
 typedef struct _FILE_ {
     char* buffer;
@@ -73,7 +74,7 @@ void printd(int n) {
         printd(div);
     putchar(mod + '0');
 }
-void printx(int n) {
+void printx(int n, char uplo) {
     if (n < 0) {
         putchar('-');
         n = -n;
@@ -93,9 +94,9 @@ void printx(int n) {
         div++;
     }
     if (div)
-        printx(div);
+        printx(div, uplo);
     if (mod > 9) 
-        putchar(mod - 10 + 'a');
+        putchar(mod - 10 + uplo);
     else
         putchar(mod + '0');
 }
@@ -107,12 +108,17 @@ void printf(const char* format, ...) {
     for (c = format; *c; c++) {
         if (*c == '%') {
             switch (*++c) {
+                case 'i': ;
                 case 'd': {
                     printd(((int)*ap++));
                     break;
                 }
                 case 'x': {
-                    printx(((int)*ap++));
+                    printx(((int)*ap++), 'a');
+                    break;
+                }
+                case 'X': {
+                    printx(((int)*ap++), 'A');
                     break;
                 }
                 case 's': {
@@ -129,5 +135,5 @@ void printf(const char* format, ...) {
             putchar(*c);
         }
     }
-    (ap = 0);
+    (ap = (int*)0);
 }

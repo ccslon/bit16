@@ -1,3 +1,4 @@
+#define NULL (void*)0
 typedef struct _div_t_ {
     int quot;
     int rem;
@@ -29,7 +30,7 @@ int bsearch(int x, int* v, int n, int (*cmp)(int, int)) {
     int high = n - 1;
     while (low <= high) {
         mid = low + ((high - low) >> 1);
-        int cond = (*cmp)(x, v[mid]);
+        int cond = (int)(*cmp)(x, v[mid]); //TODO
         if (cond < 0)
             high = mid - 1;
         else if (cond > 0) 
@@ -46,7 +47,7 @@ void swap(int* v, int i, int j) {
     v[j] = t;
 }
 void qsort(int* v, int left, int right, int (*cmp)(int, int)) {
-    int i; int last;
+    int i, last;
     if (left >= right)
         return;
     swap(v, left, (left + right) >> 1); // (l+r) / 2 
@@ -67,8 +68,7 @@ void srand(int seed) {
     next = seed;
 }
 int atoi(const char* s) {
-    int i;
-    int n = 0;
+    int i, n = 0;
     for (i = 0; '0' <= s[i] && s[i] <= '9'; ++i)
         n = 10 * n + (s[i] - '0');
     return n;

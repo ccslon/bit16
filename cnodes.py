@@ -364,9 +364,9 @@ class Num(NumBase):
             self.value = int(token.lexeme)    
 
 class SizeOf(NumBase):
-    def __init__(self, token, abstract):
+    def __init__(self, token, type):
         super().__init__(token)
-        self.value = abstract.type.size
+        self.value = type.size
 
 class Char(Expr):
     def __init__(self, token):
@@ -580,7 +580,7 @@ class Condition(Expr):
 
 class Assign(Expr):
     def __init__(self, token, left, right):
-        left.type == right.type, f'Line {token.line}: {left.type} != {right.type}'
+        assert left.type == right.type, f'Line {token.line}: {left.type} != {right.type}'
         super().__init__(left.type, token)
         self.left, self.right = left, right      
     def reduce(self, n):
@@ -897,17 +897,21 @@ class Do(Statement):
         env.end_loop()
 
 class For(While):
-    def __init__(self, init, cond, step, state):
+    def __init__(self, inits, cond, steps, state):
         super().__init__(cond, state)
-        self.init, self.step = init, step
+        self.inits, self.steps = inits, steps
     def generate(self, n):
-        self.init.generate(n)
+        for init in self.inits:
+            init.generate(n)
+        loop = env.next_label()
         env.begin_loop()
-        emit.append_label(f'.L{env.loop.start()}')
+        emit.append_label(f'.L{loop}')
         self.cond.compare(n, env.loop.end())
         self.state.generate(n)
-        self.step.generate(n)
-        emit.jump(Cond.JR, f'.L{env.loop.start()}')
+        emit.append_label(f'.L{env.loop.start()}')
+        for step in self.steps:
+            step.generate(n)
+        emit.jump(Cond.JR, f'.L{loop}')
         emit.append_label(f'.L{env.loop.end()}')
         env.end_loop()
 
