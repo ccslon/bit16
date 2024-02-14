@@ -6,7 +6,7 @@ Created on Mon Jul  3 19:47:39 2023
 """
 
 import clexer
-from cnodes import Program, Main, Defn, Params, Block, Label, Goto, Break, Continue, For, Do, While, Switch, Case, If, Statement, Return, FuncPtr, Func, Glob, Attr, Local, InitList, Assign, Condition, Logic, Compare, Binary, FuncType, Array, Union, Struct, Pointer, Const, VoidPtr, Type, Void, Pre, Cast, SizeOf, Deref, AddrOf, Not, Unary, Args, Call, Arrow, SubScr, Dot, Post, String, Char, EnumConst, Num, Frame
+from cnodes import Program, Main, Defn, Params, Block, Label, Goto, Break, Continue, For, Do, While, Switch, Case, If, Statement, Return, FuncPtr, Func, Glob, Attr, Local, InitList, Assign, Condition, Logic, Compare, Binary, FuncType, Array, Union, Struct, Pointer, Const, Type, Void, Pre, Cast, SizeOf, Deref, AddrOf, Not, Unary, Args, Call, Arrow, SubScr, Dot, Post, String, Char, EnumConst, Num, Frame
 
 '''
 TODO
@@ -23,7 +23,7 @@ TODO
 [X] Labels and goto
 [X] Division/Modulo
 [X] Different calling convention. Went with stdcall-like
-[X] Fix void and void*
+[ ] Fix void and void*
 [X] Fix compile function?
 [X] Update Docs
 [X] Typedef
@@ -155,7 +155,7 @@ class CParser:
         CAST -> UNARY
                |'(' TYPE_NAME ')' CAST
         '''
-        if self.peekn('(', ('type','struct','voidptr','const','union','enum')) or self.peek('(') and self.peek_typedefs(1):
+        if self.peekn('(', ('type','struct','void','const','union','enum')) or self.peek('(') and self.peek_typedefs(1):
             token = next(self)
             type = self.type_name()
             self.expect(')')
@@ -320,15 +320,15 @@ class CParser:
     def spec(self):
         '''
         TYPE_SPEC -> type
-                    |voidptr
+                    |void
                     |id
                     |('struct'|'union') id '{' {QUAL ATTR {',' ATTR} ';'} '}'
                     |'enum' id '{' ENUM {',' ENUM}'}'
         '''
         if self.peek('type'):
             spec = Type(next(self).lexeme)
-        elif self.accept('voidptr'):
-            spec = VoidPtr(None)
+        elif self.accept('void'):
+            spec = Void()
         elif self.peek('id'):
             spec = self.typedefs[next(self).lexeme]
         elif self.accept('struct'):
@@ -455,7 +455,8 @@ class CParser:
 
     def param(self):
         '''
-        PARAM -> QUAL ['id'] {'[' ']'}
+        PARAM -> QUAL [id] {'[' ']'}
+                |QUAL '(' '*' [id] ')' '(' PARAMS ')'
         '''
         type = self.qual()
         while self.accept('*'):
@@ -467,7 +468,7 @@ class CParser:
             self.expect('(')
             params = self.params()
             self.expect(')')
-            param = FuncPtr(Pointer(type), id, params)
+            param = FuncPtr(type, id, params)
         else:            
             id = self.accept('id')
             while self.accept('['):
@@ -505,7 +506,7 @@ class CParser:
         SELECT -> 'if' '(' EXPR ')' STATEMENT ['else' STATEMENT]
                  |'switch' '(' EXPR ')' '{' {'case' CONST_EXPR ':' STATEMENT} ['default' ':' STATEMENT] '}'
         LOOP -> 'while' '(' EXPR ')' STATEMENT
-               |'for' '(' EXPR ';' EXPR ';' EXPR ')' STATEMENT
+               |'for' '(' [EXPR {',' EXPR}] ';' EXPR ';' [EXPR {',' EXPR}] ')' STATEMENT
                |'do' STATEMENT 'while' '(' EXPR ')' ';'
         JUMP -> 'return' [EXPR] ';'
                |'break' ';'
@@ -603,7 +604,6 @@ class CParser:
         
         else:
             statement = self.expr()
-            assert isinstance(statement, (Assign, Call, Pre, Post))
             self.expect(';')
             
         return statement
@@ -614,13 +614,13 @@ class CParser:
         '''
         block = Block()
         while self.accept('typedef'):
-            type = Void() if self.accept('void') else self.qual()
+            type = self.qual()
             while self.accept('*'):
                 type = Pointer(type)
             id = self.accept('id')
             self.typedefs[id.lexeme] = type
             self.expect(';')
-        while self.peek('type','struct','voidptr','const','union','enum') or self.peek_typedefs():
+        while self.peek('type','struct','void','const','union','enum') or self.peek_typedefs():
             block.extend(self.decln())
         while self.peek(';','{','(','id','*','++','--','return','if','switch','while','do','for','break','continue','goto') and not self.peek_typedefs():
             block.append(self.statement())
@@ -632,14 +632,14 @@ class CParser:
         program = Program()
         while not self.peek('end'):
             if self.accept('typedef'):
-                type = Void() if self.accept('void') else self.qual()
+                type = self.qual()
                 while self.accept('*'):
                     type = Pointer(type)                
                 id = self.accept('id')
                 self.typedefs[id.lexeme] = type
                 self.expect(';')
             else:
-                type = Void() if self.accept('void') else self.qual()
+                type = self.qual()
                 while self.accept('*'):
                     type = Pointer(type)
                 id = self.accept('id')

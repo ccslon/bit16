@@ -186,19 +186,14 @@ class Type(CNode):
         else:
             emit.space(glob.token.lexeme, glob.type.size)
     def cast(self, other):
-        return type(other) in [Pointer, VoidPtr, Type] \
-            or type(other) is Const and self.cast(other.type)
+        return type(other) in [Pointer, Type] \
+            or type(other) is Const and self.cast(other.type) \
+            or type(other) is FuncType and self.cast(other.type)
     def __eq__(self, other):
-        return type(other) is Type
+        return type(other) is Type \
+            or type(other) is FuncType and self == other.type
     def __str__(self):
         return self.type
-
-class VoidPtr(Type):
-    def cast(self, other):
-        return type(other) in [Pointer, VoidPtr, Type] \
-            or type(other) is Const and self.cast(other.type)
-    def __eq__(self, other):
-        return type(other) in [VoidPtr, Pointer]
 
 class Const(Type):
     def __init__(self, type):
@@ -225,12 +220,12 @@ class Pointer(Type):
             emit.load(regs[n], regs[base], local.location, local.token.lexeme)
         return regs[n]
     def cast(self, other):
-        return type(other) in [Pointer, VoidPtr, Type] \
+        return type(other) in [Pointer, Type] \
             or type(other) is Const and self.cast(other.type)
     def __eq__(self, other):
         return type(other) is Pointer and self.to == other.to \
             or type(other) is Array and self.of == other.of \
-            or type(other) is VoidPtr
+            or type(other) is FuncType and self == other.type
     def __str__(self):
         return f'{self.to}*'
 
@@ -256,7 +251,8 @@ class Struct(Frame, Type):
     def cast(self, other):
         return self == other
     def __eq__(self, other):
-        return type(other) is Struct and self.name == other.name
+        return type(other) is Struct and self.name == other.name \
+            or type(other) is FuncType and self == other.type
     def __str__(self):
         return f'struct {self.name}'
 
@@ -309,7 +305,7 @@ class FuncType(Type):
         return self.type == other \
             or type(other) is FuncType and self.type == other.type
     def __str__(self):
-        return str(self.type)
+        return f'{self.type}(...)'
 
 class Expr(CNode):
     def __init__(self, type, token):

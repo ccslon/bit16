@@ -30,7 +30,7 @@ int bsearch(int x, int* v, int n, int (*cmp)(int, int)) {
     int high = n - 1;
     while (low <= high) {
         mid = low + ((high - low) >> 1);
-        int cond = (int)(*cmp)(x, v[mid]); //TODO
+        int cond = (*cmp)(x, v[mid]); //TODO
         if (cond < 0)
             high = mid - 1;
         else if (cond > 0) 
