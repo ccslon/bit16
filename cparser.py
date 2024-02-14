@@ -136,7 +136,11 @@ class CParser:
                 return cast
             return Deref(token, cast)
         elif self.peek('&'):
-            return AddrOf(next(self), self.cast())
+            token = next(self)
+            cast = self.cast()
+            if isinstance(cast, Func):
+                return cast
+            return AddrOf(token, cast)
         elif self.peek('!'):
             return Not(next(self), self.cast())
         elif self.peek('sizeof'):

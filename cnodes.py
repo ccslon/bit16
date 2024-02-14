@@ -643,6 +643,8 @@ class FuncBase(Expr):
         self.params = params
         
 class Func(FuncBase):
+    def reduce(self, n):
+        self.address(n)
     def address(self, n):
         emit.load_glob(regs[n], self.token.lexeme)
         return regs[n]      
