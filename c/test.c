@@ -9,12 +9,10 @@ int num() {
 int* alloc() {
     return (int*)0x3400;
 }
-
 struct Idk make_Idk() {
     struct Idk ret;
     return ret;
 }
-
 void print_Idk(struct Idk*);
 
 void main() {

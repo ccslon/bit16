@@ -31,10 +31,10 @@ class Frame(UserDict):
     def __init__(self):
         super().__init__()    
         self.size = 0
-    def __setitem__(self, name, local):
-        local.location = self.size
-        self.size += local.type.size
-        super().__setitem__(name, local)
+    def __setitem__(self, name, obj):
+        obj.location = self.size
+        self.size += obj.type.size
+        super().__setitem__(name, obj)
         
 class Environment:
     def clear(self):
@@ -187,11 +187,9 @@ class Type(CNode):
             emit.space(glob.token.lexeme, glob.type.size)
     def cast(self, other):
         return type(other) in [Pointer, Type] \
-            or type(other) is Const and self.cast(other.type) \
-            or type(other) is FuncType and self.cast(other.type)
+            or type(other) is Const and self.cast(other.type)
     def __eq__(self, other):
-        return type(other) is Type \
-            or type(other) is FuncType and self == other.type
+        return type(other) is Type
     def __str__(self):
         return self.type
 
@@ -224,8 +222,7 @@ class Pointer(Type):
             or type(other) is Const and self.cast(other.type)
     def __eq__(self, other):
         return type(other) is Pointer and self.to == other.to \
-            or type(other) is Array and self.of == other.of \
-            or type(other) is FuncType and self == other.type
+            or type(other) is Array and self.of == other.of
     def __str__(self):
         return f'{self.to}*'
 
@@ -251,8 +248,7 @@ class Struct(Frame, Type):
     def cast(self, other):
         return self == other
     def __eq__(self, other):
-        return type(other) is Struct and self.name == other.name \
-            or type(other) is FuncType and self == other.type
+        return type(other) is Struct and self.name == other.name
     def __str__(self):
         return f'struct {self.name}'
 
@@ -294,18 +290,16 @@ class Array(Type):
     def __str__(self):
         return f'{self.of}[]'
 
-class FuncType(Type):
-    def __init__(self, type):
-        super().__init__(type)
-        self.size = type.size
+class Func(Type):
+    def __init__(self, ret, params, variable):
+        self.ret, self.params, self.variable = ret, params, variable
+        self.size = ret.size
     def cast(self, other):
-        return self.type.cast(other) \
-            or type(other) is FuncType and self.type.cast(other.type)
+        return False
     def __eq__(self, other):
-        return self.type == other \
-            or type(other) is FuncType and self.type == other.type
+        return type(other) is Func and self.ret == other.ret #TODO
     def __str__(self):
-        return f'{self.type}(...)'
+        return f'{self.ret}('+','.join(param for param in self.params)+')'
 
 class Expr(CNode):
     def __init__(self, type, token):
@@ -429,7 +423,9 @@ class Deref(Expr):
     def reduce(self, n):
         self.unary.reduce(n)
         emit.load(regs[n], regs[n])
-        return regs[n]  
+        return regs[n]
+    def call(self, n):
+        self.unary.call(n)
 
 class Cast(Expr):
     def __init__(self, type, token, cast):
@@ -613,6 +609,9 @@ class Local(Expr):
         return self.type.reduce(self, n, 'FP')
     def address(self, n):
         return self.type.address(self, n, 'FP')
+    def call(self, n):
+        Type.reduce(self, n, 'FP')
+        emit.call(regs[n])
 
 class Attr(Local):
     def store(self, n):
@@ -621,6 +620,9 @@ class Attr(Local):
         return self.type.reduce(self, n, n)
     def address(self, n):
         return self.type.address(self, n, n)
+    def call(self, n):
+        Type.reduce(self, n, n)
+        emit.call(regs[n])
 
 class Glob(Local):
     def __init__(self, type, token):
@@ -636,30 +638,8 @@ class Glob(Local):
         return regs[n]
     def generate(self):
         self.type.glob(self)
-
-class FuncBase(Expr):    
-    def __init__(self, type, token, params):
-        super().__init__(type, token)
-        self.params = params
-        
-class Func(FuncBase):
-    def reduce(self, n):
-        self.address(n)
-    def address(self, n):
-        emit.load_glob(regs[n], self.token.lexeme)
-        return regs[n]      
     def call(self, n):
         emit.call(self.token.lexeme)
-
-class FuncPtr(FuncBase):
-    def reduce(self, n):
-        Type.reduce(self, n, 'FP')
-    def call(self, n):
-        Type.reduce(self, n, 'FP')
-        emit.call(regs[n])
-
-class Params(UserList, Expr):
-    pass
     
 class Defn(Expr):
     def __init__(self, type, id, params, block, returns, calls, space):
@@ -746,6 +726,9 @@ class Dot(Access):
     def reduce(self, n):
         self.postfix.address(n)
         return self.attr.reduce(n)
+    def call(self, n):
+        self.postfix.address(n)
+        self.attr.call(n)
 
 class Arrow(Dot):
     def address(self, n):
@@ -757,6 +740,9 @@ class Arrow(Dot):
     def reduce(self, n):
         self.postfix.reduce(n)
         return self.attr.reduce(n)
+    def call(self, n):
+        self.postfix.reduce(n)
+        self.attr.call(n)
 
 class SubScr(Access): 
     def __init__(self, token, postfix, sub):
@@ -783,19 +769,19 @@ class Args(UserList, Expr):
             emit.push(regs[n])
 
 class Call(Expr):
-    def __init__(self, func, args):
-        for i, param in enumerate(func.params):
-            assert param.type == args[i].type, f'Line {func.token.line}: Argument #{i+1} of {func.token.lexeme} {param.type} != {args[i].type}'
-        super().__init__(func.type, func.token)
-        self.func, self.args = func, args
+    def __init__(self, postfix, args):
+        for i, param in enumerate(postfix.type.params):
+            assert param == args[i].type, f'Line {postfix.token.line}: Argument #{i+1} of {postfix.token.lexeme} {param} != {args[i].type}'
+        super().__init__(postfix.type.ret, postfix.token)
+        self.postfix, self.args = postfix, args
     def reduce(self, n):
         self.generate(n)
         return regs[n]
     def generate(self, n):
         self.args.generate(n)
-        self.func.call(n) #emit.call(self.func.token.lexeme)
-        if self.func.params.variable and len(self.args) > len(self.func.params):
-            emit.inst(Op.ADD, Reg.SP, len(self.args)-len(self.func.params))
+        self.postfix.call(n)
+        if self.postfix.type.variable and len(self.args) > len(self.postfix.type.params):
+            emit.inst(Op.ADD, Reg.SP, len(self.args) - len(self.postfix.type.params))
         if n > 0:
             emit.inst(Op.MOV, regs[n], Reg.A)        
 
@@ -804,7 +790,7 @@ class Return(Expr):
         super().__init__(Void() if expr is None else expr.type, token)
         self.expr = expr
     def generate(self, n):
-        assert env.defn.type == self.type, f'Line {self.token.line}: {env.defn.type} != {self.type} in {env.defn.token.lexeme}'       
+        assert env.defn.type.ret == self.type, f'Line {self.token.line}: {env.defn.type} != {self.type} in {env.defn.token.lexeme}'       
         if self.expr:
             self.expr.reduce(n)
         emit.jump(Cond.JR, f'.L{env.return_label}')

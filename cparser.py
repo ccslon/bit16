@@ -6,7 +6,7 @@ Created on Mon Jul  3 19:47:39 2023
 """
 
 import clexer
-from cnodes import Program, Main, Defn, Params, Block, Label, Goto, Break, Continue, For, Do, While, Switch, Case, If, Statement, Return, FuncPtr, Func, Glob, Attr, Local, InitList, Assign, Condition, Logic, Compare, Binary, FuncType, Array, Union, Struct, Pointer, Const, Type, Void, Pre, Cast, SizeOf, Deref, AddrOf, Not, Unary, Args, Call, Arrow, SubScr, Dot, Post, String, Char, EnumConst, Num, Frame
+from cnodes import Program, Main, Defn, Block, Label, Goto, Break, Continue, For, Do, While, Switch, Case, If, Statement, Return, Glob, Attr, Local, InitList, Assign, Condition, Logic, Compare, Binary, Func, Array, Union, Struct, Pointer, Const, Type, Void, Pre, Cast, SizeOf, Deref, AddrOf, Not, Unary, Args, Call, Arrow, SubScr, Dot, Post, String, Char, EnumConst, Num, Frame
 
 '''
 TODO
@@ -28,7 +28,7 @@ TODO
 [X] Update Docs
 [X] Typedef
 [ ] Const expressions
-[ ] Function pointers
+[X] Function pointers
 [ ] Function defs in function defs
 [ ] Error handling
 [X] Generate vs Reduce
@@ -36,7 +36,7 @@ TODO
 [X] Line numbers in errors
 [X] Returning local structs
 [X] PREPROCESSING
-    [X] include header files
+    [X] Include header files
     [X] Macros
 '''
 
@@ -54,8 +54,6 @@ class CParser:
             return self.param_scope[name]
         elif name in self.scope:
             return self.scope[name]
-        elif name in self.functions:
-            return self.functions[name]
         elif name in self.globs:
             return self.globs[name]
         elif name in self.enum_consts:
@@ -92,7 +90,7 @@ class CParser:
                 postfix = SubScr(next(self), postfix, self.expr())
                 self.expect(']')
             elif self.accept('('):
-                assert isinstance(postfix, (Func, FuncPtr))
+                assert isinstance(postfix.type, Func)
                 postfix = Call(postfix, self.args())
                 self.expect(')')
                 self.calls = True
@@ -130,17 +128,9 @@ class CParser:
         if self.peek('-','~'):
             return Unary(next(self), self.cast())
         elif self.peek('*'):
-            token = next(self)
-            cast = self.cast()
-            if isinstance(cast, FuncPtr):
-                return cast
-            return Deref(token, cast)
+            return Deref(next(self), self.cast())
         elif self.peek('&'):
-            token = next(self)
-            cast = self.cast()
-            if isinstance(cast, Func):
-                return cast
-            return AddrOf(token, cast)
+            return AddrOf(next(self), self.cast())
         elif self.peek('!'):
             return Not(next(self), self.cast())
         elif self.peek('sizeof'):
@@ -318,7 +308,19 @@ class CParser:
         '''
         while self.accept('*'):
             type = Pointer(type)
-        id = self.expect('id')
+        if self.accept('('):
+            self.expect('*')
+            id = self.accept('id')
+            self.expect(')')
+            self.expect('(')
+            params, variable = self.params()
+            type = Pointer(Func(type, [param.type for param in params], variable))
+            self.expect(')')
+        else:            
+            id = self.accept('id')
+            while self.accept('['):
+                type = Array(type, Num(self.expect('num')))
+                self.expect(']')
         spec[id.lexeme] = Attr(type, id)
 
     def spec(self):
@@ -470,15 +472,15 @@ class CParser:
             id = self.accept('id')
             self.expect(')')
             self.expect('(')
-            params = self.params()
+            params, variable = self.params()
+            type = Pointer(Func(type, [param.type for param in params], variable))
             self.expect(')')
-            param = FuncPtr(type, id, params)
         else:            
             id = self.accept('id')
             while self.accept('['):
                 type = Pointer(type)
                 self.expect(']')
-            param = Local(type, id)
+        param = Local(type, id)
         if id:
             self.param_scope[id.lexeme] = param
         return param
@@ -487,16 +489,16 @@ class CParser:
         '''
         PARAMS -> [PARAM {',' PARAM} [',' '...']]
         '''
-        params = Params()
-        params.variable = False
+        params = []
+        variable = False
         if not self.peek(')'):
             params.append(self.param())
             while self.accept(','):
                 if self.accept('...'):
-                    params.variable = True
+                    variable = True
                     break
                 params.append(self.param())
-        return params
+        return params, variable
              
     def statement(self):
         '''
@@ -649,11 +651,11 @@ class CParser:
                 id = self.accept('id')
                 if self.accept('('):                    #Function
                     assert id is not None
-                    # type = FuncType(type)
                     self.begin_func()
-                    params = self.params()
+                    params, variable = self.params()
+                    type = Func(type, [param.type for param in params], variable)
                     self.expect(')')
-                    self.functions[id.lexeme] = Func(type, id, params)
+                    self.globs[id.lexeme] = Glob(type, id)
                     if self.accept('{'):
                         assert not any(param.token is None for param in params)
                         block = self.block()
@@ -664,7 +666,7 @@ class CParser:
                         else:
                             program.append(Defn(type, id, params, block, self.returns, self.calls, self.space))
                     else:
-                        self.expect(';')                     
+                        self.expect(';')             
                         self.end_func()                    
                 else:
                     if id:                              #Global
@@ -723,7 +725,6 @@ class CParser:
     
     def parse(self, text):
         self.stack = []
-        self.functions = {}
         self.structs = {}
         self.typedefs = {}
         self.unions = {}
