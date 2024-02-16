@@ -304,7 +304,8 @@ class CParser:
 
     def attr(self, spec, type):
         '''
-        ATTR -> {'*'} id
+        ATTR -> {'*'} [id] {'[' num ']'}
+               |{'*'} '(' '*' [id] ')' '(' PARAMS ')'
         '''
         while self.accept('*'):
             type = Pointer(type)

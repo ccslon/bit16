@@ -299,7 +299,7 @@ class Func(Type):
     def __eq__(self, other):
         return type(other) is Func and self.ret == other.ret #TODO
     def __str__(self):
-        return f'{self.ret}('+','.join(param for param in self.params)+')'
+        return f'{self.ret}('+','.join(map(str, self.params))+')'
 
 class Expr(CNode):
     def __init__(self, type, token):
@@ -769,28 +769,28 @@ class Args(UserList, Expr):
             emit.push(regs[n])
 
 class Call(Expr):
-    def __init__(self, postfix, args):
-        for i, param in enumerate(postfix.type.params):
-            assert param == args[i].type, f'Line {postfix.token.line}: Argument #{i+1} of {postfix.token.lexeme} {param} != {args[i].type}'
-        super().__init__(postfix.type.ret, postfix.token)
-        self.postfix, self.args = postfix, args
+    def __init__(self, primary, args):
+        for i, param in enumerate(primary.type.params):
+            assert param == args[i].type, f'Line {primary.token.line}: Argument #{i+1} of {primary.token.lexeme} {param} != {args[i].type}'
+        super().__init__(primary.type.ret, primary.token)
+        self.primary, self.args = primary, args
     def reduce(self, n):
         self.generate(n)
         return regs[n]
     def generate(self, n):
         self.args.generate(n)
-        self.postfix.call(n)
-        if self.postfix.type.variable and len(self.args) > len(self.postfix.type.params):
-            emit.inst(Op.ADD, Reg.SP, len(self.args) - len(self.postfix.type.params))
+        self.primary.call(n)
+        if self.primary.type.variable and len(self.args) > len(self.primary.type.params):
+            emit.inst(Op.ADD, Reg.SP, len(self.args) - len(self.primary.type.params))
         if n > 0:
-            emit.inst(Op.MOV, regs[n], Reg.A)        
+            emit.inst(Op.MOV, regs[n], Reg.A)
 
 class Return(Expr):
     def __init__(self, token, expr):
         super().__init__(Void() if expr is None else expr.type, token)
         self.expr = expr
     def generate(self, n):
-        assert env.defn.type.ret == self.type, f'Line {self.token.line}: {env.defn.type} != {self.type} in {env.defn.token.lexeme}'       
+        assert env.defn.type.ret == self.type, f'Line {self.token.line}: {env.defn.type.ret} != {self.type} in {env.defn.token.lexeme}'       
         if self.expr:
             self.expr.reduce(n)
         emit.jump(Cond.JR, f'.L{env.return_label}')
