@@ -6,7 +6,7 @@ Created on Fri Aug 25 10:49:03 2023
 """
 
 import re
-from bit16 import Reg, Op, Cond, Data, Char, Jump, Inst2, Inst2c, Inst3, Inst3c, Load, Loadc, Imm, ESCAPE
+from bit16 import Reg, Op, Cond, Data, Char, Jump, LoadB, Inst2, Inst2c, Inst3, Inst3c, Load, Loadc, LoadW, ESCAPE
 
 TOKENS = {
     'const': r'-?\d+|x[0-9a-f]+|b[01]+',
@@ -74,12 +74,11 @@ class Assembler:
         self.new_inst(Load, True, rd, rb, ro)
     def store1(self, rb, offset5, rd):
         self.new_inst(Loadc, True, rd, rb, offset5)
-    def imm(self, rd, value):
-        self.new_inst(Imm, rd)
-        self.new_imm(value)
-    def imm_char(self, rd, value):
-        self.new_inst(Imm, rd)
-        self.new_imm_char(value)
+    def word(self, rd, value):
+        self.new_inst(LoadW, rd)
+        self.new_word(value)
+    def byte(self, rd, byte):
+        self.new_inst(LoadB, byte, rd)
     def unary(self, op, rd):
         self.new_inst(Inst2, op, rd, rd)
     def inst2(self, op, rd, rs):
@@ -93,11 +92,8 @@ class Assembler:
     def new_inst(self, inst, *args):
         self.inst.append((self.labels, inst, args))
         self.labels = []
-    def new_imm(self, value):
+    def new_word(self, value):
         self.inst.append((self.labels, Data, (value,)))
-        self.labels = []
-    def new_imm_char(self, value):
-        self.inst.append((self.labels, Char, (value,)))
         self.labels = []
     def new_data(self, value):
         self.data.append((self.labels, Data, (value,)))
@@ -163,11 +159,11 @@ class Assembler:
                     elif self.match('ld', '[', 'reg', ',', 'const', ']', ',', 'reg'):
                         self.store1(*self.values())
                     elif self.match('ld', 'reg', ',', 'const'):
-                        self.imm(*self.values())
+                        self.word(*self.values())
                     elif self.match('ld', 'reg', ',', 'char'):
-                        self.imm_char(*self.values())
+                        self.byte(*self.values())
                     elif self.match('ld', 'reg', ',', '=', 'label'):
-                        self.imm(*self.values())
+                        self.word(*self.values())
                     elif self.match('op', 'reg'):
                         self.unary(*self.values())
                     elif self.match('op', 'reg', ',', 'reg'):                    
@@ -201,7 +197,7 @@ class Assembler:
                         self.inst2c(Op.ADD, Reg.SP, len(args))
                                                      
                     elif self.match('jump', 'label'):
-                        self.imm(Reg.PC, *self.values())
+                        self.word(Reg.PC, *self.values())
                         
                     elif self.match('call','reg'):
                         self.inst3c(Op.ADD, Reg.LR, Reg.PC, 2)
@@ -209,7 +205,7 @@ class Assembler:
                         
                     elif self.match('call', 'label'):
                         self.inst3c(Op.ADD, Reg.LR, Reg.PC, 3)
-                        self.imm(Reg.PC, *self.values())
+                        self.word(Reg.PC, *self.values())
                         
                     elif self.match('ret'):
                         self.inst2(Op.MOV, Reg.PC, Reg.LR)
@@ -334,3 +330,15 @@ assembler = Assembler()
 def assemble(program):
     objects = assembler.assemble(program)
     return Linker.link(objects)
+
+asm = '''
+begin:
+    LD A, 'a'
+    MOV B, 6
+    ADD A, B
+    SUB SP, 1
+    LD [SP, 0], A
+    LD C, [SP, 0]
+    LD D, xFFFF
+    JR begin
+'''
