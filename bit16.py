@@ -96,12 +96,16 @@ class Jump(Inst):
             self.str = f'{cond.name} -x{-const10:03x}'
         else:
             self.str = f'{cond.name} x{const10:03x}'
-        self._dec = 0,cond,const10
+        self._dec = 0,const10,cond
         if const10 < 0:
             const10 = negative(const10, 10)
-        self._bin = '000', f'{cond:03b}', f'{const10:010b}'
-class Nop(Inst):
-    pass    
+        self._bin = '000',f'{const10:010b}',f'{cond:03b}'
+class LoadB(Inst):
+    def __init__(self, byte, rd):
+        self.str = f"LD {rd.name}, '{INV_ESCAPE.get(byte, byte)}'"
+        char = ESCAPE.get(byte, byte)
+        self._dec = 1,0,ord(char),rd
+        self._bin = '001','XX',f'{ord(char):08b}',f'{rd:03b}'    
 class Inst2(Inst):
     def __init__(self, op, rd, rs):
         if op in [Op.NOT, Op.NEG]:
@@ -150,7 +154,7 @@ class Loadc(Inst):
             self.str = f'LD {rd.name}, [{rb.name}, {offset5}]'
         self._dec = 6,int(storing),1,offset5,rb,rd
         self._bin = '110',str(int(storing)),'1',f'{offset5:05b}',f'{rb:03b}',f'{rd:03b}'    
-class Imm(Inst):
+class LoadW(Inst):
     def __init__(self, rd):
         self.str = f'LD {rd.name}'
         self._dec = 7,0,rd
