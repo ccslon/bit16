@@ -330,15 +330,3 @@ assembler = Assembler()
 def assemble(program):
     objects = assembler.assemble(program)
     return Linker.link(objects)
-
-asm = '''
-begin:
-    LD A, 'a'
-    MOV B, 6
-    ADD A, B
-    SUB SP, 1
-    LD [SP, 0], A
-    LD C, [SP, 0]
-    LD D, xFFFF
-    JR begin
-'''
