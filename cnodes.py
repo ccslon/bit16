@@ -221,7 +221,9 @@ class Pointer(Type):
         return type(other) in [Pointer, Type] \
             or type(other) is Const and self.cast(other.type)
     def __eq__(self, other):
-        return type(other) is Pointer and self.to == other.to \
+        return type(other) is Pointer and (self.to == other.to \
+                                           or type(self.to) is Void \
+                                           or type(other.to) is Void) \
             or type(other) is Array and self.of == other.of
     def __str__(self):
         return f'{self.to}*'
@@ -431,6 +433,8 @@ class Cast(Expr):
     def __init__(self, type, token, cast):
         assert type.cast(cast.type), f'Line {token.line}: Cannot cast {cast.type} to {type}'
         super().__init__(type, token)
+        if hasattr(cast, 'value'):
+            self.value = cast.value
         self.cast = cast
     def reduce(self, n):
         return self.cast.reduce(n)

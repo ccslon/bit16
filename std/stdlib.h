@@ -73,7 +73,50 @@ int atoi(const char* s) {
         n = 10 * n + (s[i] - '0');
     return n;
 }
+struct header {
+    struct header *next;
+    int size;
+};
+typedef struct header Header;
+Header *freep = NULL;
+Header base;
 void* calloc(int nitems, int size) {}
-void free(void* ptr) {}
-void* malloc(int size) {}
+void free(void* ptr) {
+    Header *bp, *p;
+    bp = (Header*)ptr - 1;
+    for (p = freep; !(p < bp && bp < p->next); p = p->next)
+        if (p >= p->next && (p < bp || bp <p->next))
+            break;
+    if (bp + bp->size == p->next) {
+        bp->size += p->next->size;
+        bp->next = p->next->next;
+    } else 
+        bp->next = p->next;
+    if (p + p->next == bp) {
+        p->size += bp->size;
+        p->next = bp->next;
+    } else
+        p->next = bp;
+    freep = p;
+}
+void* malloc(int size) {
+    Header *p, *prevp;
+    if ((prevp = freep) == NULL) {
+        base.next = freep = prevp = &base;
+        base.size = 0;
+    }
+    for (p = prevp->next; 1; prevp = p, p = p->next) {
+        if (p->size >= size) {
+            if (p->size == size)
+                prevp->next = p->next;
+            else {
+                p->size -= size;
+                p += p->size;
+                p->size = size;
+            }
+            freep = prevp;
+            return (void*)(p+1);
+        }
+    }
+}
 void* realloc(void* ptr, int size) {}

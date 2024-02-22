@@ -50,6 +50,7 @@ class CLexer(LexerBase):
     RE_struct = r'\b(struct)\b'
     RE_enum = r'\b(enum)\b'
     RE_union = r'\b(union)\b'
+    RE_sizeof = r'\b(sizeof)\b'
     RE_return = r'\b(return)\b'
     RE_if = r'\b(if)\b'
     RE_else = r'\b(else)\b'

@@ -1,5 +1,6 @@
 #define NULL (void*)0
 #define INPORT 0x8000
+#define INBUFFER 0x7e00
 typedef struct _FILE_ {
     char* buffer;
     int read;

@@ -100,8 +100,6 @@ class CParser:
                 postfix = Arrow(next(self), postfix, postfix.type.to[self.expect('id').lexeme])
             elif self.peek('++','--'):
                     postfix = Post(next(self), postfix)
-            else:
-                self.error('POSTFIX EXPRESSION')
         return postfix
     
     def args(self):
@@ -118,14 +116,14 @@ class CParser:
     def unary(self):
         '''
         UNARY -> POSTFIX
-                |('-'|'~'|'*'|'&'|'!') CAST
                 |('++'|'--') UNARY
-                |'sizeof' UNARY
+                |('-'|'~'|'*'|'&'|'!') CAST
                 |'sizeof' '(' TYPE_NAME ')'
+                |'sizeof' UNARY
         '''
         if self.peek('++','--'):
             return Pre(next(self), self.unary())
-        if self.peek('-','~'):
+        elif self.peek('-','~'):
             return Unary(next(self), self.cast())
         elif self.peek('*'):
             return Deref(next(self), self.cast())
