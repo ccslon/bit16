@@ -1,7 +1,7 @@
 #include <stdio.h>
 
-void setup();
-void loop(char c);
+void setup() {}
+void loop(char c) {}
 
 void main() {
     setup();
@@ -9,8 +9,10 @@ void main() {
     while (1) {
         char c = *in;
         if (c) {
-            putchar(c);
-            fputc(c, &stdin);
+            stdout.buffer[stdout.write] = c;
+            stdout.write++;
+            stdin.buffer[stdin.write] = c;
+            stdin.write++;
             loop(c);
         }
     }
