@@ -143,8 +143,8 @@ class Load(Inst):
             self.str = f'LD [{rb.name}, {ro.name}], {rd.name}'
         else:
             self.str = f'LD {rd.name}, [{rb.name}, {ro.name}]'
-        self._dec = 6,int(storing),0,0,ro,rb,rd
-        self._bin = '110',str(int(storing)),'0','XX',f'{ro:03b}',f'{rb:03b}',f'{rd:03b}'
+        self._dec = 6,0,int(storing),0,ro,rb,rd
+        self._bin = '110','0',str(int(storing)),'XX',f'{ro:03b}',f'{rb:03b}',f'{rd:03b}'
 class Loadc(Inst):
     def __init__(self, storing, rd, rb, offset5):
         assert 0 <= offset5 < 32
@@ -152,8 +152,8 @@ class Loadc(Inst):
             self.str = f'LD [{rb.name}, {offset5}], {rd.name}'
         else:
             self.str = f'LD {rd.name}, [{rb.name}, {offset5}]'
-        self._dec = 6,int(storing),1,offset5,rb,rd
-        self._bin = '110',str(int(storing)),'1',f'{offset5:05b}',f'{rb:03b}',f'{rd:03b}'    
+        self._dec = 6,1,int(storing),offset5,rb,rd
+        self._bin = '110','1',str(int(storing)),f'{offset5:05b}',f'{rb:03b}',f'{rd:03b}'    
 class LoadW(Inst):
     def __init__(self, rd):
         self.str = f'LD {rd.name}'
