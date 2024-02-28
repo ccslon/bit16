@@ -6,7 +6,7 @@ Created on Fri Aug 25 10:49:03 2023
 """
 
 import re
-from bit16 import Reg, Op, Cond, Data, Char, Jump, LoadB, Inst2, Inst2c, Inst3, Inst3c, Load, Loadc, LoadW, ESCAPE
+from bit16 import Reg, Op, Cond, Data, Char, Jump, LdByte, Op2, Op2Const6, Op3, Op3Const4, LdReg, Ld, LdWord, ESCAPE
 
 TOKENS = {
     'const': r'-?\d+|x[0-9a-f]+|b[01]+',
@@ -24,9 +24,10 @@ TOKENS = {
     'halt': r'\b(halt)\b',
     'space': r'\b(space)\b',
     'reg': r'\b('+r'|'.join(reg.name for reg in Reg)+r')\b',
-    'label': r'\.?[a-z_]\w*',
+    'label': r'\.?[a-z_]\w*\s*:',
+    'id': r'\.?[a-z_]\w*',
     'equal': r'=',
-    'colon': r':',
+    # 'colon': r':',
     'dash': r'-',
     'lbrace': r'\[',
     'rbrace': r'\]',
@@ -64,35 +65,40 @@ class Assembler:
             self.new_data(0)
     def jump(self, cond, label):
         self.new_inst(Jump, cond, label)
-    def load(self, rd, rb, ro):
-        self.new_inst(Load, False, rd, rb, ro)
-    def loadc(self, rd, rb, offset5):
-        self.new_inst(Loadc, False, rd, rb, offset5)
-    def store(self, rb, rd):
-        self.new_inst(Loadc, True, rd, rb, 0)
-    def store0(self, rb, ro, rd):
-        self.new_inst(Load, True, rd, rb, ro)
-    def store1(self, rb, offset5, rd):
-        self.new_inst(Loadc, True, rd, rb, offset5)
-    def word(self, rd, value):
-        self.new_inst(LoadW, rd)
-        self.new_word(value)
-    def byte(self, rd, byte):
-        self.new_inst(LoadB, byte, rd)
-    def unary(self, op, rd):
-        self.new_inst(Inst2, op, rd, rd)
-    def inst2(self, op, rd, rs):
-        self.new_inst(Inst2, op, rd, rs)
-    def inst2c(self, op, rd, const6):
-        self.new_inst(Inst2c, op, rd, const6)
-    def inst3(self, op, rd, rs, rs2):
-        self.new_inst(Inst3, op, rd, rs, rs2)
-    def inst3c(self, op, rd, rs, const4):
-        self.new_inst(Inst3c, op, rd, rs, const4)
+    def load_w_reg_offset(self, rd, rb, ro):
+        self.new_inst(LdReg, False, rd, rb, ro)
+    def load(self, rd, rb, offset5):
+        self.new_inst(Ld, False, rd, rb, offset5)
+    def store_0_offset(self, rb, rd):
+        self.new_inst(Ld, True, rd, rb, 0)
+    def store_w_reg_offset(self, rb, ro, rd):
+        self.new_inst(LdReg, True, rd, rb, ro)
+    def store(self, rb, offset5, rd):
+        self.new_inst(Ld, True, rd, rb, offset5)
+    def load_const(self, rd, value):
+        if -128 <= value < 128:
+            self.load_byte(rd, value)
+        else:    
+            self.load_word(rd, value)
+    def load_word(self, rd, value):
+        self.new_inst(LdWord, rd)
+        self.new_imm(value)
+    def load_byte(self, rd, byte):
+        self.new_inst(LdByte, byte, rd)
+    def op1(self, op, rd):
+        self.new_inst(Op2, op, rd, rd)
+    def op2(self, op, rd, rs):
+        self.new_inst(Op2, op, rd, rs)
+    def op2_w_const(self, op, rd, const6):
+        self.new_inst(Op2Const6, op, rd, const6)
+    def op3(self, op, rd, rs, rs2):
+        self.new_inst(Op3, op, rd, rs, rs2)
+    def op3_w_const(self, op, rd, rs, const4):
+        self.new_inst(Op3Const4, op, rd, rs, const4)
     def new_inst(self, inst, *args):
         self.inst.append((self.labels, inst, args))
         self.labels = []
-    def new_word(self, value):
+    def new_imm(self, value):
         self.inst.append((self.labels, Data, (value,)))
         self.labels = []
     def new_data(self, value):
@@ -107,85 +113,97 @@ class Assembler:
     def name(self, name, value):
         self.names[name] = value
         
-    def assemble(self, asm):        
+    def assemble(self, asm): #TODO labels vs ids
         self.inst = []
         self.data = []
         self.labels = []
         self.names = {}
-        for self.line_no, line in enumerate(map(str.strip, asm.strip().split('\n')), 1):
+        for self.line_no, line in enumerate(map(str.strip, ('nop\n'+asm).strip().split('\n')), 1):
             if ';' in line:
                 line, comment = map(str.strip, line.split(';', 1))
             if line:
                 self.tokens = lex(line)
-                self.index = 0                
-                if self.match('label'):
-                    self.new_data(*self.values())
-                elif self.match('label', '=', 'const'):
-                    self.name(*self.values())
+                self.index = 0
+                
+                if self.match('id', '=', 'const'):
+                    self.name(*self.values())                    
+                    
                 elif self.peek('label'):
                     print(f'{self.line_no: >2}|{line}')
-                    if self.match('label', ':'):
+                    
+                    if self.match('label'):
                         self.label(*self.values())
-                    elif self.match('label', ':', 'const'):
+                        
+                    elif self.match('label', 'const'):
                         self.const(*self.values())
-                    elif self.match('label', ':', 'char'):
+                        
+                    elif self.match('label', 'char'):
                         self.char(*self.values())
-                    elif self.match('label', ':', 'string'):
+                        
+                    elif self.match('label', 'string'):
                         self.string(*self.values())
-                    elif self.match('label', ':', 'space', 'const'):
+                        
+                    elif self.match('label', 'space', 'const'):
                         self.space(*self.values())
+                        
                     else:
                         self.error()
                 else:
-                    print(f'{self.line_no: >2}|  {line}')
-                    if self.match('const'):
-                        self.new_data(*self.values())
-                    elif self.match('char'):
-                        self.new_char(*self.values())
-                    elif self.match('nop'):
+                    print(f'{self.line_no: >2}|  {line}')                    
+                    
+                    if self.match('nop'):
                         self.jump(Cond.JNV, 0)
-                    elif self.match('cond', 'label'):
+                    
+                    elif self.match('id'):
+                        self.new_data(*self.values())                    
+                    elif self.match('const'):
+                        self.new_data(*self.values())                        
+                    elif self.match('char'):
+                        self.new_char(*self.values())                        
+                        
+                    elif self.match('cond', 'id'):
                         self.jump(*self.values())
-                    elif self.match('ld', 'reg', ',', '[', 'reg', ',', 'reg', ']'):
-                        self.load(*self.values())
+                        
                     elif self.match('ld', 'reg', ',', '[', 'reg', ']'):
-                        self.loadc(*self.values(), 0)
+                        self.load(*self.values(), 0)                        
+                    elif self.match('ld', 'reg', ',', '[', 'reg', ',', 'reg', ']'):
+                        self.load_w_reg_offset(*self.values())
                     elif self.match('ld', 'reg', ',', '[', 'reg', ',', 'const', ']'):
-                        self.loadc(*self.values())
-                    elif self.match('ld', '[', 'reg', ',', 'reg', ']', ',', 'reg'):
-                        self.store0(*self.values())
+                        self.load(*self.values())
+                        
                     elif self.match('ld', '[', 'reg', ']', ',', 'reg'):
-                        self.store(*self.values())
+                        self.store_0_offset(*self.values())
+                    elif self.match('ld', '[', 'reg', ',', 'reg', ']', ',', 'reg'):
+                        self.store_w_reg_offset(*self.values())
                     elif self.match('ld', '[', 'reg', ',', 'const', ']', ',', 'reg'):
-                        self.store1(*self.values())
+                        self.store(*self.values())                        
+                        
                     elif self.match('ld', 'reg', ',', 'const'):
-                        self.word(*self.values())
+                        self.load_const(*self.values())                        
                     elif self.match('ld', 'reg', ',', 'char'):
-                        self.byte(*self.values())
-                    elif self.match('ld', 'reg', ',', '=', 'label'):
-                        self.word(*self.values())
+                        self.load_byte(*self.values())                        
+                    elif self.match('ld', 'reg', ',', '=', 'id'):
+                        self.load_word(*self.values())
+                        
                     elif self.match('op', 'reg'):
-                        self.unary(*self.values())
+                        self.op1(*self.values())                        
                     elif self.match('op', 'reg', ',', 'reg'):                    
-                        self.inst2(*self.values())
-                        
+                        self.op2(*self.values())                        
                     elif self.match('op', 'reg', ',', 'const'):
-                        self.inst2c(*self.values())
-                        
+                        self.op2_w_const(*self.values())                        
                     elif self.match('op', 'reg', ',', 'reg', ',', 'reg'):
-                        self.inst3(*self.values())        
-                        
+                        self.op3(*self.values())
                     elif self.match('op', 'reg', ',', 'reg', ',', 'const'):
-                        self.inst3c(*self.values())
+                        self.op3_w_const(*self.values())
                         
                     elif self.accept('push'):
                         args = [self.expect('reg')]
                         while self.accept(','):
                             args.append(self.expect('reg'))
                         self.expect('end')
-                        self.inst2c(Op.SUB, Reg.SP, len(args))
+                        self.op2_w_const(Op.SUB, Reg.SP, len(args))
                         for i, reg in enumerate(args):
-                            self.store1(Reg.SP, len(args)-1-i, reg)
+                            self.store(Reg.SP, len(args)-1-i, reg)
                             
                     elif self.accept('pop'):
                         args = [self.expect('reg')]
@@ -193,39 +211,28 @@ class Assembler:
                             args.append(self.expect('reg'))
                         self.expect('end')
                         for i, reg in enumerate(reversed(args)):
-                            self.loadc(reg, Reg.SP , i)
-                        self.inst2c(Op.ADD, Reg.SP, len(args))
+                            self.load(reg, Reg.SP , i)
+                        self.op2_w_const(Op.ADD, Reg.SP, len(args))
                                                      
-                    elif self.match('jump', 'label'):
-                        self.word(Reg.PC, *self.values())
+                    elif self.match('jump', 'id'):
+                        self.load_word(Reg.PC, *self.values())
                         
                     elif self.match('call','reg'):
-                        self.inst3c(Op.ADD, Reg.LR, Reg.PC, 2)
-                        self.inst2(Op.MOV, Reg.PC, *self.values())
+                        self.op3_w_const(Op.ADD, Reg.LR, Reg.PC, 2)
+                        self.op2(Op.MOV, Reg.PC, *self.values())
                         
-                    elif self.match('call', 'label'):
-                        self.inst3c(Op.ADD, Reg.LR, Reg.PC, 3)
-                        self.word(Reg.PC, *self.values())
+                    elif self.match('call', 'id'):
+                        self.op3_w_const(Op.ADD, Reg.LR, Reg.PC, 3)
+                        self.load_word(Reg.PC, *self.values()) 
                         
                     elif self.match('ret'):
-                        self.inst2(Op.MOV, Reg.PC, Reg.LR)
+                        self.op2(Op.MOV, Reg.PC, Reg.LR)
                         
                     elif self.match('out', 'reg'):
                         pass
                     
                     elif self.accept('ldm'):
-                        if self.peek('reg'): #ldm A, {B, C}
-                            dest = next(self)
-                            self.expect(',')
-                            self.expect('{')
-                            regs = [self.expect('reg')]
-                            while self.accept(','):
-                                regs.append(self.expect('reg'))
-                            self.expect('}')
-                            for i, reg in enumerate(regs):
-                                self.store1(dest, i, reg)
-                            #store??
-                        elif self.accept('{'): #ldm {B, C}, A
+                        if self.accept('{'):
                             regs = [self.expect('reg')]
                             while self.accept(','):
                                 regs.append(self.expect('reg'))
@@ -233,15 +240,23 @@ class Assembler:
                             self.expect(',')
                             dest = self.expect('reg')
                             for i, reg in enumerate(regs):
-                                self.loadc(reg, dest, i)                            
+                                self.load(reg, dest, i)     
                         else:
-                            self.error()
+                            dest = self.expect('reg')
+                            self.expect(',')
+                            self.expect('{')
+                            regs = [self.expect('reg')]
+                            while self.accept(','):
+                                regs.append(self.expect('reg'))
+                            self.expect('}')
+                            for i, reg in enumerate(regs):
+                                self.store(dest, i, reg)
                         
                     elif self.match('halt'):
-                        self.inst2(Op.MOV, Reg.PC, Reg.PC)
+                        self.op2(Op.MOV, Reg.PC, Reg.PC)
                     else:
                         self.error()                    
-        objects = [([], Jump, (Cond.JNV, 0))]
+        objects = []
         objects.extend(self.inst)
         objects.extend(self.data)
         return objects
@@ -250,36 +265,38 @@ class Assembler:
         pattern += ('end',)
         return len(self.tokens) == len(pattern) and all(pattern[i] in (type_, value) for i, (type_, value) in enumerate(self.tokens))
     
-    def trans(self, type_, value):
-        if type_ == 'const':
+    def trans(self, type, value):
+        if type == 'const':
             if value.startswith('x'):
                 return int(value[1:], base=16)
             elif value.startswith('b'):
                 return int(value[1:], base=2)
             else:
                 return int(value)
-        elif type_ in ['string', 'char']:
+        elif type in ['string', 'char']:
             return value[1:-1]
-        elif type_ == 'reg':
+        elif type == 'reg':
             return Reg[value.upper()]
-        elif type_ == 'cond':
+        elif type == 'cond':
             return Cond[value.upper()]
-        elif type_ == 'op':
+        elif type == 'op':
             return Op[value.upper()]
-        elif type_ == 'label':
+        elif type == 'label':
+            return value[:-1].strip()
+        elif type == 'id':
             if value in self.names:
                 return self.names[value]
             return value
     
     def values(self):
         for type_, value in self.tokens:
-            if type_ in ['const','string','char','reg','cond','op','label']:
+            if type_ in ['const','string','char','reg','cond','op','label','id']:
                 yield self.trans(type_, value)
     
     def __next__(self):
         type_, value = self.tokens[self.index]
         self.index += 1
-        if type_ in ['const','string','char','reg','cond','op','label']:
+        if type_ in ['const','string','char','reg','cond','op','label','id']:
             return self.trans(type_, value)
         return value
         
