@@ -263,7 +263,7 @@ class Assembler:
     
     def match(self, *pattern):
         pattern += ('end',)
-        return len(self.tokens) == len(pattern) and all(pattern[i] in (type_, value) for i, (type_, value) in enumerate(self.tokens))
+        return len(self.tokens) == len(pattern) and all(pattern[i] in (type, value) for i, (type, value) in enumerate(self.tokens))
     
     def trans(self, type, value):
         if type == 'const':
@@ -289,20 +289,20 @@ class Assembler:
             return value
     
     def values(self):
-        for type_, value in self.tokens:
-            if type_ in ['const','string','char','reg','cond','op','label','id']:
-                yield self.trans(type_, value)
+        for type, value in self.tokens:
+            if type in ['const','string','char','reg','cond','op','label','id']:
+                yield self.trans(type, value)
     
     def __next__(self):
-        type_, value = self.tokens[self.index]
+        type, value = self.tokens[self.index]
         self.index += 1
-        if type_ in ['const','string','char','reg','cond','op','label','id']:
-            return self.trans(type_, value)
+        if type in ['const','string','char','reg','cond','op','label','id']:
+            return self.trans(type, value)
         return value
         
     def peek(self, *symbols):
-        type_, value = self.tokens[self.index]
-        return type_ in symbols or value in symbols
+        type, value = self.tokens[self.index]
+        return type in symbols or value in symbols
     
     def accept(self, *symbols):
         if self.peek(*symbols):
@@ -321,22 +321,22 @@ class Linker:
     def link(objects):
         targets = {}
         indices = set()
-        for i, (labels, type_, args) in enumerate(objects):
+        for i, (labels, type, args) in enumerate(objects):
             for label in labels:
                 targets[label] = i
                 indices.add(i)
-            objects[i] = (type_, args)
+            objects[i] = (type, args)
         print('-'*67)
         contents = []
-        for i, (type_, args) in enumerate(objects):
-            if args and type_ is not Char:
+        for i, (type, args) in enumerate(objects):
+            if args and type is not Char:
                 *args, last = args
-                if type(last) is str:
+                if isinstance(last, str):
                     last = targets[last]
-                    if type_ is Jump:
+                    if type is Jump:
                         last -= i
                 args = *args, last
-            data = type_(*args)
+            data = type(*args)
             contents.append(data.hex())
             print('>>' if i in indices else '  ', f'{i:04x}', f'{data.str: <15}', f'| {data.dec(): <13}', f'{data.bin(): <22}', data.hex())
         print('\n', ' '.join(contents))
