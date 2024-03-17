@@ -1,6 +1,7 @@
 docs/
 __pycache__/
 bkp/
+c/*.s
+std/*.s
 *.bit16
 *.pyc
-*.s

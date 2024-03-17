@@ -4,20 +4,7 @@ typedef struct _div_t_ {
     int rem;
 } div_t;
 div_t div(int num, int den) {
-    div_t ans;
-    int quot = 0;
-    int rem = 0;
-    int i;
-    for (i = 15; i >= 0; i--) {
-        rem <<= 1;
-        rem |= (num >> i) & 1;
-        if (rem >= den) {
-            rem -= den;
-            quot |= (1 << i);
-        }
-    }
-    ans.quot = quot;
-    ans.rem = rem;
+    div_t ans = {num / den, num % den};
     return ans;
 }
 int abs(int n) {
@@ -29,8 +16,8 @@ int bsearch(int x, int* v, int n, int (*cmp)(int, int)) {
     int mid;
     int high = n - 1;
     while (low <= high) {
-        mid = low + ((high - low) >> 1);
-        int cond = (*cmp)(x, v[mid]); //TODO
+        mid = low + (high - low) / 2;
+        int cond = (*cmp)(x, v[mid]);
         if (cond < 0)
             high = mid - 1;
         else if (cond > 0) 
@@ -50,7 +37,7 @@ void qsort(int* v, int left, int right, int (*cmp)(int, int)) {
     int i, last;
     if (left >= right)
         return;
-    swap(v, left, (left + right) >> 1); // (l+r) / 2 
+    swap(v, left, left + (right - left) / 2);
     last = left;
     for (i = left+1; i <= right; i++)
         if ((*cmp)(v[i], v[left]) < 0)

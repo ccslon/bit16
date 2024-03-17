@@ -161,10 +161,7 @@ class CParser:
         '''
         mul = self.cast()
         while self.peek('*','/','%'):
-            token = next(self)
-            if token.lexeme in ['/','%']:
-                self.include_divmod(token.lexeme)
-            mul = Binary(token, mul, self.cast())
+            mul = Binary(next(self), mul, self.cast())
         return mul
     
     def add(self):
@@ -271,8 +268,6 @@ class CParser:
         elif self.peek('+=','-=','*=','/=','%=','<<=','>>=','^=','|=','&=','/=','%='):
             assert isinstance(assign, (Local,Glob,Dot,Arrow,SubScr,Deref))
             token = next(self)
-            if token.lexeme in ['/=','%=']:
-                self.include_divmod(token.lexeme)
             assign = Assign(token, assign, Binary(token, assign, self.assign()))
         return assign
     
@@ -689,14 +684,6 @@ class CParser:
     def peek_typedefs(self, offset=0):
         return self.peek('id', offset=offset) and self.tokens[self.index+offset].lexeme in self.typedefs
     
-    def include_divmod(self, op):
-        op = {'/':'div',
-              '%':'mod'}.get(op[0])
-        if not getattr(self, op):
-            with open(f'std//{op}.h') as file:
-                self.tokens[-1:] = clexer.lex(file.read())
-            setattr(self, op, True)
-    
     def begin_func(self):
         self.space = 0
         self.returns = False
@@ -730,8 +717,6 @@ class CParser:
         self.enums = []        
         self.enum_consts = {}
         self.globs = {}
-        self.div = False
-        self.mod = False
         self.tokens = clexer.lex(text)
         # for i, t in enumerate(self.tokens): print(i, t.type, t.lexeme)
         self.index = 0
@@ -775,3 +760,13 @@ parser = CParser()
 
 def parse(text):
     return parser.parse(text)
+
+'''
+0xxxxxxx
+10xxxxxx
+110xxxxx
+1110xxxx
+11110xxx
+111110xx
+1111110x
+'''

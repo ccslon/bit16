@@ -366,8 +366,10 @@ class Char(Expr):
     def data(self):
         return self.token.lexeme
     def reduce(self, n):
-        emit.imm(regs[n], self.data())
+        emit.inst(Op.MOV, regs[n], self.data())
         return regs[n]
+    def num_reduce(self, n):
+        return self.data()
 
 class String(Expr):
     def __init__(self, token):
@@ -481,25 +483,16 @@ class Binary(OpExpr):
           '|=':Op.OR,
           '&' :Op.AND,
           '&=':Op.AND,
-          '/': '_div',
-          '/=':'_div',
-          '%': '_mod',
-          '%=':'_mod'}
+          '/': Op.DIV,
+          '/=':Op.DIV,
+          '%': Op.MOD,
+          '%=':Op.MOD}
     def __init__(self, op, left, right):
         assert left.type.cast(right.type), f'Line {op.line}: Cannot {left.type} {op.lexeme} {right.type}'
         super().__init__(left.type, op)
         self.left, self.right = left, right
     def reduce(self, n):
-        if self.op in ['_div','_mod']:
-            self.right.reduce(n)
-            emit.push(regs[n])
-            self.left.reduce(n)
-            emit.push(regs[n])
-            emit.call(self.op)
-            if n > 0:
-                emit.inst(Op.MOV, regs[n], Reg.A)    
-        else:
-            emit.inst(self.op, self.left.reduce(n), self.right.num_reduce(n+1))
+        emit.inst(self.op, self.left.reduce(n), self.right.num_reduce(n+1))
         return regs[n]
 
 class Compare(Binary):

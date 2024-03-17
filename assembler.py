@@ -6,28 +6,27 @@ Created on Fri Aug 25 10:49:03 2023
 """
 
 import re
-from bit16 import Reg, Op, Cond, Data, Char, Jump, LdByte, Op2, Op2Const6, Op3, Op3Const4, LdReg, Ld, LdWord, ESCAPE
+from bit16 import Reg, Op, Cond, Data, Char, Jump, OpByte, Op4, Offset, OffsetFP, Load, LoadFP, LoadReg, StackOp, Word, ESCAPE
 
 TOKENS = {
-    'const': r'-?\d+|x[0-9a-f]+|b[01]+',
+    'const': r'-?(0x[0-9a-f]+|0b[01]+|\d+)',
     'string': r'"[^"]*"',
     'char': r"'\\?[^']'",
-    'ldm': r'\b(ldm)\b',
-    'ld': r'\b(ld)\b',
-    'nop': r'\b(nop)\b',
-    'op': r'\b('+r'|'.join(op.name for op in Op)+r')\b',
-    'cond': r'\b('+'|'.join(cond.name for cond in Cond)+r')\b',
-    'push': r'\b(push)\b',
-    'pop': r'\b(pop)\b',
-    'call': r'\b(call)\b',
-    'ret': r'\b(ret)\b',
-    'halt': r'\b(halt)\b',
+    'ldm': r'^(ldm)\b',
+    'ld': r'^(ld)\b',
+    'nop': r'^(nop)\b',   
+    'push': r'^(push)\b',
+    'pop': r'^(pop)\b',
+    'call': r'^(call)\b',
+    'ret': r'^(ret)\b',
+    'halt': r'^(halt)\b',
     'space': r'\b(space)\b',
     'reg': r'\b('+r'|'.join(reg.name for reg in Reg)+r')\b',
     'label': r'\.?[a-z_]\w*\s*:',
-    'id': r'\.?[a-z_]\w*',
+    'op': r'^('+r'|'.join(op.name for op in Op)+r')\b',
+    'cond': r'^('+'|'.join(cond.name for cond in Cond)+r')\b',    
+    'id': r'\.?[a-z_]\w*',    
     'equal': r'=',
-    # 'colon': r':',
     'dash': r'-',
     'lbrace': r'\[',
     'rbrace': r'\]',
@@ -65,36 +64,50 @@ class Assembler:
             self.new_data(0)
     def jump(self, cond, label):
         self.new_inst(Jump, cond, label)
-    def load_w_reg_offset(self, rd, rb, ro):
-        self.new_inst(LdReg, False, rd, rb, ro)
-    def load(self, rd, rb, offset5):
-        self.new_inst(Ld, False, rd, rb, offset5)
-    def store_0_offset(self, rb, rd):
-        self.new_inst(Ld, True, rd, rb, 0)
-    def store_w_reg_offset(self, rb, ro, rd):
-        self.new_inst(LdReg, True, rd, rb, ro)
-    def store(self, rb, offset5, rd):
-        self.new_inst(Ld, True, rd, rb, offset5)
-    def load_const(self, rd, value):
-        if -128 <= value < 128:
-            self.load_byte(rd, value)
-        else:    
-            self.load_word(rd, value)
+    def load_reg(self, rd, rb, ro):
+        self.new_inst(LoadReg, False, rd, rb, ro)
+    def load(self, rd, rb, offset):
+        if rb == Reg.FP:
+            self.new_inst(LoadFP, False, rd, offset)
+        else:
+            self.new_inst(Load, False, rd, rb, offset)
+    def store0(self, rb, rd):
+        self.new_inst(Load, True, rd, rb, 0)
+    def store_reg(self, rb, ro, rd):
+        self.new_inst(LoadReg, True, rd, rb, ro)
+    def store(self, rb, offset, rd):
+        if rb == Reg.FP:
+            self.new_inst(LoadFP, True, rd, offset)
+        else:
+            self.new_inst(Load, True, rd, rb, offset)
+    def pop(self, rd):
+        self.new_inst(StackOp, False, rd)
+    def push(self, rd):
+        self.new_inst(StackOp, True, rd)
     def load_word(self, rd, value):
-        self.new_inst(LdWord, rd)
-        self.new_imm(value)
-    def load_byte(self, rd, byte):
-        self.new_inst(LdByte, byte, rd)
+        self.new_inst(Word, rd)
+        self.new_imm(value)        
+    def op_byte(self, op, rd, byte):
+        assert op in [Op.MOV, Op.ADD, Op.SUB, Op.CMP]
+        self.new_inst(OpByte, op, byte, rd)
     def op1(self, op, rd):
-        self.new_inst(Op2, op, rd, rd)
-    def op2(self, op, rd, rs):
-        self.new_inst(Op2, op, rd, rs)
-    def op2_w_const(self, op, rd, const6):
-        self.new_inst(Op2Const6, op, rd, const6)
-    def op3(self, op, rd, rs, rs2):
-        self.new_inst(Op3, op, rd, rs, rs2)
-    def op3_w_const(self, op, rd, rs, const4):
-        self.new_inst(Op3Const4, op, rd, rs, const4)
+        self.new_inst(Op4, False, op, rd, rd)
+    def op4(self, op, rd, rs):
+        self.new_inst(Op4, False, op, rd, rs)
+    def op_const(self, op, rd, const):        
+        if -64 <= const < 64:
+            self.new_inst(Op4, True, op, rd, const)
+        elif 0 <= const < 256:
+            self.op_byte(op, rd, const)
+        else:
+            assert op == Op.MOV
+            self.load_word(rd, const)
+    def offset(self, op, rd, rs, const):
+        assert op in [Op.ADD, Op.SUB]
+        if rs == Reg.FP:
+            self.new_inst(OffsetFP, op, rd, const)
+        else:
+            self.new_inst(Offset, op, rd, rs, const)
     def new_inst(self, inst, *args):
         self.inst.append((self.labels, inst, args))
         self.labels = []
@@ -107,13 +120,10 @@ class Assembler:
     def new_char(self, char):
         self.data.append((self.labels, Char, (char,)))
         self.labels = []
-    def new_string(self, string): #TODO
-        for char in string:
-            self.new_char(char)
     def name(self, name, value):
         self.names[name] = value
         
-    def assemble(self, asm): #TODO labels vs ids
+    def assemble(self, asm):
         self.inst = []
         self.data = []
         self.labels = []
@@ -123,6 +133,7 @@ class Assembler:
                 line, comment = map(str.strip, line.split(';', 1))
             if line:
                 self.tokens = lex(line)
+                print(self.tokens)
                 self.index = 0
                 
                 if self.match('id', '=', 'const'):
@@ -164,72 +175,66 @@ class Assembler:
                     elif self.match('cond', 'id'):
                         self.jump(*self.values())
                         
+                    elif self.match('op', 'reg'):
+                        self.op1(*self.values())                        
+                    elif self.match('op', 'reg', ',', 'reg'):                    
+                        self.op4(*self.values())                        
+                    elif self.match('op', 'reg', ',', 'const'):
+                        self.op_const(*self.values())
+                    elif self.match('op', 'reg', ',', 'char'):
+                        self.op_byte(*self.values())
+                    elif self.match('op', 'reg', ',', 'reg', ',', 'const'):
+                        self.offset(*self.values())
+                            
                     elif self.match('ld', 'reg', ',', '[', 'reg', ']'):
                         self.load(*self.values(), 0)                        
                     elif self.match('ld', 'reg', ',', '[', 'reg', ',', 'reg', ']'):
-                        self.load_w_reg_offset(*self.values())
+                        self.load_reg(*self.values())
                     elif self.match('ld', 'reg', ',', '[', 'reg', ',', 'const', ']'):
                         self.load(*self.values())
+                    
                         
                     elif self.match('ld', '[', 'reg', ']', ',', 'reg'):
-                        self.store_0_offset(*self.values())
+                        self.store0(*self.values())
                     elif self.match('ld', '[', 'reg', ',', 'reg', ']', ',', 'reg'):
                         self.store_w_reg_offset(*self.values())
                     elif self.match('ld', '[', 'reg', ',', 'const', ']', ',', 'reg'):
                         self.store(*self.values())                        
                         
                     elif self.match('ld', 'reg', ',', 'const'):
-                        self.load_const(*self.values())                        
-                    elif self.match('ld', 'reg', ',', 'char'):
-                        self.load_byte(*self.values())                        
+                        self.load_word(*self.values())                
                     elif self.match('ld', 'reg', ',', '=', 'id'):
                         self.load_word(*self.values())
-                        
-                    elif self.match('op', 'reg'):
-                        self.op1(*self.values())                        
-                    elif self.match('op', 'reg', ',', 'reg'):                    
-                        self.op2(*self.values())                        
-                    elif self.match('op', 'reg', ',', 'const'):
-                        self.op2_w_const(*self.values())                        
-                    elif self.match('op', 'reg', ',', 'reg', ',', 'reg'):
-                        self.op3(*self.values())
-                    elif self.match('op', 'reg', ',', 'reg', ',', 'const'):
-                        self.op3_w_const(*self.values())
                         
                     elif self.accept('push'):
                         args = [self.expect('reg')]
                         while self.accept(','):
                             args.append(self.expect('reg'))
                         self.expect('end')
-                        self.op2_w_const(Op.SUB, Reg.SP, len(args))
-                        for i, reg in enumerate(args):
-                            self.store(Reg.SP, len(args)-1-i, reg)
+                        for reg in args:
+                            self.push(reg)
                             
                     elif self.accept('pop'):
                         args = [self.expect('reg')]
                         while self.accept(','):
                             args.append(self.expect('reg'))
                         self.expect('end')
-                        for i, reg in enumerate(reversed(args)):
-                            self.load(reg, Reg.SP , i)
-                        self.op2_w_const(Op.ADD, Reg.SP, len(args))
+                        for reg in reversed(args):
+                            self.pop(reg)
                                                      
                     elif self.match('jump', 'id'):
                         self.load_word(Reg.PC, *self.values())
                         
                     elif self.match('call','reg'):
-                        self.op3_w_const(Op.ADD, Reg.LR, Reg.PC, 2)
-                        self.op2(Op.MOV, Reg.PC, *self.values())
+                        self.offset(Op.ADD, Reg.LR, Reg.PC, 2)
+                        self.op4(Op.MOV, Reg.PC, *self.values())
                         
                     elif self.match('call', 'id'):
-                        self.op3_w_const(Op.ADD, Reg.LR, Reg.PC, 3)
+                        self.offset(Op.ADD, Reg.LR, Reg.PC, 3)
                         self.load_word(Reg.PC, *self.values()) 
                         
                     elif self.match('ret'):
-                        self.op2(Op.MOV, Reg.PC, Reg.LR)
-                        
-                    elif self.match('out', 'reg'):
-                        pass
+                        self.op4(Op.MOV, Reg.PC, Reg.LR)
                     
                     elif self.accept('ldm'):
                         if self.accept('{'):
@@ -253,7 +258,7 @@ class Assembler:
                                 self.store(dest, i, reg)
                         
                     elif self.match('halt'):
-                        self.op2(Op.MOV, Reg.PC, Reg.PC)
+                        self.op4(Op.MOV, Reg.PC, Reg.PC)
                     else:
                         self.error()                    
         objects = []
@@ -261,16 +266,12 @@ class Assembler:
         objects.extend(self.data)
         return objects
     
-    def match(self, *pattern):
-        pattern += ('end',)
-        return len(self.tokens) == len(pattern) and all(pattern[i] in (type, value) for i, (type, value) in enumerate(self.tokens))
-    
     def trans(self, type, value):
         if type == 'const':
-            if value.startswith('x'):
-                return int(value[1:], base=16)
-            elif value.startswith('b'):
-                return int(value[1:], base=2)
+            if value.startswith('0x'):
+                return int(value[2:], base=16)
+            elif value.startswith('0b'):
+                return int(value[2:], base=2)
             else:
                 return int(value)
         elif type in ['string', 'char']:
@@ -293,6 +294,10 @@ class Assembler:
             if type in ['const','string','char','reg','cond','op','label','id']:
                 yield self.trans(type, value)
     
+    def match(self, *pattern):
+        pattern = (*pattern, 'end')
+        return len(self.tokens) == len(pattern) and all(self.peek(symbol, offset=i) for i, symbol in enumerate(pattern))
+    
     def __next__(self):
         type, value = self.tokens[self.index]
         self.index += 1
@@ -300,9 +305,9 @@ class Assembler:
             return self.trans(type, value)
         return value
         
-    def peek(self, *symbols):
-        type, value = self.tokens[self.index]
-        return type in symbols or value in symbols
+    def peek(self, *symbols, offset=0):
+        type, value = self.tokens[self.index+offset]
+        return type in symbols or (not value.isalnum() and value in symbols)
     
     def accept(self, *symbols):
         if self.peek(*symbols):
@@ -345,5 +350,23 @@ class Linker:
 assembler = Assembler()    
 
 def assemble(program):
+    if program.endswith('.s'):
+        with open(program) as file:
+            program = file.read()
     objects = assembler.assemble(program)
     return Linker.link(objects)
+
+ASM = '''
+main:
+cmp:
+    cmp a, 'a'
+    
+    jr cmp
+    jmp main
+'''
+
+if __name__ == '__main__':
+    # assemble('testall.s')
+    assemble(ASM)
+    
+    

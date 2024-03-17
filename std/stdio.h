@@ -53,55 +53,22 @@ void printd(int n) {
         putchar('-');
         n = -n;
     }
-    int div = 0;
-    int mod = n;
-    while (mod >= 10000) {
-        mod -= 10000;
-        div += 1000;
-    }
-    while (mod >= 1000) {
-        mod -= 1000;
-        div += 100;
-    }
-    while (mod >= 100) {
-        mod -= 100;
-        div += 10;
-    }
-    while (mod >= 10) { // "division"
-        mod -= 10;
-        div++;
-    }
-    if (div)
-        printd(div);
-    putchar(mod + '0');
+    if (n / 10)
+        printd(n / 10);
+    putchar(n % 10 + '0');
 }
 void printx(int n, char uplo) {
     if (n < 0) {
         putchar('-');
         n = -n;
     }
-    int div = 0;
-    int mod = n;
-    while (mod >= 4096) { //16^3
-        mod -= 4096;
-        div += 256;
-    }
-    while (mod >= 256) { //16^2
-        mod -= 256;
-        div += 16;
-    }
-    while (mod >= 16) { //16^1
-        mod -= 16;
-        div++;
-    }
-    if (div)
-        printx(div, uplo);
-    if (mod > 9) 
-        putchar(mod - 10 + uplo);
+    if (n / 16)
+        printx(n / 16, uplo);
+    if (n % 16 > 9) 
+        putchar(n % 16 - 10 + uplo);
     else
-        putchar(mod + '0');
+        putchar(n % 16 + '0');
 }
-
 void printf(const char* format, ...) {
     int* ap;
     (ap = (int*)&(format)+1);
