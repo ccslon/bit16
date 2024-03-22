@@ -25,9 +25,6 @@ def compile(name, iflag=False, sflag=False, fflag=True):
                     with open(f'{name[:-2]}.s', 'w+') as file:
                         file.write(asm)
             else:
-                bit16 = assembler.assemble(asm)
-                if fflag:
-                    with open(f'{name[:-2]}.bit16', 'w+') as file:
-                        file.write('v2.0 raw\n'+' '.join(bit16))
+                assembler.assemble(asm, fflag, name[:-2])
     else:
         print("Wrong file type")

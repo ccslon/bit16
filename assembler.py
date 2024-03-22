@@ -349,24 +349,20 @@ class Linker:
     
 assembler = Assembler()    
 
-def assemble(program):
+def assemble(program, fflag=True, name='out'):
     if program.endswith('.s'):
+        name = program[:-2]
         with open(program) as file:
             program = file.read()
     objects = assembler.assemble(program)
-    return Linker.link(objects)
-
-ASM = '''
-main:
-cmp:
-    cmp a, 'a'
-    
-    jr cmp
-    jmp main
-'''
+    bit16 = Linker.link(objects)
+    if fflag:
+        with open(f'{name}.bit16', 'w+') as file:
+            file.write('v2.0 raw\n' + ' '.join(bit16))
 
 if __name__ == '__main__':
     # assemble('testall.s')
-    assemble(ASM)
+    # assemble(ASM)
+    pass
     
     
