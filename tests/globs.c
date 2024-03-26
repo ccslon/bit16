@@ -1,14 +1,12 @@
-#define Cat struct _Cat_
-#define Owner struct _Owner_
-Owner {
+typedef struct _Owner_ {
     char* name;
     int phone;
-};
-Cat {
+} Owner;
+typedef struct _Cat_ {
     char* name;
     int age;
     Owner* owner;
-};
+} Cat;
 Owner owners[2] = {{"Colin",34}, {"Mom", 21}};
 Cat cats[3];
 char* name = "Cats Ya!";

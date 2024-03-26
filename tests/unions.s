@@ -16,7 +16,6 @@ main:
   ADD B, FP, 0
   PUSH B
   CALL printToken
-  MOV B, A
   LD B, =.S0
   PUSH B
   CALL strToken
@@ -29,7 +28,6 @@ main:
   ADD B, FP, 2
   PUSH B
   CALL printToken
-  MOV B, A
   MOV SP, FP
   ADD SP, 4
   HALT
@@ -90,7 +88,6 @@ printToken:
   PUSH B
   CALL printf
   ADD SP, 1
-  MOV B, A
   JR .L3
 .L5:
   LD B, [FP, 4] ; token
@@ -101,7 +98,6 @@ printToken:
   PUSH B
   CALL printf
   ADD SP, 1
-  MOV B, A
   JR .L3
 .L3:
   MOV SP, FP

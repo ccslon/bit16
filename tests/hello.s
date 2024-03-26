@@ -4,6 +4,5 @@ main:
   LD B, =.S0
   PUSH B
   CALL printf
-  MOV B, A
   MOV SP, FP
   HALT

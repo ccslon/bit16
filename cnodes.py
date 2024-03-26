@@ -779,7 +779,7 @@ class Call(Expr):
         self.primary.call(n)
         if self.primary.type.variable and len(self.args) > len(self.primary.type.params):
             emit.inst(Op.ADD, Reg.SP, len(self.args) - len(self.primary.type.params))
-        if n > 0:
+        if n > 0 and self.type.size:
             emit.inst(Op.MOV, regs[n], Reg.A)
 
 class Return(Expr):

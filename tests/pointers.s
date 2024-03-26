@@ -20,7 +20,6 @@ foo:
   ADD B, FP, 0
   PUSH B
   CALL change
-  MOV B, A
   MOV SP, FP
   ADD SP, 1
   POP LR, A, B, FP
@@ -39,13 +38,11 @@ bar:
   LD B, [FP, 5] ; str
   PUSH B
   CALL print
-  MOV B, A
   LD B, [FP, 5] ; str
   LD C, [FP, 6] ; i
   ADD B, C
   PUSH B
   CALL print
-  MOV B, A
   MOV SP, FP
   POP LR, A, B, C, FP
   ADD SP, 2

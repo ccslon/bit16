@@ -32,7 +32,6 @@ main:
   LD B, [FP, 0] ; cat1
   PUSH B
   CALL print_cat
-  MOV B, A
   MOV SP, FP
   ADD SP, 1
   HALT
