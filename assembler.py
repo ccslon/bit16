@@ -128,7 +128,7 @@ class Assembler:
         self.data = []
         self.labels = []
         self.names = {}
-        for self.line_no, line in enumerate(map(str.strip, ('nop\n'+asm).strip().split('\n')), 1):
+        for self.line_no, line in enumerate(map(str.strip, ('nop\n'+asm).strip().split('\n'))):
             if ';' in line:
                 line, comment = map(str.strip, line.split(';', 1))
             if line:
