@@ -15,7 +15,7 @@ class Token(NamedTuple):
 class MetaLexer(type):
     def __init__(self, name, bases, attrs):
         self.action = {}
-        regex = []        
+        regex = []
         flag = attrs['flag'] if 'flag' in attrs else 0 #re.NOFLAG
         for attr in attrs:
             if attr.startswith('RE_'):
@@ -35,7 +35,7 @@ class LexerBase(metaclass=MetaLexer):
         return [Token(match.lastgroup, result, self.line) for match in self.regex.finditer(text) if (result := self.action[match.lastgroup](self, match.group())) is not None] + [Token('end','',self.line)]
 
 class CLexer(LexerBase):
-    
+
     RE_num = r'0x[0-9a-f]+|0b[01]+|\d+|\b(NULL)\b'
     RE_char = r"'\\?[^']'"
     RE_string = r'"[^"]*"'
@@ -106,7 +106,7 @@ class CLexer(LexerBase):
     RE_le = r'<='
     RE_eq = r'='
     RE_gt = r'>'
-    RE_lt = r'<'   
+    RE_lt = r'<'
     RE_exp = r'!'
     RE_ques = r'\?'
     RE_tilde = r'~'

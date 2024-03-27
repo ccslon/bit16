@@ -46,9 +46,9 @@ class Cond(IntEnum):
     JGE = 5
     JLE = 6
     JR = 7
-    
+
 ESCAPE = {
-    '\\0': '\0',   
+    '\\0': '\0',
     '\\t': '\t',
     '\\n': '\n',
     '\\b': '\b'
@@ -59,7 +59,7 @@ INV_ESCAPE = {
     '\n': '\\n',
     '\b': '\\b'
 }
-    
+
 class Data:
     def __init__(self, value):
         assert -32768 <= value < 65536
@@ -69,7 +69,7 @@ class Data:
             value = negative(value, 16)
         self._bin = f'{value:016b}',
     def int(self):
-        return int(''.join(self._bin).replace('X','0'), base=2)    
+        return int(''.join(self._bin).replace('X','0'), base=2)
     def hex(self):
         return f'{self.int():04x}'
     def dec(self):
@@ -89,7 +89,7 @@ class Char(Data):
 
 class Inst(Data):
     pass
-        
+
 class Jump(Inst):
     def __init__(self, cond, const10):
         assert -512 <= const10 < 512
@@ -135,16 +135,16 @@ class Offset(Inst):
         self.str = f'{op.name} {rd.name}, {rs.name}, {const}'
         self._dec = 3,0,0,rs,const,rd
         if op == Op.SUB:
-            const = negative(-const, 5)             
+            const = negative(-const, 5)
         self._bin = '011','0','X',f'{rs:03b}',f'{const:05b}',f'{rd:03b}'
-            
+
 class OffsetFP(Inst):
     def __init__(self, op, rd, const):
         assert 0 <= const < 256
         self.str = f'{op.name} {rd.name}, FP, {const:02X}'
         self._dec = 3,1,0,const,rd
         self._bin = '011','1','X',f'{const:08b}',f'{rd:03b}'
-        
+
 class Load(Inst):
     def __init__(self, storing, rd, rb, offset5):
         assert 0 <= offset5 < 32
@@ -154,7 +154,7 @@ class Load(Inst):
             self.str = f'LD {rd.name}, [{rb.name}, {offset5}]'
         self._dec = 4,0,int(storing),rb,offset5,rd
         self._bin = '100','0',str(int(storing)),f'{rb:03b}',f'{offset5:05b}',f'{rd:03b}'
-        
+
 class LoadFP(Inst):
     def __init__(self, storing, rd, offset8):
         assert 0 <= offset8 < 256
@@ -164,7 +164,7 @@ class LoadFP(Inst):
             self.str = f'LD {rd.name}, [FP, {offset8}]'
         self._dec = 4,1,int(storing),offset8,rd
         self._bin = '100','1',str(int(storing)),f'{offset8:08b}',f'{rd:03b}'
-        
+
 class LoadReg(Inst):
     def __init__(self, storing, rd, rb, ro):
         if storing:
@@ -173,7 +173,7 @@ class LoadReg(Inst):
             self.str = f'LD {rd.name}, [{rb.name}, {ro.name}]'
         self._dec = 5,0,int(storing),0,ro,rb,rd
         self._bin = '101','0',str(int(storing)),'XX',f'{ro:03b}',f'{rb:03b}',f'{rd:03b}'
-        
+
 class StackOp(Inst):
     def __init__(self, pushing, rd):
         if pushing:
@@ -182,7 +182,7 @@ class StackOp(Inst):
             self.str = f'POP {rd.name}'
         self._dec = 6,0,int(pushing),0,rd
         self._bin = '110','X',str(int(pushing)),'XXXXXXXX',f'{rd:03b}'
-        
+
 class Word(Inst):
     def __init__(self, rd):
         self.str = f'LD {rd.name}'

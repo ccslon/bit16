@@ -14,7 +14,7 @@ TOKENS = {
     'char': r"'\\?[^']'",
     'ldm': r'^(ldm)\b',
     'ld': r'^(ld)\b',
-    'nop': r'^(nop)\b',   
+    'nop': r'^(nop)\b',
     'push': r'^(push)\b',
     'pop': r'^(pop)\b',
     'call': r'^(call)\b',
@@ -24,8 +24,8 @@ TOKENS = {
     'reg': r'\b('+r'|'.join(reg.name for reg in Reg)+r')\b',
     'label': r'\.?[a-z_]\w*\s*:',
     'op': r'^('+r'|'.join(op.name for op in Op)+r')\b',
-    'cond': r'^('+'|'.join(cond.name for cond in Cond)+r')\b',    
-    'id': r'\.?[a-z_]\w*',    
+    'cond': r'^('+'|'.join(cond.name for cond in Cond)+r')\b',
+    'id': r'\.?[a-z_]\w*',
     'equal': r'=',
     'dash': r'-',
     'lbrace': r'\[',
@@ -86,7 +86,7 @@ class Assembler:
         self.new_inst(StackOp, True, rd)
     def load_word(self, rd, value):
         self.new_inst(Word, rd)
-        self.new_imm(value)        
+        self.new_imm(value)
     def op_byte(self, op, rd, byte):
         assert op in [Op.MOV, Op.ADD, Op.SUB, Op.CMP]
         self.new_inst(OpByte, op, byte, rd)
@@ -94,7 +94,7 @@ class Assembler:
         self.new_inst(Op4, False, op, rd, rd)
     def op4(self, op, rd, rs):
         self.new_inst(Op4, False, op, rd, rs)
-    def op_const(self, op, rd, const):        
+    def op_const(self, op, rd, const):
         if -64 <= const < 64:
             self.new_inst(Op4, True, op, rd, const)
         elif 0 <= const < 256:
@@ -122,7 +122,7 @@ class Assembler:
         self.labels = []
     def name(self, name, value):
         self.names[name] = value
-        
+
     def assemble(self, asm):
         self.inst = []
         self.data = []
@@ -137,7 +137,7 @@ class Assembler:
                 self.index = 0
                 
                 if self.match('id', '=', 'const'):
-                    self.name(*self.values())                    
+                    self.name(*self.values())
                     
                 elif self.peek('label'):
                     print(f'{self.line_no: >2}|{line}')
@@ -160,25 +160,25 @@ class Assembler:
                     else:
                         self.error()
                 else:
-                    print(f'{self.line_no: >2}|  {line}')                    
+                    print(f'{self.line_no: >2}|  {line}')
                     
                     if self.match('nop'):
                         self.jump(Cond.JNV, 0)
                     
                     elif self.match('id'):
-                        self.new_data(*self.values())                    
+                        self.new_data(*self.values())
                     elif self.match('const'):
-                        self.new_data(*self.values())                        
+                        self.new_data(*self.values())
                     elif self.match('char'):
-                        self.new_char(*self.values())                        
+                        self.new_char(*self.values())
                         
                     elif self.match('cond', 'id'):
                         self.jump(*self.values())
                         
                     elif self.match('op', 'reg'):
-                        self.op1(*self.values())                        
-                    elif self.match('op', 'reg', ',', 'reg'):                    
-                        self.op4(*self.values())                        
+                        self.op1(*self.values())
+                    elif self.match('op', 'reg', ',', 'reg'):
+                        self.op4(*self.values())
                     elif self.match('op', 'reg', ',', 'const'):
                         self.op_const(*self.values())
                     elif self.match('op', 'reg', ',', 'char'):
@@ -187,7 +187,7 @@ class Assembler:
                         self.offset(*self.values())
                             
                     elif self.match('ld', 'reg', ',', '[', 'reg', ']'):
-                        self.load(*self.values(), 0)                        
+                        self.load(*self.values(), 0)
                     elif self.match('ld', 'reg', ',', '[', 'reg', ',', 'reg', ']'):
                         self.load_reg(*self.values())
                     elif self.match('ld', 'reg', ',', '[', 'reg', ',', 'const', ']'):
@@ -199,10 +199,10 @@ class Assembler:
                     elif self.match('ld', '[', 'reg', ',', 'reg', ']', ',', 'reg'):
                         self.store_w_reg_offset(*self.values())
                     elif self.match('ld', '[', 'reg', ',', 'const', ']', ',', 'reg'):
-                        self.store(*self.values())                        
+                        self.store(*self.values())
                         
                     elif self.match('ld', 'reg', ',', 'const'):
-                        self.load_word(*self.values())                
+                        self.load_word(*self.values())
                     elif self.match('ld', 'reg', ',', '=', 'id'):
                         self.load_word(*self.values())
                         
@@ -221,7 +221,7 @@ class Assembler:
                         self.expect('end')
                         for reg in reversed(args):
                             self.pop(reg)
-                                                     
+                        
                     elif self.match('jump', 'id'):
                         self.load_word(Reg.PC, *self.values())
                         
@@ -231,7 +231,7 @@ class Assembler:
                         
                     elif self.match('call', 'id'):
                         self.offset(Op.ADD, Reg.LR, Reg.PC, 3)
-                        self.load_word(Reg.PC, *self.values()) 
+                        self.load_word(Reg.PC, *self.values())
                         
                     elif self.match('ret'):
                         self.op4(Op.MOV, Reg.PC, Reg.LR)
@@ -245,7 +245,7 @@ class Assembler:
                             self.expect(',')
                             dest = self.expect('reg')
                             for i, reg in enumerate(regs):
-                                self.load(reg, dest, i)     
+                                self.load(reg, dest, i)
                         else:
                             dest = self.expect('reg')
                             self.expect(',')
@@ -260,12 +260,12 @@ class Assembler:
                     elif self.match('halt'):
                         self.op4(Op.MOV, Reg.PC, Reg.PC)
                     else:
-                        self.error()                    
+                        self.error()
         objects = []
         objects.extend(self.inst)
         objects.extend(self.data)
         return objects
-    
+
     def trans(self, type, value):
         if type == 'const':
             if value.startswith('0x'):
@@ -288,36 +288,36 @@ class Assembler:
             if value in self.names:
                 return self.names[value]
             return value
-    
+
     def values(self):
         for type, value in self.tokens:
             if type in ['const','string','char','reg','cond','op','label','id']:
                 yield self.trans(type, value)
-    
+
     def match(self, *pattern):
         pattern = (*pattern, 'end')
         return len(self.tokens) == len(pattern) and all(self.peek(symbol, offset=i) for i, symbol in enumerate(pattern))
-    
+
     def __next__(self):
         type, value = self.tokens[self.index]
         self.index += 1
         if type in ['const','string','char','reg','cond','op','label','id']:
             return self.trans(type, value)
         return value
-        
+
     def peek(self, *symbols, offset=0):
         type, value = self.tokens[self.index+offset]
         return type in symbols or (not value.isalnum() and value in symbols)
-    
+
     def accept(self, *symbols):
         if self.peek(*symbols):
             return next(self)
-    
+
     def expect(self, *symbols):
         if self.peek(*symbols):
             return next(self)
         self.error(expected=symbols)
-        
+
     def error(self):
         etype, evalue = self.tokens[self.index]
         raise SyntaxError(f'Unexpected {etype} token "{evalue}" at token #{self.index} in line {self.line_no}')
@@ -346,8 +346,8 @@ class Linker:
             print('>>' if i in indices else '  ', f'{i:04x}', f'{data.str: <15}', f'| {data.dec(): <13}', f'{data.bin(): <22}', data.hex())
         print('\n', ' '.join(contents))
         return contents
-    
-assembler = Assembler()    
+
+assembler = Assembler()
 
 def assemble(program, fflag=True, name='out'):
     if program.endswith('.s'):
@@ -364,5 +364,3 @@ if __name__ == '__main__':
     # assemble('testall.s')
     # assemble(ASM)
     pass
-    
-    

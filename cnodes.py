@@ -12,7 +12,7 @@ class Loop(UserList):
         return self[-1][0]
     def end(self):
         return self[-1][1]
-    
+
 class Regs:
     def clear(self):
         self.max = -1
@@ -28,7 +28,7 @@ regs = Regs()
 
 class Frame(UserDict):
     def __init__(self):
-        super().__init__()    
+        super().__init__()
         self.size = 0
     def __setitem__(self, name, obj):
         obj.location = self.size
@@ -43,7 +43,7 @@ class Visitor:
         self.if_jump_end = False
         self.loop = Loop()
     def begin_func(self, defn):
-        if defn.type.size or defn.returns: 
+        if defn.type.size or defn.returns:
             self.return_label = self.next_label()
         self.defn = defn
     def begin_loop(self):
@@ -237,7 +237,7 @@ class Const(Type):
             or type(other) is Const and self.type == other.type
     def __str__(self):
         return f'const {self.type}'
-    
+
 class Pointer(Type):
     def __init__(self, type):
         super().__init__(type)
@@ -352,7 +352,7 @@ class Expr(CNode):
         vstr.jump(Cond.JNE, f'.L{label}')
     def num_reduce(self, vstr, n):
         return self.reduce(vstr, n)
-    
+
 class NumBase(Expr):
     def __init__(self, token):
         super().__init__(Type('int'), token)
@@ -386,7 +386,7 @@ class Num(NumBase):
         elif token.lexeme.startswith('0b'):
             self.value = int(token.lexeme, base=2)
         else:
-            self.value = int(token.lexeme)    
+            self.value = int(token.lexeme)
 
 class SizeOf(NumBase):
     def __init__(self, token, type):
@@ -430,7 +430,7 @@ class Unary(OpExpr):
     def reduce(self, vstr, n):
         vstr.inst(self.op, self.unary.reduce(vstr, n), Reg.A)
         return regs[n]
-    
+
 class Pre(Unary):
     OP = {'++':Op.ADD,
           '--':Op.SUB}
@@ -475,11 +475,11 @@ class Cast(Expr):
         return self.cast.reduce(vstr, n)
     def data(self):
         return self.cast.data()
-    
+
 class Not(Expr):
     def __init__(self, token, unary):
         super().__init__(unary.type, token)
-        self.unary = unary        
+        self.unary = unary
     def compare(self, vstr, n, label):
         vstr.inst(Op.CMP, self.unary.reduce(vstr, n), 0)
         vstr.jump(Cond.JNE, f'.L{label}')
@@ -490,10 +490,10 @@ class Not(Expr):
         label = vstr.next_label()
         sublabel = vstr.next_label()
         self.unary.compare(vstr, n, sublabel)
-        vstr.inst(Op.MOV, Reg(n), 0) #TODO why not regs[n]??
+        vstr.inst(Op.MOV, regs[n], 0)
         vstr.jump(Cond.JR, f'.L{label}')
         vstr.append_label(f'.L{sublabel}')
-        vstr.inst(Op.MOV, Reg(n), 1)
+        vstr.inst(Op.MOV, regs[n], 1)
         vstr.append_label(f'.L{label}')
         return regs[n]
 
@@ -544,22 +544,22 @@ class Compare(Binary):
     def __init__(self, op, left, right):
         super().__init__(op, left, right)
         self.inv = self.INV[op.lexeme]
-    def compare(self, vstr, n, label):        
+    def compare(self, vstr, n, label):
         vstr.inst(Op.CMP, self.left.reduce(vstr, n), self.right.num_reduce(vstr, n+1))
         vstr.jump(self.inv, f'.L{label}')
     def compare_false(self, vstr, n, label):
         vstr.inst(Op.CMP, self.left.reduce(vstr, n), self.right.num_reduce(vstr, n+1))
         vstr.jump(self.op, f'.L{label}')
-    def reduce(self, vstr, n):        
+    def reduce(self, vstr, n):
         label = vstr.next_label()
         sublabel = vstr.next_label()
         self.compare(vstr, n, sublabel)
-        vstr.inst(Op.MOV, Reg(n), 1) #TODO why not regs[n]???
+        vstr.inst(Op.MOV, regs[n], 1)
         vstr.jump(Cond.JR, f'.L{label}')
         vstr.append_label(f'.L{sublabel}')
-        vstr.inst(Op.MOV, Reg(n), 0)
+        vstr.inst(Op.MOV, regs[n], 0)
         vstr.append_label(f'.L{label}')
-        return Reg(n)
+        return regs[n]
 
 class Logic(Binary):
     OP = {'&&':Op.AND,
@@ -604,7 +604,7 @@ class Assign(Expr):
     def __init__(self, token, left, right):
         assert left.type == right.type, f'Line {token.line}: {left.type} != {right.type}'
         super().__init__(left.type, token)
-        self.left, self.right = left, right      
+        self.left, self.right = left, right
     def reduce(self, vstr, n):
         self.generate(vstr, n)
         return regs[n]
@@ -615,12 +615,12 @@ class Assign(Expr):
 class InitList(Expr):
     def __init__(self, token, left, right):
         super().__init__(left.type, token)
-        self.left, self.right = left, right 
+        self.left, self.right = left, right
     def generate(self, vstr, n):
         self.left.address(vstr, n)
         for i in range(self.left.type.size):
             self.right[i].reduce(vstr, n+1)
-            vstr.store(regs[n+1], regs[n], i)        
+            vstr.store(regs[n+1], regs[n], i)
 
 class Block(UserList, Expr):
     def generate(self, vstr, n):
@@ -665,7 +665,7 @@ class Glob(Local):
         self.type.glob(vstr, self)
     def call(self, vstr, n):
         vstr.call(self.token.lexeme)
-    
+
 class Defn(Expr):
     def __init__(self, type, id, params, block, returns, calls, space):
         super().__init__(type, id)
@@ -679,7 +679,7 @@ class Defn(Expr):
         push = list(map(Reg, range(bool(self.type.size), regs.max+1))) + [Reg.FP]
         for param in self.params:
             param.location += self.space + self.calls + len(push)
-        
+
         vstr.begin_func(self)
         #start
         vstr.append_label(self.token.lexeme)
@@ -725,7 +725,7 @@ class Post(OpExpr):
     OP = {'++':Op.ADD,
           '--':Op.SUB}
     def __init__(self, op, postfix):
-        assert postfix.type.cast(Type('int')), f'Line {op.line}: Cannot {op.lexeme} {postfix.type}' 
+        assert postfix.type.cast(Type('int')), f'Line {op.line}: Cannot {op.lexeme} {postfix.type}'
         super().__init__(postfix.type, op)
         self.postfix = postfix
     def reduce(self, vstr, n):
@@ -761,7 +761,7 @@ class Dot(Access):
 class Arrow(Dot):
     def address(self, vstr, n):
         vstr.inst(Op.ADD, self.postfix.reduce(vstr, n), self.attr.location)
-        return regs[n] 
+        return regs[n]
     def store(self, vstr, n):
         self.postfix.reduce(vstr, n+1)
         return self.attr.store(vstr, n)
@@ -772,7 +772,7 @@ class Arrow(Dot):
         self.postfix.reduce(vstr, n)
         self.attr.call(vstr, n)
 
-class SubScr(Access): 
+class SubScr(Access):
     def __init__(self, token, postfix, sub):
         super().__init__(postfix.type.of, token, postfix)
         self.sub = sub
@@ -818,7 +818,7 @@ class Return(Expr):
         super().__init__(Void() if expr is None else expr.type, token)
         self.expr = expr
     def generate(self, vstr, n):
-        assert vstr.defn.type.ret == self.type, f'Line {self.token.line}: {vstr.defn.type.ret} != {self.type} in {vstr.defn.token.lexeme}'       
+        assert vstr.defn.type.ret == self.type, f'Line {self.token.line}: {vstr.defn.type.ret} != {self.type} in {vstr.defn.token.lexeme}'
         if self.expr:
             self.expr.reduce(vstr, n)
         vstr.jump(Cond.JR, f'.L{vstr.return_label}')
@@ -882,7 +882,7 @@ class Switch(Statement):
         if self.default:
             vstr.append_label(f'.L{default}')
             self.default.generate(vstr, n)
-        vstr.append_label(f'.L{vstr.loop.end()}')            
+        vstr.append_label(f'.L{vstr.loop.end()}')
         vstr.end_loop()
 
 class While(Statement):
@@ -930,7 +930,7 @@ class For(While):
 class Continue(Statement):
     def generate(self, vstr, n):
         vstr.jump(Cond.JR, f'.L{vstr.loop.start()}')
-        
+
 class Break(Statement):
     def generate(self, vstr, n):
         vstr.jump(Cond.JR, f'.L{vstr.loop.end()}')
@@ -940,7 +940,7 @@ class Goto(Statement):
         self.target = target
     def generate(self, vstr, n):
         vstr.jump(Cond.JR, self.target.lexeme)
-        
+
 class Label(Statement):
     def __init__(self, target):
         self.target = target
