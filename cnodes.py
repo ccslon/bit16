@@ -20,7 +20,6 @@ class Regs:
         if item == 'FP':
             return Reg.FP
         elif item > Reg.D:
-            # print('\n'.join(emit.asm))
             raise SyntaxError('Not enough registers =(')
         self.max = max(self.max, item)
         return Reg(item)
@@ -35,61 +34,98 @@ class Frame(UserDict):
         obj.location = self.size
         self.size += obj.type.size
         super().__setitem__(name, obj)
-        
-class Environment:
+
+class Visitor:
+    def __init__(self):
+        self.clear()
     def clear(self):
-        self.labels = 0
-        self.loop = Loop()
+        self.n_labels = 0
         self.if_jump_end = False
-        self.preview = False
+        self.loop = Loop()
     def begin_func(self, defn):
+        if defn.type.size or defn.returns: 
+            self.return_label = self.next_label()
         self.defn = defn
-        self.space = defn.space
     def begin_loop(self):
         self.loop.append((self.next_label(), self.next_label()))
     def end_loop(self):
         self.loop.pop()
     def next_label(self):
-        if not self.preview:
-            label = self.labels
-            self.labels += 1
-            return label
+        label = self.n_labels
+        self.n_labels += 1
+        return label
+    def append_label(self, label):
+        pass
+    def string(self, string):
+        pass
+    def add(self, asm):
+        pass
+    def space(self, name, size):
+        pass
+    def glob(self, name, value):
+        pass
+    def datas(self, label, datas):
+        pass
+    def push(self, reg):
+        pass
+    def pop(self, reg):
+        pass
+    def pushm(self, calls, *regs):
+        pass
+    def popm(self, calls, *regs):
+        pass
+    def call(self, proc):
+        pass
+    def ret(self):
+        pass
+    def load_glob(self, rd, name):
+        pass
+    def load(self, rd, rb, offset=None, name=None):
+        pass
+    def store(self, rd, rb, offset=None, name=None):
+        pass
+    def imm(self, rd, value):
+        pass
+    def loadm(self, rd, size):
+        pass
+    def storem(self, rd, size):
+        pass
+    def inst(self, op, rd, src):
+        pass
+    def inst3(self, op, rd, rs, const4):
+        pass
+    def jump(self, cond, target):
+        pass
+    def halt(self):
+        pass
 
-env = Environment()
-
-class Emitter:
+class Emitter(Visitor):
     def clear(self):
+        super().clear()
         self.labels = []
         self.asm = []
         self.data = []
         self.strings = []
-        self.preview = False
-    def string(self, string):
-        if not self.preview:
-            if string not in self.strings:
-                self.strings.append(string)
-                emit.glob(f'.S{self.strings.index(string)}', string)
-            return f'.S{self.strings.index(string)}'
     def append_label(self, label):
-        if not self.preview:
-            self.labels.append(label)
+        self.labels.append(label)
+    def string(self, string):
+        if string not in self.strings:
+            self.strings.append(string)
+            self.glob(f'.S{self.strings.index(string)}', string)
+        return f'.S{self.strings.index(string)}'
     def add(self, asm):
-        if not self.preview:
-            for label in self.labels:
-                self.asm.append(f'{label}:')
-            self.asm.append(f'  {asm}')
-            self.labels.clear()
+        for label in self.labels:
+            self.asm.append(f'{label}:')
+        self.asm.append(f'  {asm}')
+        self.labels.clear()
     def space(self, name, size):
-        if not self.preview:
-            self.data.append(f'{name}: space {size}')
+        self.data.append(f'{name}: space {size}')
     def glob(self, name, value):
-        if not self.preview:
-            self.data.append(f'{name}: {value}')
+        self.data.append(f'{name}: {value}')
     def datas(self, label, datas):
-        if not self.preview:
-            self.data.append(f'{label}:')
-            for data in datas:
-                self.data.append(f'  {data}')
+        self.data.append(f'{label}:')
+        for data in datas:
+            self.data.append(f'  {data}')
     def push(self, reg):
         self.add(f'PUSH {reg.name}')
     def pop(self, reg):
@@ -111,10 +147,10 @@ class Emitter:
         self.add('RET')
     def load_glob(self, rd, name):
         self.add(f'LD {rd.name}, ={name}')
-    def load(self, rd, rb, offset5=None, name=None):
-        self.add(f'LD {rd.name}, [{rb.name}'+(f', {offset5}' if offset5 is not None else '')+']'+(f' ; {name}' if name else ''))
-    def store(self, rd, rb, offset5=None, name=None):
-        self.add(f'LD [{rb.name}'+(f', {offset5}' if offset5 is not None else '')+f'], {rd.name}'+(f' ; {name}' if name else ''))
+    def load(self, rd, rb, offset=None, name=None):
+        self.add(f'LD {rd.name}, [{rb.name}'+(f', {offset}' if offset is not None else '')+']'+(f' ; {name}' if name else ''))
+    def store(self, rd, rb, offset=None, name=None):
+        self.add(f'LD [{rb.name}'+(f', {offset}' if offset is not None else '')+f'], {rd.name}'+(f' ; {name}' if name else ''))
     def imm(self, rd, value):
         self.add(f'LD {rd.name}, {value}')
     def loadm(self, rd, size):
@@ -129,18 +165,15 @@ class Emitter:
                 self.add(f'{op.name} {rd.name}, {src.name}')
             else:
                 self.add(f'{op.name} {rd.name}, {src}')
-    def inst3c(self, op, rd, rs, const4):
+    def inst3(self, op, rd, rs, const4):
         self.add(f'{op.name} {rd.name}, {rs.name}, {const4}')
     def jump(self, cond, target):
         self.add(f'{cond.name} {target}')
     def halt(self):
-        if not self.preview:
-            self.add('HALT')
-
-emit = Emitter()
+        self.add('HALT')
 
 class CNode:
-    def generate(self, n):
+    def generate(self, vstr, n):
         pass
 
 class Void(CNode):
@@ -156,35 +189,35 @@ class Type(CNode):
         self.type = type
         self.size = 1
     @staticmethod
-    def store(local, n, base):
+    def store(vstr, n, local, base):
         if local.location is None:
-            emit.load_glob(regs[n+1], local.token.lexeme)
-            emit.store(regs[n], regs[n+1])
+            vstr.load_glob(regs[n+1], local.token.lexeme)
+            vstr.store(regs[n], regs[n+1])
         else:
-            emit.store(regs[n], regs[base], local.location, local.token.lexeme)
+            vstr.store(regs[n], regs[base], local.location, local.token.lexeme)
         return regs[n]
     @staticmethod
-    def address(local, n, base):
+    def address(vstr, n, local, base):
         if -8 <= local.location < 8:
-            emit.inst3c(Op.ADD, regs[n], regs[base], local.location)
+            vstr.inst3(Op.ADD, regs[n], regs[base], local.location)
         elif -32 <= local.location < 32:
-            emit.inst(Op.MOV, regs[n], regs[base])
-            emit.inst(Op.ADD, regs[n], local.location)
+            vstr.inst(Op.MOV, regs[n], regs[base])
+            vstr.inst(Op.ADD, regs[n], local.location)
         return regs[n]
     @staticmethod
-    def reduce(local, n, base):
+    def reduce(vstr, n, local, base):
         if local.location is None:
-            emit.load_glob(regs[n], local.token.lexeme)
-            emit.load(regs[n], regs[n])
+            vstr.load_glob(regs[n], local.token.lexeme)
+            vstr.load(regs[n], regs[n])
         else:
-            emit.load(regs[n], regs[base], local.location, local.token.lexeme)
+            vstr.load(regs[n], regs[base], local.location, local.token.lexeme)
         return regs[n]
     @staticmethod
-    def glob(glob):
+    def glob(vstr, glob):
         if glob.init:
-            emit.glob(glob.token.lexeme, glob.init.value)
+            vstr.glob(glob.token.lexeme, glob.init.value)
         else:
-            emit.space(glob.token.lexeme, glob.type.size)
+            vstr.space(glob.token.lexeme, glob.type.size)
     def cast(self, other):
         return type(other) in [Pointer, Type] \
             or type(other) is Const and self.cast(other.type)
@@ -211,11 +244,11 @@ class Pointer(Type):
         self.to = self.of = self.type
         self.size = 1
     @staticmethod
-    def reduce(local, n, base):
+    def reduce(vstr, n, local, base):
         if local.location is None:
-            emit.load_glob(regs[n], local.token.lexeme)
+            vstr.load_glob(regs[n], local.token.lexeme)
         else:
-            emit.load(regs[n], regs[base], local.location, local.token.lexeme)
+            vstr.load(regs[n], regs[base], local.location, local.token.lexeme)
         return regs[n]
     def cast(self, other):
         return type(other) in [Pointer, Type] \
@@ -233,20 +266,20 @@ class Struct(Frame, Type):
         super().__init__()
         self.name = name
     @staticmethod
-    def store(local, n, base):
-        Struct.address(local, n+1, base)
+    def store(vstr, n, local, base):
+        Struct.address(vstr, n+1, local, base)
         for i in range(local.type.size):
-            emit.load(regs[n+2], regs[n], i)
-            emit.store(regs[n+2], regs[n+1], i)
+            vstr.load(regs[n+2], regs[n], i)
+            vstr.store(regs[n+2], regs[n+1], i)
     @staticmethod
-    def reduce(local, n, base):
-        return Struct.address(local, n, base)
+    def reduce(vstr, n, local, base):
+        return Struct.address(vstr, n, local, base)
     @staticmethod
-    def glob(glob):
+    def glob(vstr, glob):
         if glob.init:
-            emit.datas(glob.token.lexeme, [expr.data() for expr in glob.init])
+            vstr.datas(glob.token.lexeme, [expr.data(vstr) for expr in glob.init])
         else:
-            emit.space(glob.token.lexeme, glob.type.size)
+            vstr.space(glob.token.lexeme, glob.type.size)
     def cast(self, other):
         return self == other
     def __eq__(self, other):
@@ -270,21 +303,21 @@ class Array(Type):
         self.of = of
         self.length = length.value
     @staticmethod
-    def address(local, n, base):
+    def address(vstr, n, local, base):
         if local.location is None:
-            emit.load_glob(regs[n], local.token.lexeme)
+            vstr.load_glob(regs[n], local.token.lexeme)
         else:
-            Type.address(local, n, base)
+            Type.address(vstr, n, local, base)
         return regs[n]
     @staticmethod
-    def reduce(local, n, base):
-        return Array.address(local, n, base)
+    def reduce(vstr, n, local, base):
+        return Array.address(vstr, n, local, base)
     @staticmethod
-    def glob(glob):
+    def glob(vstr, glob):
         if glob.init:
-            emit.datas(glob.token.lexeme, [expr.data() for expr in glob.init])
+            vstr.datas(glob.token.lexeme, [expr.data(vstr) for expr in glob.init])
         else:
-            emit.space(glob.token.lexeme, glob.type.size)
+            vstr.space(glob.token.lexeme, glob.type.size)
     def cast(self, other):
         return self == other
     def __eq__(self, other):
@@ -307,35 +340,35 @@ class Expr(CNode):
     def __init__(self, type, token):
         self.type = type
         self.token = token
-    def branch_reduce(self, n , _):
-        self.reduce(n)
-    def branch(self, n, _):
-        self.generate(n)
-    def compare(self, n, label):
-        emit.inst(Op.CMP, self.reduce(n), 0)
-        emit.jump(Cond.JEQ, f'.L{label}')
-    def compare_false(self, n, label):
-        emit.inst(Op.CMP, self.reduce(n), 0)
-        emit.jump(Cond.JNE, f'.L{label}')
-    def num_reduce(self, n):
-        return self.reduce(n)
+    def branch_reduce(self, vstr, n , _):
+        self.reduce(vstr, n)
+    def branch(self, vstr, n, _):
+        self.generate(vstr, n)
+    def compare(self, vstr, n, label):
+        vstr.inst(Op.CMP, self.reduce(vstr, n), 0)
+        vstr.jump(Cond.JEQ, f'.L{label}')
+    def compare_false(self, vstr, n, label):
+        vstr.inst(Op.CMP, self.reduce(vstr, n), 0)
+        vstr.jump(Cond.JNE, f'.L{label}')
+    def num_reduce(self, vstr, n):
+        return self.reduce(vstr, n)
     
 class NumBase(Expr):
     def __init__(self, token):
         super().__init__(Type('int'), token)
-    def data(self):
+    def data(self, vstr):
         return self.value
-    def reduce(self, n):
+    def reduce(self, vstr, n):
         if -32 <= self.value < 32:
-            emit.inst(Op.MOV, regs[n], self.value)
+            vstr.inst(Op.MOV, regs[n], self.value)
         else:
-            emit.imm(regs[n], self.value)
+            vstr.imm(regs[n], self.value)
         return regs[n]
-    def num_reduce(self, n):
+    def num_reduce(self, vstr, n):
         if -32 <= self.value < 32:
             return self.value
         else:
-            emit.imm(regs[n], self.value)
+            vstr.imm(regs[n], self.value)
             return regs[n]
 
 class EnumConst(NumBase):
@@ -365,20 +398,20 @@ class Char(Expr):
         super().__init__(Type('char'), token)
     def data(self):
         return self.token.lexeme
-    def reduce(self, n):
-        emit.inst(Op.MOV, regs[n], self.data())
+    def reduce(self, vstr, n):
+        vstr.inst(Op.MOV, regs[n], self.data())
         return regs[n]
-    def num_reduce(self, n):
+    def num_reduce(self, vstr, n):
         return self.data()
 
 class String(Expr):
     def __init__(self, token):
         super().__init__(Pointer(Type('char')), token)
         self.value = f'"{token.lexeme[1:-1]}\\0"'
-    def data(self):
-        return emit.string(self.value)
-    def reduce(self, n):
-        emit.load_glob(regs[n], self.data())
+    def data(self, vstr):
+        return vstr.string(self.value)
+    def reduce(self, vstr, n):
+        vstr.load_glob(regs[n], self.data(vstr))
         return regs[n]
 
 class OpExpr(Expr):
@@ -394,42 +427,42 @@ class Unary(OpExpr):
         assert unary.type.cast(Type('int')), f'Line {op.line}: Cannot {op.lexeme} {unary.type}'
         super().__init__(unary.type, op)
         self.unary = unary
-    def reduce(self, n):
-        emit.inst(self.op, self.unary.reduce(n), Reg.A)
+    def reduce(self, vstr, n):
+        vstr.inst(self.op, self.unary.reduce(vstr, n), Reg.A)
         return regs[n]
     
 class Pre(Unary):
     OP = {'++':Op.ADD,
           '--':Op.SUB}
-    def reduce(self, n):
-        self.generate(n)
+    def reduce(self, vstr, n):
+        self.generate(vstr, n)
         return regs[n]
-    def generate(self, n):
-        self.unary.reduce(n)
-        emit.inst(self.op, regs[n], 1)
-        self.unary.store(n)
+    def generate(self, vstr, n):
+        self.unary.reduce(vstr, n)
+        vstr.inst(self.op, regs[n], 1)
+        self.unary.store(vstr, n)
 
 class AddrOf(Expr):
     def __init__(self, token, unary):
         super().__init__(Pointer(unary.type), token)
         self.unary = unary
-    def reduce(self, n):
-        return self.unary.address(n)
+    def reduce(self, vstr, n):
+        return self.unary.address(vstr, n)
 
 class Deref(Expr):
     def __init__(self, token, unary):
         assert hasattr(unary.type, 'to'), f'Line {token.line}: Cannot {token.lexeme} {unary.type}'
         super().__init__(unary.type.to, token)
         self.unary = unary
-    def store(self, n):
-        self.unary.reduce(n+1)
-        emit.store(regs[n], regs[n+1])
-    def reduce(self, n):
-        self.unary.reduce(n)
-        emit.load(regs[n], regs[n])
+    def store(self, vstr, n):
+        self.unary.reduce(vstr, n+1)
+        vstr.store(regs[n], regs[n+1])
+    def reduce(self, vstr, n):
+        self.unary.reduce(vstr, n)
+        vstr.load(regs[n], regs[n])
         return regs[n]
-    def call(self, n):
-        self.unary.call(n)
+    def call(self, vstr, n):
+        self.unary.call(vstr, n)
 
 class Cast(Expr):
     def __init__(self, type, token, cast):
@@ -438,8 +471,8 @@ class Cast(Expr):
         if hasattr(cast, 'value'):
             self.value = cast.value
         self.cast = cast
-    def reduce(self, n):
-        return self.cast.reduce(n)
+    def reduce(self, vstr, n):
+        return self.cast.reduce(vstr, n)
     def data(self):
         return self.cast.data()
     
@@ -447,21 +480,21 @@ class Not(Expr):
     def __init__(self, token, unary):
         super().__init__(unary.type, token)
         self.unary = unary        
-    def compare(self, n, label):
-        emit.inst(Op.CMP, self.unary.reduce(n), 0)
-        emit.jump(Cond.JNE, f'.L{label}')
-    def compare_false(self, n, label):
-        emit.inst(Op.CMP, self.unary.reduce(n), 0)
-        emit.jump(Cond.JEQ, f'.L{label}')
-    def reduce(self, n):
-        label = env.next_label()
-        sublabel = env.next_label()
-        self.unary.compare(n, sublabel)
-        emit.inst(Op.MOV, Reg(n), 0)
-        emit.jump(Cond.JR, f'.L{label}')
-        emit.append_label(f'.L{sublabel}')
-        emit.inst(Op.MOV, Reg(n), 1)
-        emit.append_label(f'.L{label}')
+    def compare(self, vstr, n, label):
+        vstr.inst(Op.CMP, self.unary.reduce(vstr, n), 0)
+        vstr.jump(Cond.JNE, f'.L{label}')
+    def compare_false(self, vstr, n, label):
+        vstr.inst(Op.CMP, self.unary.reduce(vstr, n), 0)
+        vstr.jump(Cond.JEQ, f'.L{label}')
+    def reduce(self, vstr, n):
+        label = vstr.next_label()
+        sublabel = vstr.next_label()
+        self.unary.compare(vstr, n, sublabel)
+        vstr.inst(Op.MOV, Reg(n), 0) #TODO why not regs[n]??
+        vstr.jump(Cond.JR, f'.L{label}')
+        vstr.append_label(f'.L{sublabel}')
+        vstr.inst(Op.MOV, Reg(n), 1)
+        vstr.append_label(f'.L{label}')
         return regs[n]
 
 class Binary(OpExpr):
@@ -491,8 +524,8 @@ class Binary(OpExpr):
         assert left.type.cast(right.type), f'Line {op.line}: Cannot {left.type} {op.lexeme} {right.type}'
         super().__init__(left.type, op)
         self.left, self.right = left, right
-    def reduce(self, n):
-        emit.inst(self.op, self.left.reduce(n), self.right.num_reduce(n+1))
+    def reduce(self, vstr, n):
+        vstr.inst(self.op, self.left.reduce(vstr, n), self.right.num_reduce(vstr, n+1))
         return regs[n]
 
 class Compare(Binary):
@@ -511,184 +544,182 @@ class Compare(Binary):
     def __init__(self, op, left, right):
         super().__init__(op, left, right)
         self.inv = self.INV[op.lexeme]
-    def compare(self, n, label):        
-        emit.inst(Op.CMP, self.left.reduce(n), self.right.num_reduce(n+1))
-        emit.jump(self.inv, f'.L{label}')
-    def compare_false(self, n, label):
-        emit.inst(Op.CMP, self.left.reduce(n), self.right.num_reduce(n+1))
-        emit.jump(self.op, f'.L{label}')
-    def reduce(self, n):        
-        label = env.next_label()
-        sublabel = env.next_label()
-        self.compare(n, sublabel)
-        emit.inst(Op.MOV, Reg(n), 1)
-        emit.jump(Cond.JR, f'.L{label}')
-        emit.append_label(f'.L{sublabel}')
-        emit.inst(Op.MOV, Reg(n), 0)
-        emit.append_label(f'.L{label}')
+    def compare(self, vstr, n, label):        
+        vstr.inst(Op.CMP, self.left.reduce(vstr, n), self.right.num_reduce(vstr, n+1))
+        vstr.jump(self.inv, f'.L{label}')
+    def compare_false(self, vstr, n, label):
+        vstr.inst(Op.CMP, self.left.reduce(vstr, n), self.right.num_reduce(vstr, n+1))
+        vstr.jump(self.op, f'.L{label}')
+    def reduce(self, vstr, n):        
+        label = vstr.next_label()
+        sublabel = vstr.next_label()
+        self.compare(vstr, n, sublabel)
+        vstr.inst(Op.MOV, Reg(n), 1) #TODO why not regs[n]???
+        vstr.jump(Cond.JR, f'.L{label}')
+        vstr.append_label(f'.L{sublabel}')
+        vstr.inst(Op.MOV, Reg(n), 0)
+        vstr.append_label(f'.L{label}')
         return Reg(n)
 
 class Logic(Binary):
     OP = {'&&':Op.AND,
           '||':Op.OR}
-    def compare(self, n, label):
+    def compare(self, vstr, n, label):
         if self.op == Op.AND:
-            emit.inst(Op.CMP, self.left.reduce(n), 0)
-            emit.jump(Cond.JEQ, f'.L{label}')
-            emit.inst(Op.CMP, self.right.reduce(n), 0)
-            emit.jump(Cond.JEQ, f'.L{label}')
+            vstr.inst(Op.CMP, self.left.reduce(vstr, n), 0)
+            vstr.jump(Cond.JEQ, f'.L{label}')
+            vstr.inst(Op.CMP, self.right.reduce(vstr, n), 0)
+            vstr.jump(Cond.JEQ, f'.L{label}')
         elif self.op == Op.OR:
-            sublabel = env.next_label()
-            emit.inst(Op.CMP, self.left.reduce(n), 0)
-            emit.jump(Cond.JNE, f'.L{sublabel}')
-            emit.inst(Op.CMP, self.right.reduce(n), 0)
-            emit.jump(Cond.JEQ, f'.L{label}')
-            emit.append_label(f'.L{sublabel}')
+            sublabel = vstr.next_label()
+            vstr.inst(Op.CMP, self.left.reduce(vstr, n), 0)
+            vstr.jump(Cond.JNE, f'.L{sublabel}')
+            vstr.inst(Op.CMP, self.right.reduce(vstr, n), 0)
+            vstr.jump(Cond.JEQ, f'.L{label}')
+            vstr.append_label(f'.L{sublabel}')
 
 class Condition(Expr):
     def __init__(self, cond, true, false):
         self.type = true.type
         self.cond, self.true, self.false = cond, true, false
-    def reduce(self, n):
-        env.if_jump_end = False
-        label = env.next_label()
-        sublabel = env.next_label() if self.false else label
-        self.cond.compare(n, sublabel)
-        self.true.reduce(n)
-        emit.jump(Cond.JR, f'.L{label}')
-        emit.append_label(f'.L{sublabel}')
-        self.false.branch_reduce(n, label)
-        emit.append_label(f'.L{label}')
-    def branch(self, n, root):
-        sublabel = env.next_label()
-        self.cond.compare(n, sublabel)
-        self.true.reduce(n)
-        emit.jump(Cond.JR, f'.L{root}')
-        emit.append_label(f'.L{sublabel}')
-        self.false.branch_reduce(n, root)
+    def reduce(self, vstr, n):
+        vstr.if_jump_end = False
+        label = vstr.next_label()
+        sublabel = vstr.next_label() if self.false else label
+        self.cond.compare(vstr, n, sublabel)
+        self.true.reduce(vstr, n)
+        vstr.jump(Cond.JR, f'.L{label}')
+        vstr.append_label(f'.L{sublabel}')
+        self.false.branch_reduce(vstr, n, label)
+        vstr.append_label(f'.L{label}')
+    def branch(self, vstr, n, root):
+        sublabel = vstr.next_label()
+        self.cond.compare(vstr, n, sublabel)
+        self.true.reduce(vstr, n)
+        vstr.jump(Cond.JR, f'.L{root}')
+        vstr.append_label(f'.L{sublabel}')
+        self.false.branch_reduce(vstr, n, root)
 
 class Assign(Expr):
     def __init__(self, token, left, right):
         assert left.type == right.type, f'Line {token.line}: {left.type} != {right.type}'
         super().__init__(left.type, token)
         self.left, self.right = left, right      
-    def reduce(self, n):
-        self.generate(n)
+    def reduce(self, vstr, n):
+        self.generate(vstr, n)
         return regs[n]
-    def generate(self, n):
-        self.right.reduce(n)
-        self.left.store(n)
+    def generate(self, vstr, n):
+        self.right.reduce(vstr, n)
+        self.left.store(vstr, n)
 
 class InitList(Expr):
     def __init__(self, token, left, right):
         super().__init__(left.type, token)
         self.left, self.right = left, right 
-    def generate(self, n):
-        self.left.address(n)
+    def generate(self, vstr, n):
+        self.left.address(vstr, n)
         for i in range(self.left.type.size):
-            self.right[i].reduce(n+1)
-            emit.store(regs[n+1], regs[n], i)        
+            self.right[i].reduce(vstr, n+1)
+            vstr.store(regs[n+1], regs[n], i)        
 
 class Block(UserList, Expr):
-    def preview(self, n):
-        emit.preview = env.preview = True
+    def generate(self, vstr, n):
         for statement in self:
-            statement.generate(n)
-        emit.preview = env.preview = False
-    def generate(self, n):
-        for statement in self:
-            statement.generate(n)
+            statement.generate(vstr, n)
 
 class Local(Expr):
-    def store(self, n):
-        return self.type.store(self, n, 'FP')
-    def reduce(self, n):
-        return self.type.reduce(self, n, 'FP')
-    def address(self, n):
-        return self.type.address(self, n, 'FP')
-    def call(self, n):
-        Type.reduce(self, n, 'FP')
-        emit.call(regs[n])
+    def store(self, vstr, n):
+        return self.type.store(vstr, n, self, 'FP')
+    def reduce(self, vstr, n):
+        return self.type.reduce(vstr, n, self, 'FP')
+    def address(self, vstr, n):
+        return self.type.address(vstr, n, self, 'FP')
+    def call(self, vstr, n):
+        Type.reduce(vstr, n, self, 'FP')
+        vstr.call(regs[n])
 
 class Attr(Local):
-    def store(self, n):
-        return self.type.store(self, n, n+1)
-    def reduce(self, n):
-        return self.type.reduce(self, n, n)
-    def address(self, n):
-        return self.type.address(self, n, n)
-    def call(self, n):
-        Type.reduce(self, n, n)
-        emit.call(regs[n])
+    def store(self, vstr, n):
+        return self.type.store(vstr, n, self, n+1)
+    def reduce(self, vstr, n):
+        return self.type.reduce(vstr, n, self, n)
+    def address(self, vstr, n):
+        return self.type.address(vstr, n, self, n)
+    def call(self, vstr, n):
+        Type.reduce(vstr, n, self, n)
+        vstr.call(regs[n])
 
 class Glob(Local):
     def __init__(self, type, token):
         super().__init__(type, token)
         self.location = None
         self.init = None
-    def store(self, n):
-        return self.type.store(self, n, n+1)
-    def reduce(self, n):
-        return self.type.reduce(self, n, n)
-    def address(self, n):
-        emit.load_glob(regs[n], self.token.lexeme)
+    def store(self, vstr, n):
+        return self.type.store(vstr, n, self, n+1)
+    def reduce(self, vstr, n):
+        return self.type.reduce(vstr, n, self, n)
+    def address(self, vstr, n):
+        vstr.load_glob(regs[n], self.token.lexeme)
         return regs[n]
-    def generate(self):
-        self.type.glob(self)
-    def call(self, n):
-        emit.call(self.token.lexeme)
+    def generate(self, vstr):
+        self.type.glob(vstr, self)
+    def call(self, vstr, n):
+        vstr.call(self.token.lexeme)
     
 class Defn(Expr):
     def __init__(self, type, id, params, block, returns, calls, space):
         super().__init__(type, id)
         self.params, self.block, self.returns, self.calls, self.space = params, block, returns, calls, space
-    def generate(self):
+    def generate(self, vstr):
         regs.clear()
-        env.begin_func(self)
-        if self.type.size or self.returns: 
-            env.return_label = env.next_label()
-        self.block.preview(self.calls)
+        preview = Visitor()
+        preview.begin_func(self)
+        self.block.generate(preview, self.calls)
+        # self.block.preview(self.calls)
         push = list(map(Reg, range(bool(self.type.size), regs.max+1))) + [Reg.FP]
         for param in self.params:
             param.location += self.space + self.calls + len(push)
-        emit.append_label(self.token.lexeme)
+        
+        vstr.begin_func(self)
+        #start
+        vstr.append_label(self.token.lexeme)
         #prologue
-        emit.pushm(self.calls, *push)
+        vstr.pushm(self.calls, *push)
         if self.space:
-            emit.inst(Op.SUB, Reg.SP, self.space)
-        emit.inst(Op.MOV, Reg.FP, Reg.SP)
+            vstr.inst(Op.SUB, Reg.SP, self.space)
+        vstr.inst(Op.MOV, Reg.FP, Reg.SP)
         #body
-        self.block.generate(self.calls)
+        self.block.generate(vstr, self.calls)
         #epilogue
         if self.type.size or self.returns:
-            emit.append_label(f'.L{env.return_label}')
+            vstr.append_label(f'.L{vstr.return_label}')
         if self.calls and self.type.size:
-            emit.inst(Op.MOV, Reg.A, regs[self.calls])
-        emit.inst(Op.MOV, Reg.SP, Reg.FP)
+            vstr.inst(Op.MOV, Reg.A, regs[self.calls])
+        vstr.inst(Op.MOV, Reg.SP, Reg.FP)
         if self.space:
-            emit.inst(Op.ADD, Reg.SP, self.space)
-        emit.popm(self.calls, *push)
+            vstr.inst(Op.ADD, Reg.SP, self.space)
+        vstr.popm(self.calls, *push)
         if self.params:
-            emit.inst(Op.ADD, Reg.SP, len(self.params))
-        emit.ret()
+            vstr.inst(Op.ADD, Reg.SP, len(self.params))
+        vstr.ret()
 
 class Main(Expr):
     def __init__(self, block, calls, space):
         self.block, self.calls, self.space = block, calls, space
-    def generate(self):
-        env.begin_func(self)
-        emit.append_label('main')
+    def generate(self, vstr):
+        vstr.defn = self
+        vstr.append_label('main')
         #prologue
         if self.space:
-            emit.inst(Op.SUB, Reg.SP, self.space)
-        emit.inst(Op.MOV, Reg.FP, Reg.SP)
+            vstr.inst(Op.SUB, Reg.SP, self.space)
+        vstr.inst(Op.MOV, Reg.FP, Reg.SP)
         #body
-        self.block.generate(self.calls)
+        self.block.generate(vstr, self.calls)
         #epilogue
-        emit.inst(Op.MOV, Reg.SP, Reg.FP)
+        vstr.inst(Op.MOV, Reg.SP, Reg.FP)
         if self.space:
-            emit.inst(Op.ADD, Reg.SP, self.space)
-        emit.halt()
+            vstr.inst(Op.ADD, Reg.SP, self.space)
+        vstr.halt()
 
 class Post(OpExpr):
     OP = {'++':Op.ADD,
@@ -697,13 +728,13 @@ class Post(OpExpr):
         assert postfix.type.cast(Type('int')), f'Line {op.line}: Cannot {op.lexeme} {postfix.type}' 
         super().__init__(postfix.type, op)
         self.postfix = postfix
-    def reduce(self, n):
-        self.generate(n)
+    def reduce(self, vstr, n):
+        self.generate(vstr, n)
         return regs[n]
-    def generate(self, n):
-        self.postfix.reduce(n)
-        emit.inst3c(self.op, regs[n+1], regs[n], 1)
-        self.postfix.store(n+1)
+    def generate(self, vstr, n):
+        self.postfix.reduce(vstr, n)
+        vstr.inst3(self.op, regs[n+1], regs[n], 1)
+        self.postfix.store(vstr, n+1)
 
 class Access(Expr):
     def __init__(self, type, token, postfix):
@@ -714,56 +745,56 @@ class Dot(Access):
     def __init__(self, token, postfix, attr):
         super().__init__(attr.type, token, postfix)
         self.attr = attr
-    def address(self, n):
-        emit.inst(Op.ADD, self.postfix.address(n), self.attr.location)
+    def address(self, vstr, n):
+        vstr.inst(Op.ADD, self.postfix.address(vstr, n), self.attr.location)
         return regs[n]
-    def store(self, n):
-        self.postfix.address(n+1)
-        return self.attr.store(n)
-    def reduce(self, n):
-        self.postfix.address(n)
-        return self.attr.reduce(n)
-    def call(self, n):
-        self.postfix.address(n)
-        self.attr.call(n)
+    def store(self, vstr, n):
+        self.postfix.address(vstr, n+1)
+        return self.attr.store(vstr, n)
+    def reduce(self, vstr, n):
+        self.postfix.address(vstr, n)
+        return self.attr.reduce(vstr, n)
+    def call(self, vstr, n):
+        self.postfix.address(vstr, n)
+        self.attr.call(vstr, n)
 
 class Arrow(Dot):
-    def address(self, n):
-        emit.inst(Op.ADD, self.postfix.reduce(n), self.attr.location)
+    def address(self, vstr, n):
+        vstr.inst(Op.ADD, self.postfix.reduce(vstr, n), self.attr.location)
         return regs[n] 
-    def store(self, n):
-        self.postfix.reduce(n+1)
-        return self.attr.store(n)
-    def reduce(self, n):
-        self.postfix.reduce(n)
-        return self.attr.reduce(n)
-    def call(self, n):
-        self.postfix.reduce(n)
-        self.attr.call(n)
+    def store(self, vstr, n):
+        self.postfix.reduce(vstr, n+1)
+        return self.attr.store(vstr, n)
+    def reduce(self, vstr, n):
+        self.postfix.reduce(vstr, n)
+        return self.attr.reduce(vstr, n)
+    def call(self, vstr, n):
+        self.postfix.reduce(vstr, n)
+        self.attr.call(vstr, n)
 
 class SubScr(Access): 
     def __init__(self, token, postfix, sub):
         super().__init__(postfix.type.of, token, postfix)
         self.sub = sub
-    def address(self, n):
-        self.postfix.reduce(n)
-        self.sub.reduce(n+1)
+    def address(self, vstr, n):
+        self.postfix.reduce(vstr, n)
+        self.sub.reduce(vstr, n+1)
         if type(self.postfix.type) in [Array, Pointer] and self.postfix.type.of.size > 1:
-            emit.inst(Op.MUL, regs[n+1], self.postfix.type.of.size)
-        emit.inst(Op.ADD, regs[n], regs[n+1])
+            vstr.inst(Op.MUL, regs[n+1], self.postfix.type.of.size)
+        vstr.inst(Op.ADD, regs[n], regs[n+1])
         return regs[n]
-    def store(self, n):
-        emit.store(regs[n], self.address(n+1))
+    def store(self, vstr, n):
+        vstr.store(regs[n], self.address(vstr, n+1))
         return regs[n]
-    def reduce(self, n):
-        emit.load(self.address(n), regs[n])
+    def reduce(self, vstr, n):
+        vstr.load(self.address(vstr, n), regs[n])
         return regs[n]
 
 class Args(UserList, Expr):
-    def generate(self, n):
+    def generate(self, vstr, n):
         for arg in reversed(self):
-            arg.reduce(n)
-            emit.push(regs[n])
+            arg.reduce(vstr, n)
+            vstr.push(regs[n])
 
 class Call(Expr):
     def __init__(self, primary, args):
@@ -771,26 +802,26 @@ class Call(Expr):
             assert param == args[i].type, f'Line {primary.token.line}: Argument #{i+1} of {primary.token.lexeme} {param} != {args[i].type}'
         super().__init__(primary.type.ret, primary.token)
         self.primary, self.args = primary, args
-    def reduce(self, n):
-        self.generate(n)
+    def reduce(self, vstr, n):
+        self.generate(vstr, n)
         return regs[n]
-    def generate(self, n):
-        self.args.generate(n)
-        self.primary.call(n)
+    def generate(self, vstr, n):
+        self.args.generate(vstr, n)
+        self.primary.call(vstr, n)
         if self.primary.type.variable and len(self.args) > len(self.primary.type.params):
-            emit.inst(Op.ADD, Reg.SP, len(self.args) - len(self.primary.type.params))
+            vstr.inst(Op.ADD, Reg.SP, len(self.args) - len(self.primary.type.params))
         if n > 0 and self.type.size:
-            emit.inst(Op.MOV, regs[n], Reg.A)
+            vstr.inst(Op.MOV, regs[n], Reg.A)
 
 class Return(Expr):
     def __init__(self, token, expr):
         super().__init__(Void() if expr is None else expr.type, token)
         self.expr = expr
-    def generate(self, n):
-        assert env.defn.type.ret == self.type, f'Line {self.token.line}: {env.defn.type.ret} != {self.type} in {env.defn.token.lexeme}'       
+    def generate(self, vstr, n):
+        assert vstr.defn.type.ret == self.type, f'Line {self.token.line}: {vstr.defn.type.ret} != {self.type} in {vstr.defn.token.lexeme}'       
         if self.expr:
-            self.expr.reduce(n)
-        emit.jump(Cond.JR, f'.L{env.return_label}')
+            self.expr.reduce(vstr, n)
+        vstr.jump(Cond.JR, f'.L{vstr.return_label}')
 
 class Statement(CNode):
     pass
@@ -798,32 +829,32 @@ class Statement(CNode):
 class If(Statement):
     def __init__(self, cond, state):
         self.cond, self.true, self.false = cond, state, None
-    def generate(self, n):
-        env.if_jump_end = False
-        label = env.next_label()
-        sublabel = env.next_label() if self.false else label
-        self.cond.compare(n, sublabel)
-        self.true.generate(n)
+    def generate(self, vstr, n):
+        vstr.if_jump_end = False
+        label = vstr.next_label()
+        sublabel = vstr.next_label() if self.false else label
+        self.cond.compare(vstr, n, sublabel)
+        self.true.generate(vstr, n)
         if self.false:
             if not (isinstance(self.true, Return) or (isinstance(self.true, Block) and self.true and isinstance(self.true[-1], Return))):
-                emit.jump(Cond.JR, f'.L{label}')
-                env.if_jump_end = True
-            emit.append_label(f'.L{sublabel}')
-            self.false.branch(n, label)
-            if env.if_jump_end:
-                emit.append_label(f'.L{label}')
+                vstr.jump(Cond.JR, f'.L{label}')
+                vstr.if_jump_end = True
+            vstr.append_label(f'.L{sublabel}')
+            self.false.branch(vstr, n, label)
+            if vstr.if_jump_end:
+                vstr.append_label(f'.L{label}')
         else:
-            emit.append_label(f'.L{label}')
-    def branch(self, n, root):
-        sublabel = env.next_label()
-        self.cond.compare(n, sublabel)
-        self.true.generate(n)
+            vstr.append_label(f'.L{label}')
+    def branch(self, vstr, n, root):
+        sublabel = vstr.next_label()
+        self.cond.compare(vstr, n, sublabel)
+        self.true.generate(vstr, n)
         if self.false:
             if not (isinstance(self.true, Return) or (isinstance(self.true, Block) and self.true and isinstance(self.true[-1], Return))):
-                emit.jump(Cond.JR, f'.L{root}')
-                env.if_jump_end = True
-            emit.append_label(f'.L{sublabel}')
-            self.false.branch(n, root)
+                vstr.jump(Cond.JR, f'.L{root}')
+                vstr.if_jump_end = True
+            vstr.append_label(f'.L{sublabel}')
+            self.false.branch(vstr, n, root)
 
 class Case(Statement):
     def __init__(self, const, statement):
@@ -832,95 +863,94 @@ class Case(Statement):
 class Switch(Statement):
     def __init__(self, test):
         self.test, self.cases, self.default = test, [], None
-    def generate(self, n):
-        env.begin_loop()
-        self.test.reduce(n)
+    def generate(self, vstr, n):
+        vstr.begin_loop()
+        self.test.reduce(vstr, n)
         labels = []
         for case in self.cases:
-            labels.append(env.next_label())
-            emit.inst(Op.CMP, regs[n], case.const.num_reduce(n+1))
-            emit.jump(Cond.JEQ, f'.L{labels[-1]}')
+            labels.append(vstr.next_label())
+            vstr.inst(Op.CMP, regs[n], case.const.num_reduce(vstr, n+1))
+            vstr.jump(Cond.JEQ, f'.L{labels[-1]}')
         if self.default:
-            default = env.next_label()
-            emit.jump(Cond.JR, f'.L{default}')
+            default = vstr.next_label()
+            vstr.jump(Cond.JR, f'.L{default}')
         else:
-            emit.jump(Cond.JR, f'.L{env.loop.end()}')
+            vstr.jump(Cond.JR, f'.L{vstr.loop.end()}')
         for i, case in enumerate(self.cases):
-            emit.append_label(f'.L{labels[i]}')
-            case.statement.generate(n)
+            vstr.append_label(f'.L{labels[i]}')
+            case.statement.generate(vstr, n)
         if self.default:
-            emit.append_label(f'.L{default}')
-            self.default.generate(n)
-        emit.append_label(f'.L{env.loop.end()}')            
-        env.end_loop()
+            vstr.append_label(f'.L{default}')
+            self.default.generate(vstr, n)
+        vstr.append_label(f'.L{vstr.loop.end()}')            
+        vstr.end_loop()
 
 class While(Statement):
     def __init__(self, cond, state):
         self.cond, self.state = cond, state
-    def generate(self, n):
-        env.begin_loop()
-        emit.append_label(f'.L{env.loop.start()}')
-        self.cond.compare(n, env.loop.end())
-        self.state.generate(n)
-        emit.jump(Cond.JR, f'.L{env.loop.start()}')
-        emit.append_label(f'.L{env.loop.end()}')
-        env.end_loop()
+    def generate(self, vstr, n):
+        vstr.begin_loop()
+        vstr.append_label(f'.L{vstr.loop.start()}')
+        self.cond.compare(vstr, n, vstr.loop.end())
+        self.state.generate(vstr, n)
+        vstr.jump(Cond.JR, f'.L{vstr.loop.start()}')
+        vstr.append_label(f'.L{vstr.loop.end()}')
+        vstr.end_loop()
 
 class Do(Statement):
     def __init__(self, state, cond):
         self.state, self.cond = state, cond
-    def generate(self, n):
-        env.begin_loop()
-        emit.append_label(f'.L{env.loop.start()}')        
-        self.state.generate(n)
-        self.cond.compare_false(n, env.loop.start())
-        emit.append_label(f'.L{env.loop.end()}')
-        env.end_loop()
+    def generate(self, vstr, n):
+        vstr.begin_loop()
+        vstr.append_label(f'.L{vstr.loop.start()}')
+        self.state.generate(vstr, n)
+        self.cond.compare_false(vstr, n, vstr.loop.start())
+        vstr.append_label(f'.L{vstr.loop.end()}')
+        vstr.end_loop()
 
 class For(While):
     def __init__(self, inits, cond, steps, state):
         super().__init__(cond, state)
         self.inits, self.steps = inits, steps
-    def generate(self, n):
+    def generate(self, vstr, n):
         for init in self.inits:
-            init.generate(n)
-        loop = env.next_label()
-        env.begin_loop()
-        emit.append_label(f'.L{loop}')
-        self.cond.compare(n, env.loop.end())
-        self.state.generate(n)
-        emit.append_label(f'.L{env.loop.start()}')
+            init.generate(vstr, n)
+        loop = vstr.next_label()
+        vstr.begin_loop()
+        vstr.append_label(f'.L{loop}')
+        self.cond.compare(vstr, n, vstr.loop.end())
+        self.state.generate(vstr, n)
+        vstr.append_label(f'.L{vstr.loop.start()}')
         for step in self.steps:
-            step.generate(n)
-        emit.jump(Cond.JR, f'.L{loop}')
-        emit.append_label(f'.L{env.loop.end()}')
-        env.end_loop()
+            step.generate(vstr, n)
+        vstr.jump(Cond.JR, f'.L{loop}')
+        vstr.append_label(f'.L{vstr.loop.end()}')
+        vstr.end_loop()
 
 class Continue(Statement):
-    def generate(self, n):
-        emit.jump(Cond.JR, f'.L{env.loop.start()}')
+    def generate(self, vstr, n):
+        vstr.jump(Cond.JR, f'.L{vstr.loop.start()}')
         
 class Break(Statement):
-    def generate(self, n):
-        emit.jump(Cond.JR, f'.L{env.loop.end()}')
+    def generate(self, vstr, n):
+        vstr.jump(Cond.JR, f'.L{vstr.loop.end()}')
 
 class Goto(Statement):
     def __init__(self, target):
         self.target = target
-    def generate(self, n):
-        emit.jump(Cond.JR, self.target.lexeme)
+    def generate(self, vstr, n):
+        vstr.jump(Cond.JR, self.target.lexeme)
         
 class Label(Statement):
     def __init__(self, target):
         self.target = target
-    def generate(self, n):
-        emit.append_label(self.target.lexeme)
+    def generate(self, vstr, n):
+        vstr.append_label(self.target.lexeme)
 
 class Program(UserList, CNode):
     def generate(self):
         regs.clear()
-        env.clear()
-        emit.clear()
+        emitter = Emitter()
         for statement in self:
-            statement.generate()
-        return '\n'.join(emit.data+emit.asm)
+            statement.generate(emitter)
+        return '\n'.join(emitter.data + emitter.asm)
