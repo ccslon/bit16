@@ -473,8 +473,8 @@ class Cast(Expr):
         self.cast = cast
     def reduce(self, vstr, n):
         return self.cast.reduce(vstr, n)
-    def data(self):
-        return self.cast.data()
+    def data(self, vstr):
+        return self.cast.data(vstr)
 
 class Not(Expr):
     def __init__(self, token, unary):

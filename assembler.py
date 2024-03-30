@@ -133,7 +133,6 @@ class Assembler:
                 line, comment = map(str.strip, line.split(';', 1))
             if line:
                 self.tokens = lex(line)
-                print(self.tokens)
                 self.index = 0
                 
                 if self.match('id', '=', 'const'):
@@ -343,7 +342,7 @@ class Linker:
                 args = *args, last
             data = type(*args)
             contents.append(data.hex())
-            print('>>' if i in indices else '  ', f'{i:04x}', f'{data.str: <15}', f'| {data.dec(): <13}', f'{data.bin(): <22}', data.hex())
+            print('>>' if i in indices else '  ', f'{i:04x}', f'{data.s: <15}', f'| {data.dec(): <13}', f'{data.bin(): <22}', data.hex())
         print('\n', ' '.join(contents))
         return contents
 
@@ -361,6 +360,6 @@ def assemble(program, fflag=True, name='out'):
             file.write('v2.0 raw\n' + ' '.join(bit16))
 
 if __name__ == '__main__':
+    assemble('tests/fib.s')
     # assemble('testall.s')
     # assemble(ASM)
-    pass
