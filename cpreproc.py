@@ -77,12 +77,12 @@ class CPreProc:
     ELIP = re.compile(r'^#define (?P<name>\w(\w|\d)*)\((?P<args>(\w+(,\s*\w+)*,)?)\s*(?P<elip>\.\.\.)\) (?P<expr>\(.+\))$', re.M)
 
     def comments(self, text):
-        return self.COMMENT.sub(self.repl_comment, text)
+        return self.COMMENT.sub(self.repl, text)
 
     def include(self, regex, text, ext=''):
         for match in regex.finditer(text):
             file_name = match['file'][1:-1]
-            text = regex.sub(self.repl_macro, text)
+            text = regex.sub(self.repl, text)
             if file_name not in self.included:
                 with open(f'{ext}{os.path.sep}{file_name}') as file:
                     text = file.read() + '\n@\n' + text
@@ -100,10 +100,10 @@ class CPreProc:
         self.defined = {}
         for match in self.OBJ.finditer(text):
             self.defined[match['name']] = None, match.group('expr')
-        text = self.OBJ.sub(self.repl_macro, text)
+        text = self.OBJ.sub(self.repl, text)
         for match in self.FUNC.finditer(text):
             self.defined[match.group('name')] = tuple(filter(len, map(str.strip, match.group('args').split(',')))), match.group('expr')
-        text = self.FUNC.sub(self.repl_macro, text)
+        text = self.FUNC.sub(self.repl, text)
         for defn, (args, expr)  in self.defined.items():
             if args is None:
                 text = re.sub(rf'\b{defn}\b', expr, text)
@@ -125,7 +125,7 @@ class CPreProc:
         text = self.concat(text)
         return text
 
-    def repl_comment(self, match):
+    def repl(self, match):
         return '\n' * match.group().count('\n')
 
     def repl_define(self, match):
@@ -135,9 +135,6 @@ class CPreProc:
             expr = re.sub(rf'\b{arg}\b', match[arg], expr)
         return expr
 
-    def repl_macro(self, match):
-        return '\n' * match.group().count('\n')
-
     def repl_concat(self, match):
         return f'"{match[1]}{match[2]}"'
 
@@ -145,4 +142,3 @@ preproc = CPreProc()
 
 def preprocess(file_name):
     return preproc.preproc(file_name)
-
