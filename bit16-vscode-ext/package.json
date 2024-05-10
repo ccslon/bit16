@@ -1,0 +1,39 @@
+{
+	"name": "bit16-asm",
+	"displayName": "bit16 Assembly",
+	"description": "bit16 Assembly support for Visual Studio Code",
+	"version": "0.0.6",
+	"author": "Colin Slon",
+    "publisher": "Colin Slon",
+	"engines": {
+		"vscode": "^1.0.0"
+	},
+	"categories": [
+		"Programming Languages"
+	],
+	"keywords": [
+		"assembly"
+	],
+	"contributes": {
+		"languages": [
+			{
+				"id": "bit16-asm",
+				"aliases": [
+					"bit16 Assembly"
+				],
+				"extensions": [
+					".asm",
+					".s"
+				],
+				"configuration": "./bit16.config.json"
+			}
+		],
+		"grammars": [
+			{
+				"language": "bit16-asm",
+				"scopeName": "source.asm.bit16",
+				"path": "./bit16.json"
+			}
+		]
+	}
+}
