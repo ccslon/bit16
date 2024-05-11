@@ -12,9 +12,9 @@ ID = r'[A-Za-z]\w*'
 ARG = r'(([^,]|"[^"]*")+'
 class CPreProc:
     COMMENT = re.compile(r'''
-                         /\*(.|\n)*?\*/
+                         /\*(.|\n)*?\*/     #multi line comment
                          |
-                         //.*\n
+                         //.*\n             #single line comment
                          ''', re.M | re.X)
     STD = re.compile(r'''
                      ^
@@ -92,7 +92,7 @@ class CPreProc:
     def includes(self, text):
         self.included = set()
         while self.STD.search(text) or self.INCLUDE.search(text):
-            text = self.include(self.STD, text, os.getcwd()+os.path.sep+'std')
+            text = self.include(self.STD, text, f'{os.getcwd()}{os.path.sep}std')
             text = self.include(self.INCLUDE, text, self.path)
         return text
 
