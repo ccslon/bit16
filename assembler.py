@@ -124,11 +124,12 @@ class Assembler:
         self.names[name] = value
 
     def assemble(self, asm):
+        base = 'nop\nLD SP, 0x7fff\n'
         self.inst = []
         self.data = []
         self.labels = []
         self.names = {}
-        for self.line_no, line in enumerate(map(str.strip, ('nop\n'+asm).strip().split('\n'))):
+        for self.line_no, line in enumerate(map(str.strip, (base+asm).strip().split('\n'))):
             if ';' in line:
                 line, comment = map(str.strip, line.split(';', 1))
             if line:
@@ -191,8 +192,7 @@ class Assembler:
                         self.load_reg(*self.values())
                     elif self.match('ld', 'reg', ',', '[', 'reg', ',', 'const', ']'):
                         self.load(*self.values())
-                    
-                        
+                                            
                     elif self.match('ld', '[', 'reg', ']', ',', 'reg'):
                         self.store0(*self.values())
                     elif self.match('ld', '[', 'reg', ',', 'reg', ']', ',', 'reg'):
@@ -360,6 +360,6 @@ def assemble(program, fflag=True, name='out'):
             file.write('v2.0 raw\n' + ' '.join(bit16))
 
 if __name__ == '__main__':
-    assemble('tests/fib.s')
+    assemble('bios.s')
     # assemble('testall.s')
     # assemble(ASM)

@@ -34,6 +34,14 @@
 				"scopeName": "source.asm.bit16",
 				"path": "./bit16.json"
 			}
+		],
+		"themes": [
+			{
+				"id": "bit16.theme",
+				"label": "Dark (Visual Studio - bit16 asm)",
+				"uiTheme": "vs-dark",
+				"path": "./bit16.theme.json"
+			}
 		]
 	}
 }
