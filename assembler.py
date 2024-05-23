@@ -124,12 +124,13 @@ class Assembler:
         self.names[name] = value
 
     def assemble(self, asm):
-        base = 'nop\nLD SP, 0x7fff\n'
+        with open('bios.s') as bios:
+            base = bios.read()
         self.inst = []
         self.data = []
         self.labels = []
         self.names = {}
-        for self.line_no, line in enumerate(map(str.strip, (base+asm).strip().split('\n'))):
+        for self.line_no, line in enumerate(map(str.strip, (base+'\n'+asm).strip().split('\n'))):
             if ';' in line:
                 line, comment = map(str.strip, line.split(';', 1))
             if line:

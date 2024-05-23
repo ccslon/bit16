@@ -15,7 +15,7 @@ if __name__ == '__main__':
     # ccompile('std/stdio.h', sflag=True, fflag=False)
     # ccompile('c/strcat.c')
     # ccompile('c/in.c')
-    ccompile('c/testall.c')
+    ccompile('c/hello.c')
     # ccompile('c/hello.c', sflag=True)
     # ccompile('c/funcptrs.c', sflag=True, fflag=True)
     # ccompile('c/bsearch.c', sflag=True, fflag=True)

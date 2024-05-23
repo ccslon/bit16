@@ -1,19 +1,15 @@
 #define NULL (void*)0
-#define INPORT 0x8000
-#define INBUFFER 0x7e00
-typedef struct _FILE_ {
-    char* buffer;
-    int read;
-    int write;
-} FILE;
-FILE stdin = {(char*)0x0, 0, 0};
-FILE stdout = {(char*)0x8000, 0, 0};
+typedef int* FILE;
+void output(char c);
+char input();
+FILE stdin = (int*)0x8002;
+FILE stdout = (int*)0x8001;
 char fgetc(FILE* stream) {
-    return stream->buffer[stream->read++];
+    return **stream;
 }
 #define getc() (fgetc(&stdin))
 char getchar() {
-    return fgetc(&stdin);
+    return input();
 }
 char* fgets(char* s, int n, FILE* stream) {
     char c;
@@ -28,12 +24,13 @@ char* gets(char* s) {
     return fgets(s, 0xff, &stdin);
 }
 int fputc(char c, FILE* stream) {
-    *stream->buffer = c;
+    **stream = c;
     return 0;
 }
 #define putc(c) (fputc(c, &stdout))
 int putchar(char c) {
-    return fputc(c, &stdout);
+    output(c);
+    return 0;
 }
 int fputs(const char* s, FILE* stream) {
     while (*s != '\0') {
