@@ -124,7 +124,7 @@ class Assembler:
         self.names[name] = value
 
     def assemble(self, asm):
-        with open('bios.s') as bios:
+        with open('boot.s') as bios:
             base = bios.read()
         self.inst = []
         self.data = []
@@ -362,6 +362,6 @@ def assemble(program, fflag=True, name='out'):
             file.write('v2.0 raw\n' + ' '.join(bit16))
 
 if __name__ == '__main__':
-    assemble('bios.s')
+    assemble('')
     # assemble('testall.s')
     # assemble(ASM)

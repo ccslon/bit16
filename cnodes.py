@@ -243,13 +243,13 @@ class Pointer(Type):
         super().__init__(type)
         self.to = self.of = self.type
         self.size = 1
-    @staticmethod
-    def reduce(vstr, n, local, base):
-        if local.location is None:
-            vstr.load_glob(regs[n], local.token.lexeme)
-        else:
-            vstr.load(regs[n], regs[base], local.location, local.token.lexeme)
-        return regs[n]
+    # @staticmethod
+    # def reduce(vstr, n, local, base):
+    #     if local.location is None:
+    #         vstr.load_glob(regs[n], local.token.lexeme)
+    #     else:
+    #         vstr.load(regs[n], regs[base], local.location, local.token.lexeme)
+    #     return regs[n]
     def cast(self, other):
         return type(other) in [Pointer, Type] \
             or type(other) is Const and self.cast(other.type)
@@ -321,7 +321,7 @@ class Array(Type):
     def cast(self, other):
         return self == other
     def __eq__(self, other):
-        return type(other) is Array and self.of == other.of
+        return type(other) in [Array, Pointer] and self.of == other.of
     def __str__(self):
         return f'{self.of}[]'
 

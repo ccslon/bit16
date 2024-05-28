@@ -18,7 +18,6 @@ char* name = "Cats Ya!";
 int num = 69;
 
 void print_cat(Cat* cat) {    
-    
     printf("%s %d\n", cat->name, cat->age);
     printf("%s\n", cat->owner->name);
 }

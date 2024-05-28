@@ -1,15 +1,13 @@
 #define NULL (void*)0
 typedef int* FILE;
-void output(char c);
-char input();
-FILE stdin = (int*)0x8002;
-FILE stdout = (int*)0x8001;
+FILE stdout = (int*)0x8000;
+FILE stdin = (int*)0x8001;
 char fgetc(FILE* stream) {
     return **stream;
 }
 #define getc() (fgetc(&stdin))
 char getchar() {
-    return input();
+    return *stdin;
 }
 char* fgets(char* s, int n, FILE* stream) {
     char c;
@@ -29,7 +27,7 @@ int fputc(char c, FILE* stream) {
 }
 #define putc(c) (fputc(c, &stdout))
 int putchar(char c) {
-    output(c);
+    *stdout = c;
     return 0;
 }
 int fputs(const char* s, FILE* stream) {
