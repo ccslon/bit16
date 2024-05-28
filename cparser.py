@@ -656,7 +656,7 @@ class CParser:
                         self.expect('}')
                         self.end_func()
                         if id.lexeme == 'main':
-                            program.insert(0, Main(block, self.calls, self.space))
+                            program.append(Main(block, self.calls, self.space))
                         else:
                             program.append(Defn(type, id, params, block, self.returns, self.calls, self.space))
                     else:

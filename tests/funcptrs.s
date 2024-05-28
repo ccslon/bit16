@@ -1,33 +1,4 @@
 .S0: "Cloud\0"
-main:
-  SUB SP, 5
-  MOV FP, SP
-  LD B, =.S0
-  ADD C, FP, 0
-  LD [C, 0], B ; name
-  MOV B, 15
-  ADD C, FP, 0
-  LD [C, 1], B ; age
-  LD B, =get_name
-  ADD C, FP, 0
-  LD [C, 2], B ; get_name
-  ADD B, FP, 0
-  PUSH B
-  ADD B, FP, 0
-  LD B, [B, 2] ; get_name
-  CALL B
-  MOV B, A
-  LD [FP, 3], B ; name
-  LD B, =sqr
-  PUSH B
-  MOV B, 10
-  PUSH B
-  CALL sum
-  MOV B, A
-  LD [FP, 4], B ; n
-  MOV SP, FP
-  ADD SP, 5
-  HALT
 get_name:
   PUSH FP
   MOV FP, SP
@@ -87,3 +58,32 @@ sum:
   POP LR, B, C, FP
   ADD SP, 2
   RET
+main:
+  SUB SP, 5
+  MOV FP, SP
+  LD B, =.S0
+  ADD C, FP, 0
+  LD [C, 0], B ; name
+  MOV B, 15
+  ADD C, FP, 0
+  LD [C, 1], B ; age
+  LD B, =get_name
+  ADD C, FP, 0
+  LD [C, 2], B ; get_name
+  ADD B, FP, 0
+  PUSH B
+  ADD B, FP, 0
+  LD B, [B, 2] ; get_name
+  CALL B
+  MOV B, A
+  LD [FP, 3], B ; name
+  LD B, =sqr
+  PUSH B
+  MOV B, 10
+  PUSH B
+  CALL sum
+  MOV B, A
+  LD [FP, 4], B ; n
+  MOV SP, FP
+  ADD SP, 5
+  HALT

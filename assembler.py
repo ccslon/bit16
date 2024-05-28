@@ -138,6 +138,7 @@ class Assembler:
                 self.index = 0
                 
                 if self.match('id', '=', 'const'):
+                    print(f'{self.line_no: >2}|{line}')
                     self.name(*self.values())
                     
                 elif self.peek('label'):
