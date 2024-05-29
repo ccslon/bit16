@@ -16,11 +16,12 @@ int sum(int n, int (*f)(int)) {
     }
     return s;
 }
-void main() {
+int main() {
     struct Cat cat;
     cat.name = "Cloud";
     cat.age = 15;
     cat.get_name = &get_name;
     char* name = (*cat.get_name)(&cat);
     int n = sum(10, &sqr);
+    return 0;
 }

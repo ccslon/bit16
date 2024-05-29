@@ -9,7 +9,8 @@ enum WeekEnd {
     SAT,
     SUN = 10
 };
-void main() {
+int main() {
     enum Week day = SUN;
     int today = FRI;
+    return 0;
 }

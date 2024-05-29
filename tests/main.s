@@ -1,4 +1,6 @@
 main:
+  PUSH FP
   MOV FP, SP
   MOV SP, FP
-  HALT
+  POP FP
+  RET

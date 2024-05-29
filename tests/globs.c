@@ -18,10 +18,11 @@ void print_cat(Cat* cat) {
     int age = cat->age;
     char* owner = cat->owner->name;
 }
-void main() {
+int main() {
     Cat* cat1 = &cats[0];
     cat1->name = "Cloud";
     cat1->age = 10;
     cat1->owner = &owners[0];
     print_cat(cat1);
+    return 0;
 }

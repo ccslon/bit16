@@ -34,7 +34,7 @@ void printToken(struct Token* token) {
         }
     }
 }
-void main() {
+int main() {
     struct Token t1 = intToken(5);
     printToken(&t1);
     struct Token t2 = strToken("Hello!");

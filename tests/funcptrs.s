@@ -59,6 +59,7 @@ sum:
   ADD SP, 2
   RET
 main:
+  PUSH LR, B, C, FP
   SUB SP, 5
   MOV FP, SP
   LD B, =.S0
@@ -84,6 +85,11 @@ main:
   CALL sum
   MOV B, A
   LD [FP, 4], B ; n
+  MOV B, 0
+  JR .L6
+.L6:
+  MOV A, B
   MOV SP, FP
   ADD SP, 5
-  HALT
+  POP LR, B, C, FP
+  RET
