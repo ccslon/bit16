@@ -150,6 +150,9 @@ class Assembler:
                     elif self.match('label', 'const'):
                         self.const(*self.values())
                         
+                    elif self.match('label', 'id'):
+                        self.const(*self.values())
+                        
                     elif self.match('label', 'char'):
                         self.char(*self.values())
                         
