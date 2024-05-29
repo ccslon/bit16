@@ -215,7 +215,7 @@ class Type(CNode):
     @staticmethod
     def glob(vstr, glob):
         if glob.init:
-            vstr.glob(glob.token.lexeme, glob.init.value)
+            vstr.glob(glob.token.lexeme, glob.init.data(vstr))
         else:
             vstr.space(glob.token.lexeme, glob.type.size)
     def cast(self, other):
@@ -243,13 +243,6 @@ class Pointer(Type):
         super().__init__(type)
         self.to = self.of = self.type
         self.size = 1
-    # @staticmethod
-    # def reduce(vstr, n, local, base):
-    #     if local.location is None:
-    #         vstr.load_glob(regs[n], local.token.lexeme)
-    #     else:
-    #         vstr.load(regs[n], regs[base], local.location, local.token.lexeme)
-    #     return regs[n]
     def cast(self, other):
         return type(other) in [Pointer, Type] \
             or type(other) is Const and self.cast(other.type)
@@ -468,8 +461,6 @@ class Cast(Expr):
     def __init__(self, type, token, cast):
         assert type.cast(cast.type), f'Line {token.line}: Cannot cast {cast.type} to {type}'
         super().__init__(type, token)
-        if hasattr(cast, 'value'):
-            self.value = cast.value
         self.cast = cast
     def reduce(self, vstr, n):
         return self.cast.reduce(vstr, n)
@@ -702,24 +693,6 @@ class Defn(Expr):
         if self.params:
             vstr.inst(Op.ADD, Reg.SP, len(self.params))
         vstr.ret()
-
-class Main(Expr):
-    def __init__(self, block, calls, space):
-        self.block, self.calls, self.space = block, calls, space
-    def generate(self, vstr):
-        vstr.defn = self
-        vstr.append_label('main')
-        #prologue
-        if self.space:
-            vstr.inst(Op.SUB, Reg.SP, self.space)
-        vstr.inst(Op.MOV, Reg.FP, Reg.SP)
-        #body
-        self.block.generate(vstr, self.calls)
-        #epilogue
-        vstr.inst(Op.MOV, Reg.SP, Reg.FP)
-        if self.space:
-            vstr.inst(Op.ADD, Reg.SP, self.space)
-        vstr.halt()
 
 class Post(OpExpr):
     OP = {'++':Op.ADD,

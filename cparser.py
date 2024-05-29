@@ -24,6 +24,7 @@ TODO
 [X] Division/Modulo
 [X] Different calling convention. Went with stdcall-like
 [ ] Fix void and void*
+[ ] Fix array strings e.g. char str[3] = "Hi";
 [X] Fix compile function?
 [X] Update Docs
 [X] Typedef
@@ -656,10 +657,6 @@ class CParser:
                         self.expect('}')
                         self.end_func()
                         program.append(Defn(type, id, params, block, self.returns, self.calls, self.space))
-                        # if id.lexeme == 'main':
-                        #     program.append(Main(block, self.calls, self.space))
-                        # else:
-                        #     program.append(Defn(type, id, params, block, self.returns, self.calls, self.space))
                     else:
                         self.expect(';')
                         self.end_func()
