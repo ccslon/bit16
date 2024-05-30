@@ -90,8 +90,11 @@ class TestCompiler(TestCase):
     def test_unions(self):
         self.code_eq_asm('unions')
         
-    def test_funcptrs(self):
-        self.code_eq_asm('funcptrs')
+    def test_func_ptrs(self):
+        self.code_eq_asm('func_ptrs')
+    
+    def test_neg_nums(self):
+        self.code_eq_asm('neg_nums')
 
 if __name__ == '__main__':
     main()

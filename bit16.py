@@ -115,17 +115,20 @@ class Op4(Inst):
     def __init__(self, imm, op, rd, src):
         if op in [Op.NOT, Op.NEG]:
             self.s = f'{op.name} {rd.name}'
-            self.d = 1,imm,op,rd,rd
-            self.b = '001',str(int(imm)),f'{op:04b}','XX',f'{rd:03b}',f'{rd:03b}'
+            self.d = 1,0,op,rd,rd
+            self.b = '001','0',f'{op:04b}','XX',f'{rd:03b}',f'{rd:03b}'
         else:
             if imm:
+                assert -16 <= src < 16
                 self.s = f'{op.name} {rd.name}, {src}'
                 self.d = 1,imm,op,src,rd
-                self.b = '001',str(int(imm)),f'{op:04b}',f'{src:05b}',f'{rd:03b}'
+                if src < 0:
+                    src = negative(src, 5)
+                self.b = '001','1',f'{op:04b}',f'{src:05b}',f'{rd:03b}'
             else:
                 self.s = f'{op.name} {rd.name}, {src.name}'
                 self.d = 1,imm,op,0,src,rd
-                self.b = '001',str(int(imm)),f'{op:04b}','XX',f'{src:03b}',f'{rd:03b}'
+                self.b = '001','0',f'{op:04b}','XX',f'{src:03b}',f'{rd:03b}'
 
 class Offset(Inst):
     def __init__(self, op, rd, rs, const):
@@ -183,6 +186,6 @@ class StackOp(Inst):
 
 class Word(Inst):
     def __init__(self, rd):
-        self.s = f'LD {rd.name}'
+        self.s = f'LD {rd.name}, ...'
         self.d = 7,0,rd
         self.b = '111','XXXXXXXXXX',f'{rd:03b}'

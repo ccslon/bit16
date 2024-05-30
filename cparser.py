@@ -6,7 +6,7 @@ Created on Mon Jul  3 19:47:39 2023
 """
 
 import clexer
-from cnodes import Program, Main, Defn, Block, Label, Goto, Break, Continue, For, Do, While, Switch, Case, If, Statement, Return, Glob, Attr, Local, InitList, Assign, Condition, Logic, Compare, Binary, Func, Array, Union, Struct, Pointer, Const, Type, Void, Pre, Cast, SizeOf, Deref, AddrOf, Not, Unary, Args, Call, Arrow, SubScr, Dot, Post, String, Char, EnumConst, Num, Frame
+from cnodes import Program, Defn, Block, Label, Goto, Break, Continue, For, Do, While, Switch, Case, If, Statement, Return, Glob, Attr, Local, InitList, Assign, Condition, Logic, Compare, Binary, Func, Array, Union, Struct, Pointer, Const, Type, Void, Pre, Cast, SizeOf, Deref, AddrOf, Not, Unary, Call, Arrow, SubScr, Dot, Post, String, Char, EnumConst, NegNum, Num, Frame
 
 '''
 TODO
@@ -25,6 +25,9 @@ TODO
 [X] Different calling convention. Went with stdcall-like
 [ ] Fix void and void*
 [ ] Fix array strings e.g. char str[3] = "Hi";
+[X] Add negative numbers
+[ ] Add unsigned
+[ ] Add floats??
 [X] Fix compile function?
 [X] Update Docs
 [X] Typedef
@@ -107,7 +110,7 @@ class CParser:
         '''
         ARGS -> [ASSIGN {',' ASSIGN}]
         '''
-        args = Args()
+        args = []
         if not self.peek(')'):
             args.append(self.assign())
             while self.accept(','):
@@ -124,6 +127,9 @@ class CParser:
         '''
         if self.peek('++','--'):
             return Pre(next(self), self.unary())
+        elif self.peekn('-', 'num'):
+            next(self)
+            return NegNum(next(self))
         elif self.peek('-','~'):
             return Unary(next(self), self.cast())
         elif self.peek('*'):

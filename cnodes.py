@@ -381,6 +381,11 @@ class Num(NumBase):
         else:
             self.value = int(token.lexeme)
 
+class NegNum(Num):
+    def __init__(self, token):
+        super().__init__(token)
+        self.value = -self.value
+
 class SizeOf(NumBase):
     def __init__(self, token, type):
         super().__init__(token)
@@ -518,6 +523,18 @@ class Binary(OpExpr):
     def reduce(self, vstr, n):
         vstr.inst(self.op, self.left.reduce(vstr, n), self.right.num_reduce(vstr, n+1))
         return regs[n]
+
+'''
+u > i ls
+u < i cs hs
+u >= i cc lo
+u <= i hi
+
+i > u cs hs
+i < u ls
+i >= u hi
+i <= u cc lo
+'''
 
 class Compare(Binary):
     OP = {'==':Cond.JEQ,
@@ -763,12 +780,6 @@ class SubScr(Access):
         vstr.load(self.address(vstr, n), regs[n])
         return regs[n]
 
-class Args(UserList, Expr):
-    def generate(self, vstr, n):
-        for arg in reversed(self):
-            arg.reduce(vstr, n)
-            vstr.push(regs[n])
-
 class Call(Expr):
     def __init__(self, primary, args):
         for i, param in enumerate(primary.type.params):
@@ -779,7 +790,9 @@ class Call(Expr):
         self.generate(vstr, n)
         return regs[n]
     def generate(self, vstr, n):
-        self.args.generate(vstr, n)
+        for arg in reversed(self.args):
+            arg.reduce(vstr, n)
+            vstr.push(regs[n])
         self.primary.call(vstr, n)
         if self.primary.type.variable and len(self.args) > len(self.primary.type.params):
             vstr.inst(Op.ADD, Reg.SP, len(self.args) - len(self.primary.type.params))

@@ -27,7 +27,6 @@ TOKENS = {
     'cond': r'^('+'|'.join(cond.name for cond in Cond)+r')\b',
     'id': r'\.?[a-z_]\w*',
     'equal': r'=',
-    'dash': r'-',
     'lbrace': r'\[',
     'rbrace': r'\]',
     'lbrack': r'\{',
@@ -95,7 +94,7 @@ class Assembler:
     def op4(self, op, rd, rs):
         self.new_inst(Op4, False, op, rd, rs)
     def op_const(self, op, rd, const):
-        if -64 <= const < 64:
+        if -16 <= const < 16:
             self.new_inst(Op4, True, op, rd, const)
         elif 0 <= const < 256:
             self.op_byte(op, rd, const)
@@ -365,6 +364,6 @@ def assemble(program, fflag=True, name='out'):
             file.write('v2.0 raw\n' + ' '.join(bit16))
 
 if __name__ == '__main__':
-    assemble('')
+    assemble('main:\nMOV A, -4')
     # assemble('testall.s')
     # assemble(ASM)
