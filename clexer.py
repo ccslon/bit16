@@ -36,7 +36,7 @@ class LexerBase(metaclass=MetaLexer):
 
 class CLexer(LexerBase):
 
-    RE_num = r'0x[0-9a-f]+|0b[01]+|\d+|\b(NULL)\b'
+    RE_num = r'0x[0-9a-f]+|0b[01]+|\d+'
     RE_char = r"'\\?[^']'"
     RE_string = r'"[^"]*"'
     def RE_eof(self, match):
@@ -45,7 +45,7 @@ class CLexer(LexerBase):
     RE_typedef  = r'\b(typedef)\b'
     RE_const = r'\b(const)\b'
     RE_void = r'\b(void)\b'
-    RE_type = r'\b(int|char)\b'
+    RE_word = r'\b(int|char)\b'
     RE_unsigned = r'\b(unsigned)\b'
     RE_signed = r'\b(signed)\b'
     RE_struct = r'\b(struct)\b'

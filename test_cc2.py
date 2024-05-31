@@ -95,6 +95,9 @@ class TestCompiler(TestCase):
     
     def test_neg_nums(self):
         self.code_eq_asm('neg_nums')
+        
+    def test_unsigned(self):
+        self.code_eq_asm('unsigned')
 
 if __name__ == '__main__':
     main()

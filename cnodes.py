@@ -161,12 +161,12 @@ class Emitter(Visitor):
         if op in [Op.NOT, Op.NEG]:
             self.add(f'{op.name} {rd.name}')
         else:
-            if type(src) is Reg:
+            if isinstance(src, Reg):
                 self.add(f'{op.name} {rd.name}, {src.name}')
             else:
                 self.add(f'{op.name} {rd.name}, {src}')
-    def inst3(self, op, rd, rs, const4):
-        self.add(f'{op.name} {rd.name}, {rs.name}, {const4}')
+    def inst3(self, op, rd, rs, const):
+        self.add(f'{op.name} {rd.name}, {rs.name}, {const}')
     def jump(self, cond, target):
         self.add(f'{cond.name} {target}')
     def halt(self):
@@ -185,7 +185,16 @@ class Void(CNode):
         return 'void'
 
 class Type(CNode):
+    def __init__(self):
+        self.const = False
+    @staticmethod
+    def address(vstr, n, local, base):
+        vstr.inst3(Op.ADD, regs[n], regs[base], local.location)
+        return regs[n]
+
+class Word(Type):
     def __init__(self, type, unsigned=False):
+        super().__init__()
         self.type = type
         self.unsigned = unsigned
         self.size = 1
@@ -198,14 +207,6 @@ class Type(CNode):
             vstr.store(regs[n], regs[n+1])
         else:
             vstr.store(regs[n], regs[base], local.location, local.token.lexeme)
-        return regs[n]
-    @staticmethod
-    def address(vstr, n, local, base):
-        if -8 <= local.location < 8:
-            vstr.inst3(Op.ADD, regs[n], regs[base], local.location)
-        elif -32 <= local.location < 32:
-            vstr.inst(Op.MOV, regs[n], regs[base])
-            vstr.inst(Op.ADD, regs[n], local.location)
         return regs[n]
     @staticmethod
     def reduce(vstr, n, local, base):
@@ -222,34 +223,20 @@ class Type(CNode):
         else:
             vstr.space(glob.token.lexeme, glob.type.size)
     def cast(self, other):
-        return type(other) in [Pointer, Type] \
-            or type(other) is Const and self.cast(other.type)
+        return isinstance(other, Word)
     def __eq__(self, other):
-        return type(other) is Type
+        return type(other) is Word
     def __str__(self):
         return self.type
 
-class Const(Type):
-    def __init__(self, type):
-        super().__init__(type)
-        self.size = type.size
-    def cast(self, other):
-        return self == other
-    def __eq__(self, other):
-        return self.type == other \
-            or type(other) is Const and self.type == other.type
-    def __str__(self):
-        return f'const {self.type}'
-
-class Pointer(Type):
+class Pointer(Word):
     def __init__(self, type):
         super().__init__(type)
         self.to = self.of = self.type
         self.unsigned = True
         self.size = 1
     def cast(self, other):
-        return type(other) in [Pointer, Type] \
-            or type(other) is Const and self.cast(other.type)
+        return isinstance(other, Word)
     def __eq__(self, other):
         return type(other) is Pointer and (self.to == other.to \
                                            or type(self.to) is Void \
@@ -261,6 +248,7 @@ class Pointer(Type):
 class Struct(Frame, Type):
     def __init__(self, name):
         super().__init__()
+        self.const = False
         self.name = name
     @staticmethod
     def store(vstr, n, local, base):
@@ -284,10 +272,11 @@ class Struct(Frame, Type):
     def __str__(self):
         return f'struct {self.name}'
 
-class Union(UserDict, Type): #TODO
+class Union(UserDict, Word): #TODO
     def __init__(self, name):
         super().__init__()
-        self.size = 0
+        self.const = False
+        self.size = -1
         self.name = name
     def __setitem__(self, name, attr):
         attr.location = 0
@@ -296,6 +285,7 @@ class Union(UserDict, Type): #TODO
 
 class Array(Type):
     def __init__(self, of, length):
+        super().__init__()
         self.size = of.size * length.value
         self.of = of
         self.length = length.value
@@ -304,7 +294,7 @@ class Array(Type):
         if local.location is None:
             vstr.load_glob(regs[n], local.token.lexeme)
         else:
-            Type.address(vstr, n, local, base)
+            Word.address(vstr, n, local, base)
         return regs[n]
     @staticmethod
     def reduce(vstr, n, local, base):
@@ -318,7 +308,7 @@ class Array(Type):
     def cast(self, other):
         return self == other
     def __eq__(self, other):
-        return type(other) in [Array, Pointer] and self.of == other.of
+        return isinstance(other, Array | Pointer) and self.of == other.of
     def __str__(self):
         return f'{self.of}[]'
 
@@ -349,24 +339,28 @@ class Expr(CNode):
         vstr.jump(Cond.JNE, f'.L{label}')
     def num_reduce(self, vstr, n):
         return self.reduce(vstr, n)
+    def is_unsigned(self):
+        return self.type.is_unsigned()
 
 class NumBase(Expr):
     def __init__(self, token):
-        super().__init__(Type('int'), token)
+        super().__init__(Word('int'), token)
     def data(self, vstr):
         return self.value
     def reduce(self, vstr, n):
-        if -32 <= self.value < 32:
+        if -16 <= self.value < 256:
             vstr.inst(Op.MOV, regs[n], self.value)
         else:
             vstr.imm(regs[n], self.value)
         return regs[n]
     def num_reduce(self, vstr, n):
-        if -32 <= self.value < 32:
+        if -16 <= self.value < 16:
             return self.value
+        elif 0 <= self.value < 256:
+            vstr.inst(Op.MOV, regs[n], self.value)
         else:
             vstr.imm(regs[n], self.value)
-            return regs[n]
+        return regs[n]
 
 class EnumConst(NumBase):
     def __init__(self, token, value):
@@ -376,9 +370,7 @@ class EnumConst(NumBase):
 class Num(NumBase):
     def __init__(self, token):
         super().__init__(token)
-        if token.lexeme == 'NULL':
-            self.value = 0
-        elif token.lexeme.startswith('0x'):
+        if token.lexeme.startswith('0x'):
             self.value = int(token.lexeme, base=16)
         elif token.lexeme.startswith('0b'):
             self.value = int(token.lexeme, base=2)
@@ -397,7 +389,7 @@ class SizeOf(NumBase):
 
 class Char(Expr):
     def __init__(self, token):
-        super().__init__(Type('char'), token)
+        super().__init__(Word('char'), token)
     def data(self):
         return self.token.lexeme
     def reduce(self, vstr, n):
@@ -408,7 +400,7 @@ class Char(Expr):
 
 class String(Expr):
     def __init__(self, token):
-        super().__init__(Pointer(Type('char')), token)
+        super().__init__(Pointer(Word('char')), token)
         self.value = f'"{token.lexeme[1:-1]}\\0"'
     def data(self, vstr):
         return vstr.string(self.value)
@@ -425,7 +417,7 @@ class Unary(OpExpr):
     OP = {'-':Op.NEG,
           '~':Op.NOT}
     def __init__(self, op, unary):
-        assert unary.type.cast(Type('int')), f'Line {op.line}: Cannot {op.lexeme} {unary.type}'
+        assert unary.type.cast(Word('int')), f'Line {op.line}: Cannot {op.lexeme} {unary.type}'
         super().__init__(unary.type, op)
         self.unary = unary
     def reduce(self, vstr, n):
@@ -524,21 +516,11 @@ class Binary(OpExpr):
         super().__init__(left.type, op)
         self.left, self.right = left, right
     def is_unsigned(self):
-        return self.left.is_unsigned or self.right.isunsigned()
+        return self.left.is_unsigned() or self.right.is_unsigned()
     def reduce(self, vstr, n):
         vstr.inst(self.op, self.left.reduce(vstr, n), self.right.num_reduce(vstr, n+1))
         return regs[n]
-'''
-u > i ls
-u < i cs hs
-u >= i cc lo
-u <= i hi
 
-i > u cs hs
-i < u ls
-i >= u hi
-i <= u cc lo
-'''
 class Compare(Binary):
     OP = {'==':Cond.JEQ,
           '!=':Cond.JNE,
@@ -562,16 +544,12 @@ class Compare(Binary):
             '<=':Cond.JHI}
     def __init__(self, op, left, right):
         super().__init__(op, left, right)
-        if left.type.is_unsigned():
+        if self.is_unsigned():
             self.op = self.UOP.get(op.lexeme, self.OP[op.lexeme])
             self.inv = self.UINV.get(op.lexeme, self.INV[op.lexeme])
-        elif right.type.is_unsigned():
-            self.op = self.UINV.get(op.lexeme, self.OP[op.lexeme])
-            self.inv = self.UOP.gegt(op.lexeme, self.INV[op.lexeme])
         else:
             self.op = self.OP[op.lexeme]
             self.inv = self.INV[op.lexeme]
-        
     def compare(self, vstr, n, label):
         vstr.inst(Op.CMP, self.left.reduce(vstr, n), self.right.num_reduce(vstr, n+1))
         vstr.jump(self.inv, f'.L{label}')
@@ -581,12 +559,12 @@ class Compare(Binary):
     def reduce(self, vstr, n):
         label = vstr.next_label()
         sublabel = vstr.next_label()
-        self.compare(vstr, n, sublabel)
-        vstr.inst(Op.MOV, regs[n], 1)
-        vstr.jump(Cond.JR, f'.L{label}')
-        vstr.append_label(f'.L{sublabel}')
+        self.compare_false(vstr, n, label)
         vstr.inst(Op.MOV, regs[n], 0)
+        vstr.jump(Cond.JR, f'.L{sublabel}')
         vstr.append_label(f'.L{label}')
+        vstr.inst(Op.MOV, regs[n], 1)
+        vstr.append_label(f'.L{sublabel}')
         return regs[n]
 
 class Logic(Binary):
@@ -605,6 +583,8 @@ class Logic(Binary):
             vstr.inst(Op.CMP, self.right.reduce(vstr, n), 0)
             vstr.jump(Cond.JEQ, f'.L{label}')
             vstr.append_label(f'.L{sublabel}')
+    def compare_false(self, vstr, n, label): #TODO
+        pass
 
 class Condition(Expr):
     def __init__(self, cond, true, false):
@@ -628,7 +608,7 @@ class Condition(Expr):
         vstr.append_label(f'.L{sublabel}')
         self.false.branch_reduce(vstr, n, root)
 
-class Assign(Expr):
+class InitAssign(Expr):
     def __init__(self, token, left, right):
         assert left.type == right.type, f'Line {token.line}: {left.type} != {right.type}'
         super().__init__(left.type, token)
@@ -640,7 +620,12 @@ class Assign(Expr):
         self.right.reduce(vstr, n)
         self.left.store(vstr, n)
 
-class InitList(Expr):
+class Assign(InitAssign):
+    def __init__(self, token, left, right):
+        assert not left.type.const, 'Line {token.line}: Left is const'
+        super().__init__(token, left, right)
+        
+class InitListAssign(Expr):
     def __init__(self, token, left, right):
         super().__init__(left.type, token)
         self.left, self.right = left, right
@@ -663,7 +648,7 @@ class Local(Expr):
     def address(self, vstr, n):
         return self.type.address(vstr, n, self, 'FP')
     def call(self, vstr, n):
-        Type.reduce(vstr, n, self, 'FP')
+        Word.reduce(vstr, n, self, 'FP')
         vstr.call(regs[n])
 
 class Attr(Local):
@@ -674,7 +659,7 @@ class Attr(Local):
     def address(self, vstr, n):
         return self.type.address(vstr, n, self, n)
     def call(self, vstr, n):
-        Type.reduce(vstr, n, self, n)
+        Word.reduce(vstr, n, self, n)
         vstr.call(regs[n])
 
 class Glob(Local):
@@ -735,7 +720,7 @@ class Post(OpExpr):
     OP = {'++':Op.ADD,
           '--':Op.SUB}
     def __init__(self, op, postfix):
-        assert postfix.type.cast(Type('int')), f'Line {op.line}: Cannot {op.lexeme} {postfix.type}'
+        assert postfix.type.cast(Word('int')), f'Line {op.line}: Cannot {op.lexeme} {postfix.type}'
         super().__init__(postfix.type, op)
         self.postfix = postfix
     def reduce(self, vstr, n):
@@ -788,10 +773,12 @@ class SubScr(Access):
         self.sub = sub
     def address(self, vstr, n):
         self.postfix.reduce(vstr, n)
-        self.sub.reduce(vstr, n+1)
         if type(self.postfix.type) in [Array, Pointer] and self.postfix.type.of.size > 1:
+            self.sub.reduce(vstr, n+1)
             vstr.inst(Op.MUL, regs[n+1], self.postfix.type.of.size)
-        vstr.inst(Op.ADD, regs[n], regs[n+1])
+            vstr.inst(Op.ADD, regs[n], regs[n+1])
+        else:
+            vstr.inst(Op.ADD, regs[n], self.sub.num_reduce(vstr, n+1))
         return regs[n]
     def store(self, vstr, n):
         vstr.store(regs[n], self.address(vstr, n+1))

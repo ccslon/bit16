@@ -49,8 +49,8 @@ class Cond(IntEnum):
     JCC = JLO = 8
     JHI = 9
     JLS = 10
-    JGE = 11
-    JLT = 12    
+    JLT = 11
+    JGE = 12
     JLE = 13
     JGT = 14
     JR = 15
@@ -139,20 +139,20 @@ class Op4(Inst):
                 self.b = '001','0',f'{op:04b}','XX',f'{src:03b}',f'{rd:03b}'
 
 class Offset(Inst):
-    def __init__(self, op, rd, rs, const):
-        assert 0 <= const < 16
-        self.s = f'{op.name} {rd.name}, {rs.name}, {const}'
-        self.d = 3,0,0,rs,const,rd
+    def __init__(self, op, rd, rs, const5):
+        assert -16 <= const5 < 16
+        self.s = f'{op.name} {rd.name}, {rs.name}, {const5}'
+        self.d = 3,0,0,rs,const5,rd
         if op == Op.SUB:
-            const = negative(-const, 5)
-        self.b = '011','0','X',f'{rs:03b}',f'{const:05b}',f'{rd:03b}'
+            const5 = negative(-const5, 5)
+        self.b = '011','0','X',f'{rs:03b}',f'{const5:05b}',f'{rd:03b}'
 
 class OffsetFP(Inst):
-    def __init__(self, op, rd, const):
-        assert 0 <= const < 256
-        self.s = f'{op.name} {rd.name}, FP, {const:02X}'
-        self.d = 3,1,0,const,rd
-        self.b = '011','1','X',f'{const:08b}',f'{rd:03b}'
+    def __init__(self, op, rd, byte):
+        assert 0 <= byte < 256
+        self.s = f'{op.name} {rd.name}, FP, 0x{byte:02X}'
+        self.d = 3,1,0,byte,rd
+        self.b = '011','1','X',f'{byte:08b}',f'{rd:03b}'
 
 class Load(Inst):
     def __init__(self, storing, rd, rb, offset5):

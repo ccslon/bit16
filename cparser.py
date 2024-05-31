@@ -6,7 +6,7 @@ Created on Mon Jul  3 19:47:39 2023
 """
 
 import clexer
-from cnodes import Program, Defn, Block, Label, Goto, Break, Continue, For, Do, While, Switch, Case, If, Statement, Return, Glob, Attr, Local, InitList, Assign, Condition, Logic, Compare, Binary, Func, Array, Union, Struct, Pointer, Const, Type, Void, Pre, Cast, SizeOf, Deref, AddrOf, Not, Unary, Call, Arrow, SubScr, Dot, Post, String, Char, EnumConst, NegNum, Num, Frame
+from cnodes import Program, Defn, Block, Label, Goto, Break, Continue, For, Do, While, Switch, Case, If, Statement, Return, Glob, Attr, Local, InitListAssign, Assign, InitAssign, Condition, Logic, Compare, Binary, Func, Array, Union, Struct, Pointer, Word, Void, Pre, Cast, SizeOf, Deref, AddrOf, Not, Unary, Call, Arrow, SubScr, Dot, Post, String, Char, EnumConst, NegNum, Num, Frame
 
 '''
 TODO
@@ -23,10 +23,11 @@ TODO
 [X] Labels and goto
 [X] Division/Modulo
 [X] Different calling convention. Went with stdcall-like
-[ ] Fix void and void*
+[X] Fix void and void*
 [ ] Fix array strings e.g. char str[3] = "Hi";
 [X] Add negative numbers
-[ ] Add unsigned
+[X] Fix const
+[X] Add unsigned
 [ ] Add floats??
 [X] Fix compile function?
 [X] Update Docs
@@ -154,7 +155,7 @@ class CParser:
         CAST -> UNARY
                |'(' TYPE_NAME ')' CAST
         '''
-        if self.peekn('(', ('type','struct','void','const','union','enum')) or self.peek('(') and self.peek_typedefs(1):
+        if self.peekn('(', ('word','unsigned','signed','struct','void','const','union','enum')) or self.peek('(') and self.peek_typedefs(1):
             token = next(self)
             type = self.type_name()
             self.expect(')')
@@ -332,12 +333,12 @@ class CParser:
                     |('struct'|'union') [id] '{' {QUAL ATTR {',' ATTR} ';'} '}'
                     |'enum' [id] '{' ENUM {',' ENUM}'}'
         '''
-        if self.peek('type'):
-            spec = Type(next(self).lexeme)
+        if self.peek('word'):
+            spec = Word(next(self).lexeme)
         elif self.accept('signed'):
-            spec = Type(next(self).lexeme if self.peek('type') else 'int')
+            spec = Word(next(self).lexeme if self.peek('word') else 'int')
         elif self.accept('unsigned'):
-            spec = Type(next(self).lexeme if self.peek('type') else 'int', True)
+            spec = Word(next(self).lexeme if self.peek('word') else 'int', True)
         elif self.accept('void'):
             spec = Void()
         elif self.peek('id'):
@@ -382,7 +383,7 @@ class CParser:
                 self.expect('}')
             else:
                 assert id and id.lexeme in self.enums
-            spec = Type('int')
+            spec = Word('int')
         else:
             self.error('TYPE SPECIFIER')
         return spec
@@ -392,7 +393,9 @@ class CParser:
         TYPE_QUAL -> ['const'] SPEC
         '''
         if self.accept('const'):
-            return Const(self.spec())
+            qual = self.spec()
+            qual.const = True
+            return qual
         return self.spec()
 
     def type_name(self):
@@ -429,10 +432,10 @@ class CParser:
             token = next(self)
             if self.accept('{'):
                 assert isinstance(declr.type, (Array, Struct))
-                inits.append(InitList(token, declr, self.list()))
+                inits.append(InitListAssign(token, declr, self.list()))
                 self.expect('}')
             else:
-                inits.append(Assign(token, declr, self.expr()))
+                inits.append(InitAssign(token, declr, self.expr()))
     def decln(self):
         '''
         DECLN -> QUAL [INIT {',' INIT}] ';'
@@ -631,7 +634,7 @@ class CParser:
             id = self.accept('id')
             self.typedefs[id.lexeme] = type
             self.expect(';')
-        while self.peek('type','struct','void','const','union','enum') or self.peek_typedefs():
+        while self.peek('word','unsigned','signed','struct','void','const','union','enum') or self.peek_typedefs():
             block.extend(self.decln())
         while self.peek(';','{','(','id','*','++','--','return','if','switch','while','do','for','break','continue','goto') and not self.peek_typedefs():
             block.append(self.statement())
