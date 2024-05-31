@@ -41,11 +41,19 @@ class Cond(IntEnum):
     JNV = 0
     JEQ = 1
     JNE = 2
-    JGT = 3
-    JLT = 4
-    JGE = 5
-    JLE = 6
-    JR = 7
+    JMI = 3
+    JPL = 4
+    JVS = 5
+    JVC = 6
+    JCS = JHS = 7
+    JCC = JLO = 8
+    JHI = 9
+    JLS = 10
+    JGE = 11
+    JLT = 12    
+    JLE = 13
+    JGT = 14
+    JR = 15
 
 ESCAPE = {
     '\\0': '\0',
@@ -89,16 +97,16 @@ class Inst(Data):
     pass
 
 class Jump(Inst):
-    def __init__(self, cond, const10):
-        assert -512 <= const10 < 512
-        if const10 < 0:
-            self.s = f'{cond.name} -0x{-const10:03X}'
+    def __init__(self, cond, const9):
+        assert -256 <= const9 < 256
+        if const9 < 0:
+            self.s = f'{cond.name} -0x{-const9:03X}'
         else:
-            self.s = f'{cond.name} 0x{const10:03X}'
-        self.d = 0,const10,cond
-        if const10 < 0:
-            const10 = negative(const10, 10)
-        self.b = '000',f'{const10:010b}',f'{cond:03b}'
+            self.s = f'{cond.name} 0x{const9:03X}'
+        self.d = 0,const9,cond
+        if const9 < 0:
+            const9 = negative(const9, 9)
+        self.b = '000',f'{const9:09b}',f'{cond:04b}'
 class OpByte(Inst):
     def __init__(self, op, byte, rd):
         if isinstance(byte, str):

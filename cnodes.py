@@ -185,9 +185,12 @@ class Void(CNode):
         return 'void'
 
 class Type(CNode):
-    def __init__(self, type):
+    def __init__(self, type, unsigned=False):
         self.type = type
+        self.unsigned = unsigned
         self.size = 1
+    def is_unsigned(self):
+        return self.unsigned
     @staticmethod
     def store(vstr, n, local, base):
         if local.location is None:
@@ -242,6 +245,7 @@ class Pointer(Type):
     def __init__(self, type):
         super().__init__(type)
         self.to = self.of = self.type
+        self.unsigned = True
         self.size = 1
     def cast(self, other):
         return type(other) in [Pointer, Type] \
@@ -413,7 +417,6 @@ class String(Expr):
         return regs[n]
 
 class OpExpr(Expr):
-    OP = {}
     def __init__(self, type, op):
         super().__init__(type, op)
         self.op = self.OP[op.lexeme]
@@ -520,10 +523,11 @@ class Binary(OpExpr):
         assert left.type.cast(right.type), f'Line {op.line}: Cannot {left.type} {op.lexeme} {right.type}'
         super().__init__(left.type, op)
         self.left, self.right = left, right
+    def is_unsigned(self):
+        return self.left.is_unsigned or self.right.isunsigned()
     def reduce(self, vstr, n):
         vstr.inst(self.op, self.left.reduce(vstr, n), self.right.num_reduce(vstr, n+1))
         return regs[n]
-
 '''
 u > i ls
 u < i cs hs
@@ -535,7 +539,6 @@ i < u ls
 i >= u hi
 i <= u cc lo
 '''
-
 class Compare(Binary):
     OP = {'==':Cond.JEQ,
           '!=':Cond.JNE,
@@ -549,9 +552,26 @@ class Compare(Binary):
            '<': Cond.JGE,
            '>=':Cond.JLT,
            '<=':Cond.JGT}
+    UOP = {'>': Cond.JHI,
+           '<': Cond.JLO,
+           '>=':Cond.JHS,
+           '<=':Cond.JLS}
+    UINV = {'>': Cond.JLS,
+            '<': Cond.JHS,
+            '>=':Cond.JLO,
+            '<=':Cond.JHI}
     def __init__(self, op, left, right):
         super().__init__(op, left, right)
-        self.inv = self.INV[op.lexeme]
+        if left.type.is_unsigned():
+            self.op = self.UOP.get(op.lexeme, self.OP[op.lexeme])
+            self.inv = self.UINV.get(op.lexeme, self.INV[op.lexeme])
+        elif right.type.is_unsigned():
+            self.op = self.UINV.get(op.lexeme, self.OP[op.lexeme])
+            self.inv = self.UOP.gegt(op.lexeme, self.INV[op.lexeme])
+        else:
+            self.op = self.OP[op.lexeme]
+            self.inv = self.INV[op.lexeme]
+        
     def compare(self, vstr, n, label):
         vstr.inst(Op.CMP, self.left.reduce(vstr, n), self.right.num_reduce(vstr, n+1))
         vstr.jump(self.inv, f'.L{label}')

@@ -46,6 +46,8 @@ class CLexer(LexerBase):
     RE_const = r'\b(const)\b'
     RE_void = r'\b(void)\b'
     RE_type = r'\b(int|char)\b'
+    RE_unsigned = r'\b(unsigned)\b'
+    RE_signed = r'\b(signed)\b'
     RE_struct = r'\b(struct)\b'
     RE_enum = r'\b(enum)\b'
     RE_union = r'\b(union)\b'

@@ -329,11 +329,15 @@ class CParser:
         TYPE_SPEC -> type
                     |void
                     |id
-                    |('struct'|'union') id '{' {QUAL ATTR {',' ATTR} ';'} '}'
-                    |'enum' id '{' ENUM {',' ENUM}'}'
+                    |('struct'|'union') [id] '{' {QUAL ATTR {',' ATTR} ';'} '}'
+                    |'enum' [id] '{' ENUM {',' ENUM}'}'
         '''
         if self.peek('type'):
             spec = Type(next(self).lexeme)
+        elif self.accept('signed'):
+            spec = Type(next(self).lexeme if self.peek('type') else 'int')
+        elif self.accept('unsigned'):
+            spec = Type(next(self).lexeme if self.peek('type') else 'int', True)
         elif self.accept('void'):
             spec = Void()
         elif self.peek('id'):
