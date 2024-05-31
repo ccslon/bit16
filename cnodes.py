@@ -334,7 +334,7 @@ class Expr(CNode):
     def compare(self, vstr, n, label):
         vstr.inst(Op.CMP, self.reduce(vstr, n), 0)
         vstr.jump(Cond.JEQ, f'.L{label}')
-    def compare_false(self, vstr, n, label):
+    def compare_false(self, vstr, n, label, _):
         vstr.inst(Op.CMP, self.reduce(vstr, n), 0)
         vstr.jump(Cond.JNE, f'.L{label}')
     def num_reduce(self, vstr, n):
@@ -474,7 +474,7 @@ class Not(Expr):
     def compare(self, vstr, n, label):
         vstr.inst(Op.CMP, self.unary.reduce(vstr, n), 0)
         vstr.jump(Cond.JNE, f'.L{label}')
-    def compare_false(self, vstr, n, label):
+    def compare_false(self, vstr, n, label, _):
         vstr.inst(Op.CMP, self.unary.reduce(vstr, n), 0)
         vstr.jump(Cond.JEQ, f'.L{label}')
     def reduce(self, vstr, n):
@@ -553,7 +553,7 @@ class Compare(Binary):
     def compare(self, vstr, n, label):
         vstr.inst(Op.CMP, self.left.reduce(vstr, n), self.right.num_reduce(vstr, n+1))
         vstr.jump(self.inv, f'.L{label}')
-    def compare_false(self, vstr, n, label):
+    def compare_false(self, vstr, n, label, _=None):
         vstr.inst(Op.CMP, self.left.reduce(vstr, n), self.right.num_reduce(vstr, n+1))
         vstr.jump(self.op, f'.L{label}')
     def reduce(self, vstr, n):
@@ -583,8 +583,45 @@ class Logic(Binary):
             vstr.inst(Op.CMP, self.right.reduce(vstr, n), 0)
             vstr.jump(Cond.JEQ, f'.L{label}')
             vstr.append_label(f'.L{sublabel}')
-    def compare_false(self, vstr, n, label): #TODO
-        pass
+    def compare_false(self, vstr, n, label, sublabel): 
+        if self.op == Op.AND:
+            vstr.inst(Op.CMP, self.left.reduce(vstr, n), 0)
+            vstr.jump(Cond.JEQ, f'.L{sublabel}')
+            vstr.inst(Op.CMP, self.right.reduce(vstr, n), 0)
+            vstr.jump(Cond.JNE, f'.L{label}')
+        elif self.op == Op.OR:
+            vstr.inst(Op.CMP, self.left.reduce(vstr, n), 0)
+            vstr.jump(Cond.JNE, f'.L{label}')
+            vstr.inst(Op.CMP, self.right.reduce(vstr, n), 0)
+            vstr.jump(Cond.JNE, f'.L{label}')
+    def reduce(self, vstr, n):
+        if self.op == Op.AND:
+            label = vstr.next_label()
+            sublabel = vstr.next_label()
+            vstr.inst(Op.CMP, self.left.reduce(vstr, n), 0)
+            vstr.jump(Cond.JEQ, f'.L{label}')
+            vstr.inst(Op.CMP, self.right.reduce(vstr, n), 0)
+            vstr.jump(Cond.JEQ, f'.L{label}')
+            vstr.inst(Op.MOV, regs[n], 1)
+            vstr.jump(Cond.JR, f'.L{sublabel}')
+            vstr.append_label(f'.L{label}')
+            vstr.inst(Op.MOV, regs[n], 0)
+            vstr.append_label(f'.L{sublabel}') 
+        elif self.op == Op.OR:
+            label = vstr.next_label()
+            sublabel = vstr.next_label()
+            subsublabel = vstr.next_label()
+            vstr.inst(Op.CMP, self.left.reduce(vstr, n), 0)
+            vstr.jump(Cond.JNE, f'.L{label}')            
+            vstr.inst(Op.CMP, self.right.reduce(vstr, n), 0)
+            vstr.jump(Cond.JEQ, f'.L{sublabel}')
+            vstr.append_label(f'.L{label}')
+            vstr.inst(Op.MOV, regs[n], 1)
+            vstr.jump(Cond.JR, f'.L{subsublabel}')
+            vstr.append_label(f'.L{sublabel}')
+            vstr.inst(Op.MOV, regs[n], 0)
+            vstr.append_label(f'.L{subsublabel}')
+        return regs[n]
 
 class Condition(Expr):
     def __init__(self, cond, true, false):
@@ -897,7 +934,7 @@ class Do(Statement):
         vstr.begin_loop()
         vstr.append_label(f'.L{vstr.loop.start()}')
         self.state.generate(vstr, n)
-        self.cond.compare_false(vstr, n, vstr.loop.start())
+        self.cond.compare_false(vstr, n, vstr.loop.start(), vstr.loop.end())
         vstr.append_label(f'.L{vstr.loop.end()}')
         vstr.end_loop()
 

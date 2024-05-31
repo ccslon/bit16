@@ -53,7 +53,7 @@ class Cond(IntEnum):
     JGE = 12
     JLE = 13
     JGT = 14
-    JR = 15
+    JR = JMP = 15
 
 ESCAPE = {
     '\\0': '\0',

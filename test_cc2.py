@@ -98,6 +98,9 @@ class TestCompiler(TestCase):
         
     def test_unsigned(self):
         self.code_eq_asm('unsigned')
+    
+    def test_logic(self):
+        self.code_eq_asm('logic')
 
 if __name__ == '__main__':
     main()
