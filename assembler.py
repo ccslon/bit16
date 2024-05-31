@@ -97,6 +97,7 @@ class Assembler:
         if -16 <= const < 16:
             self.new_inst(Op4, True, op, rd, const)
         elif 0 <= const < 256:
+            assert op in [Op.MOV, Op.ADD, Op.SUB, Op.CMP]
             self.op_byte(op, rd, const)
         else:
             assert op == Op.MOV
