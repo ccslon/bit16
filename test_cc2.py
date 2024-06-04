@@ -4,7 +4,7 @@ Created on Fri Sep  8 14:37:22 2023
 
 @author: ccslon
 """
-from unittest import TestCase, main
+from unittest import TestCase, main, expectedFailure
 import cpreproc
 import cparser
 
@@ -17,6 +17,12 @@ class TestCompiler(TestCase):
         with open(f'tests/{name}.s') as file:
             asm = file.read()
         self.assertEqual(out, asm)
+    
+    @expectedFailure
+    def test_bad_const(self):
+        text = cpreproc.preprocess('tests/bad_const.c')
+        ast = cparser.parse(text)
+        ast.generate()
     
     def test_init(self):
         self.code_eq_asm('init')

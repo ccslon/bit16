@@ -2,7 +2,12 @@ void printf(char*, ...);
 
 int* gg = (int*)0x4567;
 
-char* msg = "hello";
+void print(char*);
+char* msg = "hi";
+
+int main() {
+    print("Hello");
+}
 
 void a() {
     printf("%d\n", gg);

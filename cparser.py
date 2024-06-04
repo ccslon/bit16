@@ -431,7 +431,7 @@ class CParser:
         if self.peek('='):
             token = next(self)
             if self.accept('{'):
-                assert isinstance(declr.type, (Array, Struct))
+                assert isinstance(declr.type, (Array,Struct))
                 inits.append(InitListAssign(token, declr, self.list()))
                 self.expect('}')
             else:
@@ -682,7 +682,7 @@ class CParser:
                         glob = Glob(type, id)
                         if self.accept('='):
                             if self.accept('{'):
-                                assert isinstance(glob.type, (Array, Struct))
+                                assert isinstance(glob.type, (Array,Struct))
                                 glob.init = self.list()
                                 self.expect('}')
                             else:
@@ -693,7 +693,8 @@ class CParser:
         return program
 
     def peek_typedefs(self, offset=0):
-        return self.peek('id', offset=offset) and self.tokens[self.index+offset].lexeme in self.typedefs
+        return self.peek('id', offset=offset) \
+            and self.tokens[self.index+offset].lexeme in self.typedefs
 
     def begin_func(self):
         self.space = 0

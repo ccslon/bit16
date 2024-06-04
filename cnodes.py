@@ -86,17 +86,11 @@ class Visitor:
         pass
     def imm(self, rd, value):
         pass
-    def loadm(self, rd, size):
-        pass
-    def storem(self, rd, size):
-        pass
     def inst(self, op, rd, src):
         pass
     def inst3(self, op, rd, rs, const4):
         pass
     def jump(self, cond, target):
-        pass
-    def halt(self):
         pass
 
 class Emitter(Visitor):
@@ -153,10 +147,6 @@ class Emitter(Visitor):
         self.add(f'LD [{rb.name}'+(f', {offset}' if offset is not None else '')+f'], {rd.name}'+(f' ; {name}' if name else ''))
     def imm(self, rd, value):
         self.add(f'LD {rd.name}, {value}')
-    def loadm(self, rd, size):
-        self.add('LDM {'+', '.join(regs[rd+i].name for i in range(size))+'}, '+f'{regs[size].name}')
-    def storem(self, rd, size):
-        self.add(f'LDM {regs[size].name}'+', {'+', '.join(regs[rd+i].name for i in range(size))+'}')
     def inst(self, op, rd, src):
         if op in [Op.NOT, Op.NEG]:
             self.add(f'{op.name} {rd.name}')
@@ -169,8 +159,6 @@ class Emitter(Visitor):
         self.add(f'{op.name} {rd.name}, {rs.name}, {const}')
     def jump(self, cond, target):
         self.add(f'{cond.name} {target}')
-    def halt(self):
-        self.add('HALT')
 
 class CNode:
     def generate(self, vstr, n):
@@ -180,7 +168,7 @@ class Void(CNode):
     def __init__(self):
         self.size = 0
     def __eq__(self, other):
-        return type(other) is Void
+        return isinstance(other, Void)
     def __str__(self):
         return 'void'
 
@@ -223,9 +211,9 @@ class Word(Type):
         else:
             vstr.space(glob.token.lexeme, glob.type.size)
     def cast(self, other):
-        return isinstance(other, Word)
+        return self == other
     def __eq__(self, other):
-        return type(other) is Word
+        return isinstance(other, Word)
     def __str__(self):
         return self.type
 
@@ -238,10 +226,10 @@ class Pointer(Word):
     def cast(self, other):
         return isinstance(other, Word)
     def __eq__(self, other):
-        return type(other) is Pointer and (self.to == other.to \
-                                           or type(self.to) is Void \
-                                           or type(other.to) is Void) \
-            or type(other) is Array and self.of == other.of
+        return isinstance(other, Pointer) and (self.to == other.to \
+                                               or isinstance(self.to, Void) \
+                                               or isinstance(other.to, Void)) \
+            or isinstance(other, Array) and self.of == other.of
     def __str__(self):
         return f'{self.to}*'
 
@@ -268,7 +256,7 @@ class Struct(Frame, Type):
     def cast(self, other):
         return self == other
     def __eq__(self, other):
-        return type(other) is Struct and self.name == other.name
+        return isinstance(other, Struct) and self.name == other.name
     def __str__(self):
         return f'struct {self.name}'
 
@@ -308,7 +296,7 @@ class Array(Type):
     def cast(self, other):
         return self == other
     def __eq__(self, other):
-        return isinstance(other, Array | Pointer) and self.of == other.of
+        return isinstance(other, (Array,Pointer)) and self.of == other.of
     def __str__(self):
         return f'{self.of}[]'
 
@@ -319,7 +307,7 @@ class Func(Type):
     def cast(self, other):
         return False
     def __eq__(self, other):
-        return type(other) is Func and self.ret == other.ret #TODO
+        return isinstance(other, Func) and self.ret == other.ret #TODO
     def __str__(self):
         return f'{self.ret}('+','.join(map(str, self.params))+')'
 
@@ -810,7 +798,7 @@ class SubScr(Access):
         self.sub = sub
     def address(self, vstr, n):
         self.postfix.reduce(vstr, n)
-        if type(self.postfix.type) in [Array, Pointer] and self.postfix.type.of.size > 1:
+        if isinstance(self.postfix.type, (Array,Pointer)) and self.postfix.type.of.size > 1:
             self.sub.reduce(vstr, n+1)
             vstr.inst(Op.MUL, regs[n+1], self.postfix.type.of.size)
             vstr.inst(Op.ADD, regs[n], regs[n+1])
