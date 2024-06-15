@@ -18,20 +18,21 @@ foo:
   CALL baz
   LD B, [FP, 4] ; a
   CMP B, 0
-  JEQ .L4
+  JEQ .L5
   LD B, [FP, 5] ; b
   CMP B, 0
   JNE .L3
+.L5:
 .L4:
   LD B, [FP, 4] ; a
   CMP B, 0
-  JEQ .L5
+  JEQ .L6
   LD B, [FP, 5] ; b
   CMP B, 0
-  JEQ .L5
+  JEQ .L6
   MOV B, 100
   JR .L0
-.L5:
+.L6:
 .L0:
   MOV A, B
   MOV SP, FP
@@ -45,37 +46,37 @@ bar:
   MOV FP, SP
   LD B, [FP, 4] ; a
   CMP B, 0
-  JNE .L7
+  JNE .L8
   LD B, [FP, 5] ; b
   CMP B, 0
-  JEQ .L8
-.L7:
-  MOV B, 1
-  JR .L9
+  JEQ .L9
 .L8:
-  MOV B, 0
+  MOV B, 1
+  JR .L10
 .L9:
-  LD [FP, 0], B ; n
+  MOV B, 0
 .L10:
+  LD [FP, 0], B ; n
+.L11:
   CALL baz
   LD B, [FP, 4] ; a
   CMP B, 0
-  JNE .L10
+  JNE .L11
   LD B, [FP, 5] ; b
   CMP B, 0
-  JNE .L10
-.L11:
+  JNE .L11
+.L12:
   LD B, [FP, 4] ; a
   CMP B, 0
-  JNE .L13
+  JNE .L14
   LD B, [FP, 5] ; b
   CMP B, 0
-  JEQ .L12
-.L13:
+  JEQ .L13
+.L14:
   MOV B, 100
-  JR .L6
-.L12:
-.L6:
+  JR .L7
+.L13:
+.L7:
   MOV A, B
   MOV SP, FP
   ADD SP, 1

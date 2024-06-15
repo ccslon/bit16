@@ -55,13 +55,13 @@ class Cond(IntEnum):
     JGT = 14
     JR = JMP = 15
 
-ESCAPE = {
+UNESCAPE = {
     '\\0': '\0',
     '\\t': '\t',
     '\\n': '\n',
     '\\b': '\b'
 }
-INV_ESCAPE = {
+ESCAPE = {
     '\0': '\\0',
     '\t': '\\t',
     '\n': '\\n',
@@ -87,8 +87,8 @@ class Data:
 
 class Char(Data):
     def __init__(self, char):
-        self.s = f"'{INV_ESCAPE.get(char, char)}'"
-        char = ESCAPE.get(char, char)
+        self.s = f"'{ESCAPE.get(char, char)}'"
+        char = UNESCAPE.get(char, char)
         assert 0 <= ord(char) < 128
         self.d = 0,ord(char)
         self.b = 'XXXXXXXXX',f'{ord(char):07b}'
@@ -110,8 +110,8 @@ class Jump(Inst):
 class OpByte(Inst):
     def __init__(self, op, byte, rd):
         if isinstance(byte, str):
-            self.s = f"{op.name} {rd.name}, '{INV_ESCAPE.get(byte, byte)}'"
-            char = ESCAPE.get(byte, byte)
+            self.s = f"{op.name} {rd.name}, '{ESCAPE.get(byte, byte)}'"
+            char = UNESCAPE.get(byte, byte)
             self.d = 2,op,ord(char),rd
             self.b = '010',f'{op:02b}',f'{ord(char):08b}',f'{rd:03b}'
         else:

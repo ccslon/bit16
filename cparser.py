@@ -6,7 +6,7 @@ Created on Mon Jul  3 19:47:39 2023
 """
 
 import clexer
-from cnodes import Program, Defn, Block, Label, Goto, Break, Continue, For, Do, While, Switch, Case, If, Statement, Return, Glob, Attr, Local, InitListAssign, Assign, InitAssign, Condition, Logic, Compare, Binary, Func, Array, Union, Struct, Pointer, Word, Void, Pre, Cast, SizeOf, Deref, AddrOf, Not, Unary, Call, Arrow, SubScr, Dot, Post, String, Char, EnumConst, NegNum, Num, Frame
+from cnodes import Program, Defn, Block, Label, Goto, Break, Continue, For, Do, While, Switch, Case, If, Statement, Return, Glob, Attr, Local, InitArrayString, InitListAssign, Assign, InitAssign, Condition, Logic, Compare, Binary, Func, Array, Union, Struct, Pointer, Word, Void, Pre, Cast, SizeOf, Deref, AddrOf, Not, Unary, Call, Arrow, SubScr, Dot, Post, String, Char, EnumConst, NegNum, Num, Frame
 
 '''
 TODO
@@ -25,6 +25,7 @@ TODO
 [X] Different calling convention. Went with stdcall-like
 [X] Fix void and void*
 [ ] Fix array strings e.g. char str[3] = "Hi";
+[ ] init Arrays of unknown size
 [X] Add negative numbers
 [X] Fix const
 [X] Add unsigned
@@ -53,6 +54,8 @@ class Scope(Frame):
         return copy
 
 class CParser:
+
+    TYPE = ('word','unsigned','signed','struct','void','const','union','enum')
 
     def resolve(self, name):
         if name in self.param_scope:
@@ -87,24 +90,24 @@ class CParser:
 
     def postfix(self):
         '''
-        POST -> PRIMARY {'[' EXPR ']'|'(' ARGS ')'|'.' id|'->' id|'++'|'--'}
+        POST -> PRIMARY {'(' ARGS ')'|'[' EXPR ']'|'++'|'--'|'.' id|'->' id}
         '''
         postfix = self.primary()
-        while self.peek('.','[','->','(','++','--'):
-            if self.peek('['):
-                postfix = SubScr(next(self), postfix, self.expr())
-                self.expect(']')
-            elif self.accept('('):
+        while self.peek('(','[','++','--','.','->'):
+            if self.accept('('):
                 assert isinstance(postfix.type, Func)
                 postfix = Call(postfix, self.args())
                 self.expect(')')
                 self.calls = True
+            elif self.peek('['):
+                postfix = SubScr(next(self), postfix, self.expr())
+                self.expect(']')
+            elif self.peek('++','--'):
+                    postfix = Post(next(self), postfix)
             elif self.peek('.'):
                 postfix = Dot(next(self), postfix, postfix.type[self.expect('id').lexeme])
             elif self.peek('->'):
                 postfix = Arrow(next(self), postfix, postfix.type.to[self.expect('id').lexeme])
-            elif self.peek('++','--'):
-                    postfix = Post(next(self), postfix)
         return postfix
 
     def args(self):
@@ -121,24 +124,24 @@ class CParser:
     def unary(self):
         '''
         UNARY -> POSTFIX
-                |('++'|'--') UNARY
-                |('-'|'~'|'*'|'&'|'!') CAST
+                |('*'|'-'|'~'|'&'|'!') CAST
+                |('++'|'--') UNARY                
                 |'sizeof' '(' TYPE_NAME ')'
                 |'sizeof' UNARY
         '''
-        if self.peek('++','--'):
-            return Pre(next(self), self.unary())
+        if self.peek('*'):
+            return Deref(next(self), self.cast())        
         elif self.peekn('-', 'num'):
             next(self)
             return NegNum(next(self))
         elif self.peek('-','~'):
             return Unary(next(self), self.cast())
-        elif self.peek('*'):
-            return Deref(next(self), self.cast())
-        elif self.peek('&'):
-            return AddrOf(next(self), self.cast())
+        elif self.peek('++','--'):
+            return Pre(next(self), self.unary())
         elif self.peek('!'):
             return Not(next(self), self.cast())
+        elif self.peek('&'):
+            return AddrOf(next(self), self.cast())
         elif self.peek('sizeof'):
             token = next(self)
             if self.accept('('):
@@ -155,7 +158,7 @@ class CParser:
         CAST -> UNARY
                |'(' TYPE_NAME ')' CAST
         '''
-        if self.peekn('(', ('word','unsigned','signed','struct','void','const','union','enum')) or self.peek('(') and self.peek_typedefs(1):
+        if self.peekn('(', self.TYPE) or self.peek('(') and self.peek_typedefs(1):
             token = next(self)
             type = self.type_name()
             self.expect(')')
@@ -321,7 +324,7 @@ class CParser:
         else:
             id = self.accept('id')
             while self.accept('['):
-                type = Array(type, Num(self.expect('num')))
+                type = Array(type, self.expect('num'))
                 self.expect(']')
         spec[id.lexeme] = Attr(type, id)
 
@@ -400,13 +403,13 @@ class CParser:
 
     def type_name(self):
         '''
-        TYPE_NAME -> QUAL {'*'}
+        TYPE_NAME -> QUAL {'*'} {'[' num ']'}
         '''
         type_name = self.qual()
         while self.accept('*'):
             type_name = Pointer(type_name)
         while self.accept('['):
-            type_name = Array(type_name, Num(self.expect('num')))
+            type_name = Array(type_name, self.expect('num'))
             self.expect(']')
         return type_name
 
@@ -418,36 +421,41 @@ class CParser:
             type = Pointer(type)
         id = self.expect('id')
         while self.accept('['):
-            type = Array(type, Num(self.expect('num')))
+            type = Array(type, self.accept('num'))
             self.expect(']')
-        declr = self.scope[id.lexeme] = Local(type, id)
-        return declr
+        # declr = self.scope[id.lexeme] = Local(type, id)
+        return Local(type, id)
 
-    def init(self, type, inits):
+    def init(self, type):
         '''
         INIT -> DECLR ['=' (EXPR|'{' INIT_LIST '}')]
         '''
-        declr = self.declr(type)
+        init = declr = self.declr(type)
         if self.peek('='):
             token = next(self)
             if self.accept('{'):
                 assert isinstance(declr.type, (Array,Struct))
-                inits.append(InitListAssign(token, declr, self.list()))
+                init = InitListAssign(token, declr, self.list())
                 self.expect('}')
+            elif self.peek('string') and isinstance(declr.type, Array):
+                init = InitArrayString(token, declr, next(self).lexeme)
             else:
-                inits.append(InitAssign(token, declr, self.expr()))
+                init = InitAssign(token, declr, self.expr())
+        self.scope[declr.token.lexeme] = declr
+        return init
+                
     def decln(self):
         '''
         DECLN -> QUAL [INIT {',' INIT}] ';'
         '''
         type = self.qual()
-        inits = []
+        decln = []
         if not self.accept(';'):
-            self.init(type, inits)
+            decln.append(self.init(type))
             while self.accept(','):
-                self.init(type, inits)
+                decln.append(self.init(type))
             self.expect(';')
-        return inits
+        return decln
 
     def list(self):
         '''
@@ -634,7 +642,7 @@ class CParser:
             id = self.accept('id')
             self.typedefs[id.lexeme] = type
             self.expect(';')
-        while self.peek('word','unsigned','signed','struct','void','const','union','enum') or self.peek_typedefs():
+        while self.peek(*self.TYPE) or self.peek_typedefs():
             block.extend(self.decln())
         while self.peek(';','{','(','id','*','++','--','return','if','switch','while','do','for','break','continue','goto') and not self.peek_typedefs():
             block.append(self.statement())
@@ -677,7 +685,7 @@ class CParser:
                     if id:                              #Global
                         assert not isinstance(type, Void)
                         while self.accept('['):
-                            type = Array(type, Num(self.expect('num')))
+                            type = Array(type, self.expect('num'))
                             self.expect(']')
                         glob = Glob(type, id)
                         if self.accept('='):
@@ -685,6 +693,7 @@ class CParser:
                                 assert isinstance(glob.type, (Array,Struct))
                                 glob.init = self.list()
                                 self.expect('}')
+                            # elif self.peek('string')
                             else:
                                 glob.init = self.const()
                         self.globs[id.lexeme] = glob
@@ -743,7 +752,7 @@ class CParser:
 
     def peek(self, *symbols, offset=0):
         token = self.tokens[self.index+offset]
-        return token.type in symbols or (not token.lexeme.isalnum() and token.lexeme in symbols)
+        return token.type in symbols or not token.lexeme.isalnum() and token.lexeme in symbols
 
     def peekn(self, *buckets):
         if self.index+len(buckets) < len(self.tokens)-1:
@@ -755,8 +764,8 @@ class CParser:
             return True
         return False
 
-    def accept(self, *symbols):
-        if self.peek(*symbols):
+    def accept(self, symbol):
+        if self.peek(symbol):
             return next(self)
 
     def expect(self, symbol):

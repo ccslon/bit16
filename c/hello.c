@@ -1,5 +1,6 @@
 #include <stdio.h>
 
 void main() {
-    printf("Hello world!\n");
+    char msg[] = "Hello world!\n";
+    printf(msg);
 }

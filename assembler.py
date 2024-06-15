@@ -365,6 +365,6 @@ def assemble(program, fflag=True, name='out'):
             file.write('v2.0 raw\n' + ' '.join(bit16))
 
 if __name__ == '__main__':
-    assemble('main:\nMOV A, -4')
+    assemble('main:\nMOV A, \'\\n\'')
     # assemble('testall.s')
     # assemble(ASM)

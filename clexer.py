@@ -16,7 +16,6 @@ class MetaLexer(type):
     def __init__(self, name, bases, attrs):
         self.action = {}
         regex = []
-        flag = attrs['flag'] if 'flag' in attrs else 0 #re.NOFLAG
         for attr in attrs:
             if attr.startswith('RE_'):
                 name = attr[3:]
@@ -27,7 +26,7 @@ class MetaLexer(type):
                     pattern = attrs[attr]
                     self.action[name] = lambda self, match: match
                 regex.append((name, pattern))
-        self.regex = re.compile('|'.join(rf'(?P<{name}>{pattern})' for name, pattern in regex), flag)
+        self.regex = re.compile('|'.join(rf'(?P<{name}>{pattern})' for name, pattern in regex))
 
 class LexerBase(metaclass=MetaLexer):
     def lex(self, text):
@@ -38,7 +37,9 @@ class CLexer(LexerBase):
 
     RE_num = r'0x[0-9a-f]+|0b[01]+|\d+'
     RE_char = r"'\\?[^']'"
-    RE_string = r'"[^"]*"'
+    def RE_string(self, match):
+        r'"[^"]*"'
+        return match[1:-1]
     def RE_eof(self, match):
         r'@\n'
         self.line = 1

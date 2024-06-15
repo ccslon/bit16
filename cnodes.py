@@ -1,3 +1,4 @@
+
 # -*- coding: utf-8 -*-
 """
 Created on Mon Jul  3 19:48:36 2023
@@ -5,7 +6,7 @@ Created on Mon Jul  3 19:48:36 2023
 @author: Colin
 """
 from collections import UserList, UserDict
-from bit16 import Reg, Op, Cond
+from bit16 import Reg, Op, Cond, ESCAPE, UNESCAPE
 
 class Loop(UserList):
     def start(self):
@@ -105,7 +106,7 @@ class Emitter(Visitor):
     def string(self, string):
         if string not in self.strings:
             self.strings.append(string)
-            self.glob(f'.S{self.strings.index(string)}', string)
+            self.glob(f'.S{self.strings.index(string)}', rf'"{string}\0"')
         return f'.S{self.strings.index(string)}'
     def add(self, asm):
         for label in self.labels:
@@ -274,9 +275,12 @@ class Union(UserDict, Word): #TODO
 class Array(Type):
     def __init__(self, of, length):
         super().__init__()
-        self.size = of.size * length.value
         self.of = of
-        self.length = length.value
+        self.length = length
+        if length is not None:
+            self.length = num2int(length.lexeme)
+            self.size = of.size * self.length
+        
     @staticmethod
     def address(vstr, n, local, base):
         if local.location is None:
@@ -322,7 +326,7 @@ class Expr(CNode):
     def compare(self, vstr, n, label):
         vstr.inst(Op.CMP, self.reduce(vstr, n), 0)
         vstr.jump(Cond.JEQ, f'.L{label}')
-    def compare_false(self, vstr, n, label, _):
+    def compare_false(self, vstr, n, label):
         vstr.inst(Op.CMP, self.reduce(vstr, n), 0)
         vstr.jump(Cond.JNE, f'.L{label}')
     def num_reduce(self, vstr, n):
@@ -355,15 +359,18 @@ class EnumConst(NumBase):
         super().__init__(token)
         self.value = value
 
+def num2int(num):
+    if num.startswith('0x'):
+        return int(num, base=16)
+    elif num.startswith('0b'):
+        return int(num, base=2)
+    else:
+        return int(num)
+
 class Num(NumBase):
     def __init__(self, token):
         super().__init__(token)
-        if token.lexeme.startswith('0x'):
-            self.value = int(token.lexeme, base=16)
-        elif token.lexeme.startswith('0b'):
-            self.value = int(token.lexeme, base=2)
-        else:
-            self.value = int(token.lexeme)
+        self.value = num2int(token.lexeme)
 
 class NegNum(Num):
     def __init__(self, token):
@@ -389,7 +396,7 @@ class Char(Expr):
 class String(Expr):
     def __init__(self, token):
         super().__init__(Pointer(Word('char')), token)
-        self.value = f'"{token.lexeme[1:-1]}\\0"'
+        self.value = token.lexeme
     def data(self, vstr):
         return vstr.string(self.value)
     def reduce(self, vstr, n):
@@ -462,7 +469,7 @@ class Not(Expr):
     def compare(self, vstr, n, label):
         vstr.inst(Op.CMP, self.unary.reduce(vstr, n), 0)
         vstr.jump(Cond.JNE, f'.L{label}')
-    def compare_false(self, vstr, n, label, _):
+    def compare_false(self, vstr, n, label):
         vstr.inst(Op.CMP, self.unary.reduce(vstr, n), 0)
         vstr.jump(Cond.JEQ, f'.L{label}')
     def reduce(self, vstr, n):
@@ -493,13 +500,14 @@ class Binary(OpExpr):
           '^=':Op.XOR,
           '|' :Op.OR,
           '|=':Op.OR,
-          '&' :Op.AND,
+          '&': Op.AND,
           '&=':Op.AND,
           '/': Op.DIV,
           '/=':Op.DIV,
           '%': Op.MOD,
           '%=':Op.MOD}
     def __init__(self, op, left, right):
+        assert not isinstance(left, String) or not isinstance(right, String)
         assert left.type.cast(right.type), f'Line {op.line}: Cannot {left.type} {op.lexeme} {right.type}'
         super().__init__(left.type, op)
         self.left, self.right = left, right
@@ -541,7 +549,7 @@ class Compare(Binary):
     def compare(self, vstr, n, label):
         vstr.inst(Op.CMP, self.left.reduce(vstr, n), self.right.num_reduce(vstr, n+1))
         vstr.jump(self.inv, f'.L{label}')
-    def compare_false(self, vstr, n, label, _=None):
+    def compare_false(self, vstr, n, label):
         vstr.inst(Op.CMP, self.left.reduce(vstr, n), self.right.num_reduce(vstr, n+1))
         vstr.jump(self.op, f'.L{label}')
     def reduce(self, vstr, n):
@@ -571,12 +579,14 @@ class Logic(Binary):
             vstr.inst(Op.CMP, self.right.reduce(vstr, n), 0)
             vstr.jump(Cond.JEQ, f'.L{label}')
             vstr.append_label(f'.L{sublabel}')
-    def compare_false(self, vstr, n, label, sublabel): 
+    def compare_false(self, vstr, n, label): 
         if self.op == Op.AND:
+            sublabel = vstr.next_label()
             vstr.inst(Op.CMP, self.left.reduce(vstr, n), 0)
             vstr.jump(Cond.JEQ, f'.L{sublabel}')
             vstr.inst(Op.CMP, self.right.reduce(vstr, n), 0)
             vstr.jump(Cond.JNE, f'.L{label}')
+            vstr.append_label(f'.L{sublabel}')
         elif self.op == Op.OR:
             vstr.inst(Op.CMP, self.left.reduce(vstr, n), 0)
             vstr.jump(Cond.JNE, f'.L{label}')
@@ -659,6 +669,22 @@ class InitListAssign(Expr):
         for i in range(self.left.type.size):
             self.right[i].reduce(vstr, n+1)
             vstr.store(regs[n+1], regs[n], i)
+
+class InitArrayString(Expr):
+    def __init__(self, token, array, string):
+        if array.type.length is None:
+            array.type.size = array.type.length = len(string) + 1
+        else:
+            assert array.type.length >= len(string) + 1
+        self.array = array
+        self.string = string
+    def generate(self, vstr, n):
+        self.array.address(vstr, n)
+        for i, c in enumerate(self.string.replace('\\n','\n')):
+            vstr.inst(Op.MOV, regs[n+1], f"'{c}'")
+            vstr.store(regs[n+1], regs[n], i)                    
+        vstr.inst(Op.MOV, regs[n+1], r"'\0'")
+        vstr.store(regs[n+1], regs[n], len(self.string))
 
 class Block(UserList, Expr):
     def generate(self, vstr, n):
@@ -922,7 +948,7 @@ class Do(Statement):
         vstr.begin_loop()
         vstr.append_label(f'.L{vstr.loop.start()}')
         self.state.generate(vstr, n)
-        self.cond.compare_false(vstr, n, vstr.loop.start(), vstr.loop.end())
+        self.cond.compare_false(vstr, n, vstr.loop.start())
         vstr.append_label(f'.L{vstr.loop.end()}')
         vstr.end_loop()
 

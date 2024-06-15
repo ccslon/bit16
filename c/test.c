@@ -1,27 +1,24 @@
-struct Idk {
-    int a, *b;
-} dunno;
+int* foo(int n);
+void print(char*);
+//char msg[3] = "Hi";
 
-int num() {
-    return 9;
+int main() {
+    char msg1[] = "Yo";
+    char msg2[3] = "Hi";
+    char msg4[8] = "Sup";
+    char msg3[2] = "C";
+    print("Hello world!");
+    int lol[3];
+    print(msg4);
+    if (msg1[0] == '\n') {
+
+    }
 }
 
-int* alloc() {
-    return (int*)0x3400;
-}
-struct Idk make_Idk() {
-    struct Idk ret;
-    return ret;
-}
-void print_Idk(struct Idk*);
-
-void main() {
-    int a = num();
-    int b = a * num();
-    int c = num() * num();
-    int d = num() * c;
-    int *e = alloc();
-    struct Idk idk = make_Idk();
-    idk.a = num();
-    print_Idk(&idk);
-}
+/*
+mov A, 3
+push A
+call foo
+mov B, 10
+ld [A], B
+*/
