@@ -324,7 +324,7 @@ class CParser:
         else:
             id = self.accept('id')
             while self.accept('['):
-                type = Array(type, self.expect('num'))
+                type = Array(type, Num(self.expect('num')))
                 self.expect(']')
         spec[id.lexeme] = Attr(type, id)
 
@@ -349,7 +349,7 @@ class CParser:
         elif self.accept('struct'):
             id = self.accept('id')
             if self.accept('{'):
-                spec = Struct(id.lexeme)
+                spec = Struct(id)
                 if id:
                     self.structs[id.lexeme] = spec
                 while not self.accept('}'):
@@ -363,7 +363,7 @@ class CParser:
         elif self.accept('union'):
             id = self.accept('id')
             if self.accept('{'):
-                spec = Union(id.lexeme)
+                spec = Union(id)
                 if id:
                     self.unions[id.lexeme] = spec
                 while not self.accept('}'):
@@ -409,7 +409,7 @@ class CParser:
         while self.accept('*'):
             type_name = Pointer(type_name)
         while self.accept('['):
-            type_name = Array(type_name, self.expect('num'))
+            type_name = Array(type_name, Num(self.expect('num')))
             self.expect(']')
         return type_name
 
@@ -421,9 +421,8 @@ class CParser:
             type = Pointer(type)
         id = self.expect('id')
         while self.accept('['):
-            type = Array(type, self.accept('num'))
+            type = Array(type, Num(next(self)) if self.peek('num') else None)
             self.expect(']')
-        # declr = self.scope[id.lexeme] = Local(type, id)
         return Local(type, id)
 
     def init(self, type):
@@ -437,8 +436,8 @@ class CParser:
                 assert isinstance(declr.type, (Array,Struct))
                 init = InitListAssign(token, declr, self.list())
                 self.expect('}')
-            elif self.peek('string') and isinstance(declr.type, Array):
-                init = InitArrayString(token, declr, next(self).lexeme)
+            elif isinstance(declr.type, Array) and self.peek('string'):
+                init = InitArrayString(token, declr, String(next(self)))
             else:
                 init = InitAssign(token, declr, self.expr())
         self.scope[declr.token.lexeme] = declr
@@ -685,7 +684,7 @@ class CParser:
                     if id:                              #Global
                         assert not isinstance(type, Void)
                         while self.accept('['):
-                            type = Array(type, self.expect('num'))
+                            type = Array(type, Num(self.expect('num')))
                             self.expect(']')
                         glob = Glob(type, id)
                         if self.accept('='):
@@ -693,7 +692,6 @@ class CParser:
                                 assert isinstance(glob.type, (Array,Struct))
                                 glob.init = self.list()
                                 self.expect('}')
-                            # elif self.peek('string')
                             else:
                                 glob.init = self.const()
                         self.globs[id.lexeme] = glob

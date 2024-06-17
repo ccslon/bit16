@@ -8,6 +8,8 @@ Created on Mon Jul  3 19:48:36 2023
 from collections import UserList, UserDict
 from bit16 import Reg, Op, Cond, ESCAPE, UNESCAPE
 
+
+
 class Loop(UserList):
     def start(self):
         return self[-1][0]
@@ -180,15 +182,6 @@ class Type(CNode):
     def address(vstr, n, local, base):
         vstr.inst3(Op.ADD, regs[n], regs[base], local.location)
         return regs[n]
-
-class Word(Type):
-    def __init__(self, type, unsigned=False):
-        super().__init__()
-        self.type = type
-        self.unsigned = unsigned
-        self.size = 1
-    def is_unsigned(self):
-        return self.unsigned
     @staticmethod
     def store(vstr, n, local, base):
         if local.location is None:
@@ -211,6 +204,15 @@ class Word(Type):
             vstr.glob(glob.token.lexeme, glob.init.data(vstr))
         else:
             vstr.space(glob.token.lexeme, glob.type.size)
+
+class Word(Type):
+    def __init__(self, type, unsigned=False):
+        super().__init__()
+        self.type = type
+        self.unsigned = unsigned
+        self.size = 1
+    def is_unsigned(self):
+        return self.unsigned    
     def cast(self, other):
         return self == other
     def __eq__(self, other):
@@ -261,11 +263,11 @@ class Struct(Frame, Type):
     def __str__(self):
         return f'struct {self.name}'
 
-class Union(UserDict, Word): #TODO
+class Union(UserDict, Type): #TODO
     def __init__(self, name):
         super().__init__()
         self.const = False
-        self.size = -1
+        self.size = 0
         self.name = name
     def __setitem__(self, name, attr):
         attr.location = 0
@@ -275,12 +277,10 @@ class Union(UserDict, Word): #TODO
 class Array(Type):
     def __init__(self, of, length):
         super().__init__()
+        if length is not None:
+            self.size = of.size * length.value
         self.of = of
         self.length = length
-        if length is not None:
-            self.length = num2int(length.lexeme)
-            self.size = of.size * self.length
-        
     @staticmethod
     def address(vstr, n, local, base):
         if local.location is None:
@@ -319,8 +319,6 @@ class Expr(CNode):
     def __init__(self, type, token):
         self.type = type
         self.token = token
-    def branch_reduce(self, vstr, n , _):
-        self.reduce(vstr, n)
     def branch(self, vstr, n, _):
         self.generate(vstr, n)
     def compare(self, vstr, n, label):
@@ -329,6 +327,8 @@ class Expr(CNode):
     def compare_false(self, vstr, n, label):
         vstr.inst(Op.CMP, self.reduce(vstr, n), 0)
         vstr.jump(Cond.JNE, f'.L{label}')
+    def branch_reduce(self, vstr, n, _):
+        self.reduce(vstr, n)
     def num_reduce(self, vstr, n):
         return self.reduce(vstr, n)
     def is_unsigned(self):
@@ -359,18 +359,15 @@ class EnumConst(NumBase):
         super().__init__(token)
         self.value = value
 
-def num2int(num):
-    if num.startswith('0x'):
-        return int(num, base=16)
-    elif num.startswith('0b'):
-        return int(num, base=2)
-    else:
-        return int(num)
-
 class Num(NumBase):
     def __init__(self, token):
         super().__init__(token)
-        self.value = num2int(token.lexeme)
+        if token.lexeme.startswith('0x'):
+            self.value = int(token.lexeme, base=16)
+        elif token.lexeme.startswith('0b'):
+            self.value = int(token.lexeme, base=2)
+        else:
+            self.value = int(token.lexeme)   
 
 class NegNum(Num):
     def __init__(self, token):
@@ -385,20 +382,33 @@ class SizeOf(NumBase):
 class Char(Expr):
     def __init__(self, token):
         super().__init__(Word('char'), token)
-    def data(self):
+    def data(self, _):
         return self.token.lexeme
     def reduce(self, vstr, n):
-        vstr.inst(Op.MOV, regs[n], self.data())
+        vstr.inst(Op.MOV, regs[n], self.data(vstr))
         return regs[n]
     def num_reduce(self, vstr, n):
-        return self.data()
+        return self.data(vstr)
 
 class String(Expr):
+    class Char:
+        def __init__(self, char):
+            self.char = char
+        def data(self, _):
+            return f"'{self.char}'"
     def __init__(self, token):
         super().__init__(Pointer(Word('char')), token)
         self.value = token.lexeme
+        for k, v in UNESCAPE.items():
+            self.value = self.value.replace(k, v)
+    def __iter__(self):
+        for c in self.value:
+            yield self.Char(ESCAPE.get(c, c))
+        yield self.Char(r'\0')
+    def __len__(self):
+        return len(self.value)
     def data(self, vstr):
-        return vstr.string(self.value)
+        return vstr.string(self.token.lexeme)
     def reduce(self, vstr, n):
         vstr.load_glob(regs[n], self.data(vstr))
         return regs[n]
@@ -673,18 +683,16 @@ class InitListAssign(Expr):
 class InitArrayString(Expr):
     def __init__(self, token, array, string):
         if array.type.length is None:
-            array.type.size = array.type.length = len(string) + 1
+            array.type.size = len(string) + 1
         else:
-            assert array.type.length >= len(string) + 1
+            assert array.type.size >= len(string) + 1
         self.array = array
         self.string = string
     def generate(self, vstr, n):
         self.array.address(vstr, n)
-        for i, c in enumerate(self.string.replace('\\n','\n')):
-            vstr.inst(Op.MOV, regs[n+1], f"'{c}'")
-            vstr.store(regs[n+1], regs[n], i)                    
-        vstr.inst(Op.MOV, regs[n+1], r"'\0'")
-        vstr.store(regs[n+1], regs[n], len(self.string))
+        for i, c in enumerate(self.string):
+            vstr.inst(Op.MOV, regs[n+1], c.data(vstr))
+            vstr.store(regs[n+1], regs[n], i)
 
 class Block(UserList, Expr):
     def generate(self, vstr, n):
@@ -739,7 +747,6 @@ class Defn(Expr):
         preview = Visitor()
         preview.begin_func(self)
         self.block.generate(preview, self.calls)
-        # self.block.preview(self.calls)
         push = list(map(Reg, range(bool(self.type.size), regs.max+1))) + [Reg.FP]
         for param in self.params:
             param.location += self.space + self.calls + len(push)

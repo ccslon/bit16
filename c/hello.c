@@ -1,6 +1,7 @@
-#include <stdio.h>
+//#include <stdio.h>
+void putchar(char);
 
 void main() {
-    char msg[] = "Hello world!\n";
-    printf(msg);
+    //printf("Hello world!\n");
+    putchar('-');
 }
