@@ -107,6 +107,9 @@ class TestCompiler(TestCase):
     
     def test_logic(self):
         self.code_eq_asm('logic')
+        
+    def test_cstrings(self):
+        self.code_eq_asm('cstrings')
 
 if __name__ == '__main__':
     main()

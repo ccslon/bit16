@@ -54,14 +54,7 @@ class Cond(IntEnum):
     JLE = 13
     JGT = 14
     JR = JMP = 15
-
-UNESCAPE = {
-    r'\n': '\n',
-    r'\0': '\0',
-    r'\t': '\t',
-    r'\b': '\b',
-    r'\\': '\\'
-}
+    
 ESCAPE = {
     '\0': r'\0',
     '\t': r'\t',
@@ -69,6 +62,20 @@ ESCAPE = {
     '\b': r'\b',
     '\\': r'\\'
 }
+UNESCAPE = {
+    r'\n': '\n',
+    r'\0': '\0',
+    r'\t': '\t',
+    r'\b': '\b',
+    r'\\': '\\'
+}
+def unescape(text):
+    for k, v in UNESCAPE.items():
+        text = text.replace(k, v)
+    return text
+
+def escape(char):
+    return ESCAPE.get(char, char)
 
 class Data:
     def __init__(self, value):
@@ -89,8 +96,7 @@ class Data:
 
 class Char(Data):
     def __init__(self, char):
-        self.s = f"'{ESCAPE.get(char, char)}'"
-        char = UNESCAPE.get(char, char)
+        self.s = f"'{escape(char)}'"
         assert 0 <= ord(char) < 128
         self.d = 0,ord(char)
         self.b = 'XXXXXXXXX',f'{ord(char):07b}'
@@ -112,10 +118,9 @@ class Jump(Inst):
 class OpByte(Inst):
     def __init__(self, op, byte, rd):
         if isinstance(byte, str):
-            self.s = f"{op.name} {rd.name}, '{ESCAPE.get(byte, byte)}'"
-            char = UNESCAPE.get(byte, byte)
-            self.d = 2,op,ord(char),rd
-            self.b = '010',f'{op:02b}',f'{ord(char):08b}',f'{rd:03b}'
+            self.s = f"{op.name} {rd.name}, '{escape(byte)}'"
+            self.d = 2,op,ord(byte),rd
+            self.b = '010',f'{op:02b}',f'{ord(byte):08b}',f'{rd:03b}'
         else:
             assert 0 <= byte < 256
             self.s = f'{op.name} {rd.name}, 0x{byte:02X}'

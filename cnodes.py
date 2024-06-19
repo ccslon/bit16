@@ -6,7 +6,7 @@ Created on Mon Jul  3 19:48:36 2023
 @author: Colin
 """
 from collections import UserList, UserDict
-from bit16 import Reg, Op, Cond, ESCAPE, UNESCAPE
+from bit16 import Reg, Op, Cond, escape, unescape
 
 
 
@@ -398,12 +398,10 @@ class String(Expr):
             return f"'{self.char}'"
     def __init__(self, token):
         super().__init__(Pointer(Word('char')), token)
-        self.value = token.lexeme
-        for k, v in UNESCAPE.items():
-            self.value = self.value.replace(k, v)
+        self.value = unescape(token.lexeme)
     def __iter__(self):
         for c in self.value:
-            yield self.Char(ESCAPE.get(c, c))
+            yield self.Char(escape(c))
         yield self.Char(r'\0')
     def __len__(self):
         return len(self.value)

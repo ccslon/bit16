@@ -6,7 +6,7 @@ Created on Fri Aug 25 10:49:03 2023
 """
 
 import re
-from bit16 import Reg, Op, Cond, Data, Char, Jump, OpByte, Op4, Offset, OffsetFP, Load, LoadFP, LoadReg, StackOp, Word, ESCAPE
+from bit16 import Reg, Op, Cond, Data, Char, Jump, OpByte, Op4, Offset, OffsetFP, Load, LoadFP, LoadReg, StackOp, Word, unescape
 
 TOKENS = {
     'const': r'-?(0x[0-9a-f]+|0b[01]+|\d+)',
@@ -49,12 +49,9 @@ class Assembler:
         self.new_data(value)
     def char(self, label, char):
         self.label(label)
-        char = ESCAPE.get(char, char)
         self.new_char(char)
     def string(self, label, string):
         self.label(label)
-        for escape in ESCAPE:
-            string = string.replace(escape, ESCAPE[escape])
         for char in string:
             self.new_char(char)
     def space(self, label, size):
@@ -265,21 +262,18 @@ class Assembler:
                         self.op4(Op.MOV, Reg.PC, Reg.PC)
                     else:
                         self.error()
-        objects = []
-        objects.extend(self.inst)
-        objects.extend(self.data)
-        return objects
+        return self.inst + self.data
 
     def trans(self, type, value):
         if type == 'const':
             if value.startswith('0x'):
-                return int(value[2:], base=16)
+                return int(value, base=16)
             elif value.startswith('0b'):
-                return int(value[2:], base=2)
+                return int(value, base=2)
             else:
                 return int(value)
         elif type in ['string', 'char']:
-            return value[1:-1]
+            return unescape(value[1:-1])
         elif type == 'reg':
             return Reg[value.upper()]
         elif type == 'cond':
