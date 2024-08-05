@@ -111,10 +111,11 @@ class Jump(Inst):
             self.str = f'{cond.name} -0x{-const9:03X}'
         else:
             self.str = f'{cond.name} 0x{const9:03X}'
-        self.dec = 0,const9,cond
+        self.dec = 0,cond,const9
         if const9 < 0:
             const9 = negative(const9, 9)
-        self.bin = '000',f'{const9:09b}',f'{cond:04b}'
+        self.bin = '000',f'{cond:04b}',f'{const9:09b}'
+        
 class OpByte(Inst):
     def __init__(self, op, byte, rd):
         if isinstance(byte, str):
@@ -126,6 +127,7 @@ class OpByte(Inst):
             self.str = f'{op.name} {rd.name}, 0x{byte:02X}'
             self.dec = 2,op,byte,rd
             self.bin = '010',f'{op:02b}',f'{byte:08b}',f'{rd:03b}'
+            
 class Op4(Inst):
     def __init__(self, imm, op, rd, src):
         if op in [Op.NOT, Op.NEG]:

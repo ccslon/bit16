@@ -24,7 +24,7 @@ TODO
 [X] Division/Modulo
 [X] Different calling convention. Went with stdcall-like
 [X] Fix void and void*
-[ ] Fix array strings e.g. char str[3] = "Hi";
+[X] Fix array strings e.g. char str[3] = "Hi";
 [ ] init Arrays of unknown size
 [X] Add negative numbers
 [X] Fix const

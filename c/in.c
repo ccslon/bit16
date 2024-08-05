@@ -1,11 +1,15 @@
-#include "BIOS.c"
+#include <stdio.h>
 
-#define SIZE 0xff
-
-char buffer[SIZE];
-
-void setup() {}
-
+int main() {
+    char in;
+    while (1) {
+        in = getchar();
+        if (in) {
+            putchar(in);
+        }
+    }
+}
+/*
 void loop(char c) {
     if (c == '\n') {
         gets(buffer);
@@ -22,3 +26,4 @@ void loop(char c) {
         printf(buffer);
     }
 }
+*/

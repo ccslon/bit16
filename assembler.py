@@ -343,6 +343,7 @@ class Linker:
             contents.append(data.hex())
             print('>>' if i in indices else '  ', f'{i:04x}', f'{data.str: <15}', f'| {data.format_dec(): <13}', f'{data.format_bin(): <22}', data.hex())
         print('\n', ' '.join(contents))
+        print(len(contents))
         return contents
 
 assembler = Assembler()
