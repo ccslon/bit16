@@ -24,16 +24,16 @@ class Op(IntEnum):
     ADD = 1
     SUB = 2
     CMP = 3
-    MUL = 4
-    NOT = 5
-    DIV = 6
-    MOD = 7
-    AND = 8
-    OR =  9
-    XOR = 10
-    # = 11
-    # = 12
-    NEG = 13
+    NOT = 4
+    NEG = 5
+    # = 6
+    # = 7
+    MUL = 8
+    DIV = 9
+    MOD = 10
+    AND = 11
+    OR =  12
+    XOR = 13
     SHR = 14
     SHL = 15
 
