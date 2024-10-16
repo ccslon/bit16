@@ -828,7 +828,10 @@ class SubScr(Access):
         super().__init__(postfix.type.of, token, postfix)
         self.sub = sub
     def address(self, vstr, n):
-        self.postfix.reduce(vstr, n)
+        if isinstance(self.postfix.type, Pointer):
+            self.postfix.reduce(vstr, n)
+        else:
+            self.postfix.address(vstr, n)
         if isinstance(self.postfix.type, (Array,Pointer)) and self.postfix.type.of.size > 1:
             self.sub.reduce(vstr, n+1)
             vstr.inst(Op.MUL, regs[n+1], self.postfix.type.of.size)
