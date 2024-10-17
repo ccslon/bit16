@@ -38,7 +38,7 @@ class CLexer(LexerBase):
     RE_num = r'0x[0-9a-f]+|0b[01]+|\d+'
     RE_char = r"'\\?[^']'"
     def RE_string(self, match):
-        r'"[^"]*"'
+        r'"(\\"|[^"])*"'
         return match[1:-1]
     def RE_eof(self, match):
         r'@\n'
