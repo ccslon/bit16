@@ -54,8 +54,7 @@ class Scope(Frame):
         return copy
 
 class CParser:
-
-    TYPE = ('word','unsigned','signed','struct','void','const','union','enum')
+    TYPE = ('word','unsigned','signed','struct','void','const','union','enum','volatile')
 
     def resolve(self, name):
         if name in self.param_scope:
@@ -95,7 +94,7 @@ class CParser:
         postfix = self.primary()
         while self.peek('(','[','++','--','.','->'):
             if self.accept('('):
-                assert isinstance(postfix.type, Func)
+                assert isinstance(postfix.type, Func), self.error(f'"{postfix.token.lexeme}" is not a function')
                 postfix = Call(postfix, self.args())
                 self.expect(')')
                 self.calls = True
@@ -272,14 +271,14 @@ class CParser:
         ASSIGN -> UNARY ['+'|'-'|'*'|'/'|'%'|'<<'|'>>'|'^'|'|'|'&']'=' ASSIGN
                  |COND
         '''
-        assign = self.cond()
-        if self.peek('='):
-            assert isinstance(assign, (Local,Glob,Dot,Arrow,SubScr,Deref)), f'Line {self.tokens[self.index].line}: {type(assign)}'
-            assign = Assign(next(self), assign, self.assign())
-        elif self.peek('+=','-=','*=','/=','%=','<<=','>>=','^=','|=','&=','/=','%='):
-            assert isinstance(assign, (Local,Glob,Dot,Arrow,SubScr,Deref))
-            token = next(self)
-            assign = Assign(token, assign, Binary(token, assign, self.assign()))
+        assign = self.cond()        
+        if self.peek('=','+=','-=','*=','/=','%=','<<=','>>=','^=','|=','&=','/=','%='):
+            assert isinstance(assign, (Local,Glob,Dot,Arrow,SubScr,Deref)), self.error(f'Cannot assign to {type(assign)}')
+            if self.peek('='):
+                assign = Assign(next(self), assign, self.assign())
+            else:
+                token = next(self)
+                assign = Assign(token, assign, Binary(token, assign, self.assign()))
         return assign
 
     def expr(self):
@@ -336,13 +335,7 @@ class CParser:
                     |('struct'|'union') [id] '{' {QUAL ATTR {',' ATTR} ';'} '}'
                     |'enum' [id] '{' ENUM {',' ENUM}'}'
         '''
-        if self.peek('word'):
-            spec = Word(next(self).lexeme)
-        elif self.accept('signed'):
-            spec = Word(next(self).lexeme if self.peek('word') else 'int')
-        elif self.accept('unsigned'):
-            spec = Word(next(self).lexeme if self.peek('word') else 'int', True)
-        elif self.accept('void'):
+        if self.accept('void'):
             spec = Void()
         elif self.peek('id'):
             spec = self.typedefs[next(self).lexeme]
@@ -388,7 +381,13 @@ class CParser:
                 assert id and id.lexeme in self.enums
             spec = Word('int')
         else:
-            self.error('TYPE SPECIFIER')
+            if self.accept('unsigned'):
+                unsigned = True
+            else:
+                self.accept('signed')
+                unsigned = False
+            self.accept('word')
+            spec = Word('int', unsigned)
         return spec
 
     def qual(self):
@@ -399,6 +398,8 @@ class CParser:
             qual = self.spec()
             qual.const = True
             return qual
+        elif self.accept('volatile'):
+            pass
         return self.spec()
 
     def type_name(self):
