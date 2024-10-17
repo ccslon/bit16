@@ -11,7 +11,7 @@ foo:
 .L1:
   MOV A, 1
 .L2:
-  LD [FP, 0], A ; a
+  ST [FP, 0], A ; a
   LD A, [FP, 8] ; u
   LD B, [FP, 9] ; i
   CMP A, B
@@ -21,7 +21,7 @@ foo:
 .L3:
   MOV A, 1
 .L4:
-  LD [FP, 1], A ; b
+  ST [FP, 1], A ; b
   LD A, [FP, 8] ; u
   LD B, [FP, 9] ; i
   CMP A, B
@@ -31,7 +31,7 @@ foo:
 .L5:
   MOV A, 1
 .L6:
-  LD [FP, 2], A ; c
+  ST [FP, 2], A ; c
   LD A, [FP, 8] ; u
   LD B, [FP, 9] ; i
   CMP A, B
@@ -41,7 +41,7 @@ foo:
 .L7:
   MOV A, 1
 .L8:
-  LD [FP, 3], A ; d
+  ST [FP, 3], A ; d
   LD A, [FP, 8] ; u
   LD B, [FP, 9] ; i
   CMP A, B
@@ -51,7 +51,7 @@ foo:
 .L9:
   MOV A, 1
 .L10:
-  LD [FP, 4], A ; e
+  ST [FP, 4], A ; e
   LD A, [FP, 8] ; u
   LD B, [FP, 9] ; i
   CMP A, B
@@ -61,7 +61,7 @@ foo:
 .L11:
   MOV A, 1
 .L12:
-  LD [FP, 5], A ; f
+  ST [FP, 5], A ; f
 .L0:
   MOV SP, FP
   ADD SP, 6

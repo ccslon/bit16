@@ -39,7 +39,7 @@ class TestCompiler(TestCase):
     def test_multi(self):
         self.code_eq_asm('multi')
     
-    def test_paren1(self):
+    def test_paren(self):
         self.code_eq_asm('paren')
         
     def test_params(self):

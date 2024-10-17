@@ -2,7 +2,7 @@
 main:
   PUSH LR, A, B, FP
   MOV FP, SP
-  LD B, =.S0
+  LDW B, =.S0
   PUSH B
   CALL printf
   MOV SP, FP

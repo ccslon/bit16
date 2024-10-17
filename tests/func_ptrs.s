@@ -27,9 +27,9 @@ sum:
   SUB SP, 2
   MOV FP, SP
   MOV B, 0
-  LD [FP, 0], B ; s
+  ST [FP, 0], B ; s
   MOV B, 0
-  LD [FP, 1], B ; i
+  ST [FP, 1], B ; i
 .L3:
   LD B, [FP, 1] ; i
   LD C, [FP, 6] ; n
@@ -42,11 +42,11 @@ sum:
   CALL C
   MOV C, A
   ADD B, C
-  LD [FP, 0], B ; s
+  ST [FP, 0], B ; s
 .L4:
   LD B, [FP, 1] ; i
   ADD C, B, 1
-  LD [FP, 1], C ; i
+  ST [FP, 1], C ; i
   JR .L3
 .L5:
   LD B, [FP, 0] ; s
@@ -62,29 +62,29 @@ main:
   PUSH LR, B, C, FP
   SUB SP, 5
   MOV FP, SP
-  LD B, =.S0
+  LDW B, =.S0
   ADD C, FP, 0
-  LD [C, 0], B ; name
+  ST [C, 0], B ; name
   MOV B, 15
   ADD C, FP, 0
-  LD [C, 1], B ; age
-  LD B, =get_name
+  ST [C, 1], B ; age
+  LDW B, =get_name
   ADD C, FP, 0
-  LD [C, 2], B ; get_name
+  ST [C, 2], B ; get_name
   ADD B, FP, 0
   PUSH B
   ADD B, FP, 0
   LD B, [B, 2] ; get_name
   CALL B
   MOV B, A
-  LD [FP, 3], B ; name
-  LD B, =sqr
+  ST [FP, 3], B ; name
+  LDW B, =sqr
   PUSH B
   MOV B, 10
   PUSH B
   CALL sum
   MOV B, A
-  LD [FP, 4], B ; n
+  ST [FP, 4], B ; n
   MOV B, 0
   JR .L6
 .L6:

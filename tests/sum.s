@@ -15,9 +15,9 @@ sum:
   SUB SP, 2
   MOV FP, SP
   MOV B, 0
-  LD [FP, 0], B ; s
+  ST [FP, 0], B ; s
   MOV B, 0
-  LD [FP, 1], B ; i
+  ST [FP, 1], B ; i
 .L2:
   LD B, [FP, 1] ; i
   LD C, [FP, 6] ; n
@@ -30,11 +30,11 @@ sum:
   CALL C
   MOV C, A
   ADD B, C
-  LD [FP, 0], B ; s
+  ST [FP, 0], B ; s
 .L3:
   LD B, [FP, 1] ; i
   ADD C, B, 1
-  LD [FP, 1], C ; i
+  ST [FP, 1], C ; i
   JR .L2
 .L4:
   LD B, [FP, 0] ; s
@@ -49,7 +49,7 @@ sum:
 main:
   PUSH LR, B, FP
   MOV FP, SP
-  LD B, =sqr
+  LDW B, =sqr
   PUSH B
   MOV B, 5
   PUSH B

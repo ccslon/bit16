@@ -13,7 +13,7 @@ foo:
 .L1:
   MOV B, 0
 .L2:
-  LD [FP, 0], B ; n
+  ST [FP, 0], B ; n
 .L3:
   CALL baz
   LD B, [FP, 4] ; a
@@ -56,7 +56,7 @@ bar:
 .L9:
   MOV B, 0
 .L10:
-  LD [FP, 0], B ; n
+  ST [FP, 0], B ; n
 .L11:
   CALL baz
   LD B, [FP, 4] ; a
