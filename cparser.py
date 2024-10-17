@@ -54,7 +54,7 @@ class Scope(Frame):
         return copy
 
 class CParser:
-    TYPE = ('word','unsigned','signed','struct','void','const','union','enum','volatile')
+    TYPE = ('word','unsigned','signed','struct','void','typedef','const','union','enum','volatile','static')
 
     def resolve(self, name):
         if name in self.param_scope:
@@ -307,24 +307,9 @@ class CParser:
 
     def attr(self, spec, type):
         '''
-        ATTR -> {'*'} [id] {'[' num ']'}
-               |{'*'} '(' '*' [id] ')' '(' PARAMS ')'
+        ATTR -> DECLR
         '''
-        while self.accept('*'):
-            type = Pointer(type)
-        if self.accept('('):
-            self.expect('*')
-            id = self.accept('id')
-            self.expect(')')
-            self.expect('(')
-            params, variable = self.params()
-            type = Pointer(Func(type, [param.type for param in params], variable))
-            self.expect(')')
-        else:
-            id = self.accept('id')
-            while self.accept('['):
-                type = Array(type, Num(self.expect('num')))
-                self.expect(']')
+        type, id = self.declr(type)
         spec[id.lexeme] = Attr(type, id)
 
     def spec(self):
@@ -392,45 +377,74 @@ class CParser:
 
     def qual(self):
         '''
-        TYPE_QUAL -> ['const'] SPEC
+        TYPE_QUAL -> ['const'|'volatile'] SPEC
         '''
         if self.accept('const'):
             qual = self.spec()
             qual.const = True
             return qual
-        elif self.accept('volatile'):
-            pass
+        self.accept('volatile')
         return self.spec()
 
     def type_name(self):
         '''
-        TYPE_NAME -> QUAL {'*'} {'[' num ']'}
+        TYPE_NAME -> QUAL ABS_DECLR
         '''
         type_name = self.qual()
-        while self.accept('*'):
-            type_name = Pointer(type_name)
-        while self.accept('['):
-            type_name = Array(type_name, Num(self.expect('num')))
-            self.expect(']')
+        types = []
+        id = self._declr(types)
+        assert id is None
+        for new_type, args in reversed(types):
+            type_name = new_type(type_name, *args)
         return type_name
+
+    def _declr(self, types):
+        '''
+        DECLR -> {'*'} DIR_DECLR
+        '''
+        ns = 0
+        while self.accept('*'):
+            ns += 1
+        id = self.dir_declr(types)
+        for _ in range(ns):
+            types.append((Pointer, ()))
+        return id
+
+    def dir_declr(self, types):
+        '''
+        DIR_DECLR -> ('(' _DECLR ')'|[id]){'(' PARAMS ')'|'[' num ']'}
+        '''
+        if self.accept('('):
+            id = self._declr(types)
+            self.expect(')')
+        else:
+            id = self.accept('id')
+        while self.peek('(','['):
+            if self.accept('('):
+                params, variable = self.params()
+                types.append((Func, (params, variable)))
+                self.expect(')')
+            elif self.accept('['):
+                types.append((Array, (Num(next(self)) if self.peek('num') else None,)))
+                self.expect(']')
+        return id
 
     def declr(self, type):
         '''
         DECLR -> {'*'} id {'[' num ']'}
         '''
-        while self.accept('*'):
-            type = Pointer(type)
-        id = self.expect('id')
-        while self.accept('['):
-            type = Array(type, Num(next(self)) if self.peek('num') else None)
-            self.expect(']')
-        return Local(type, id)
+        types = []
+        id = self._declr(types)
+        for new_type, args in reversed(types):
+            type = new_type(type, *args)
+        return type, id
 
     def init(self, type):
         '''
         INIT -> DECLR ['=' (EXPR|'{' INIT_LIST '}')]
         '''
-        init = declr = self.declr(type)
+        type, id = self.declr(type)
+        init = declr = Local(type, id)
         if self.peek('='):
             token = next(self)
             if self.accept('{'):
@@ -446,15 +460,22 @@ class CParser:
                 
     def decln(self):
         '''
-        DECLN -> QUAL [INIT {',' INIT}] ';'
+        DECLN -> 'typedef' QUAL DECLR ';'
+                 |QUAL [INIT {',' INIT}] ';'
         '''
-        type = self.qual()
         decln = []
-        if not self.accept(';'):
-            decln.append(self.init(type))
-            while self.accept(','):
-                decln.append(self.init(type))
+        if self.accept('typedef'):
+            type = self.qual()
+            type, id = self.declr(type)
+            self.typedefs[id.lexeme] = type
             self.expect(';')
+        else:
+            type = self.qual()
+            if not self.accept(';'):
+                decln.append(self.init(type))
+                while self.accept(','):
+                    decln.append(self.init(type))
+                self.expect(';')
         return decln
 
     def list(self):
@@ -477,29 +498,17 @@ class CParser:
 
     def param(self):
         '''
-        PARAM -> QUAL [id] {'[' ']'}
-                |QUAL '(' '*' [id] ')' '(' PARAMS ')'
+        PARAM -> QUAL DECLR
         '''
         type = self.qual()
-        while self.accept('*'):
-            type = Pointer(type)
-        if self.accept('('):
-            self.expect('*')
-            id = self.accept('id')
-            self.expect(')')
-            self.expect('(')
-            params, variable = self.params()
-            type = Pointer(Func(type, [param.type for param in params], variable))
-            self.expect(')')
-        else:
-            id = self.accept('id')
-            while self.accept('['):
+        types = []
+        id = self._declr(types)
+        for new_type, args in reversed(types):
+            if new_type is Array:
                 type = Pointer(type)
-                self.expect(']')
-        param = Local(type, id)
-        if id:
-            self.param_scope[id.lexeme] = param
-        return param
+            else:
+                type = new_type(type, *args)
+        return Local(type, id) 
 
     def params(self):
         '''
@@ -635,13 +644,6 @@ class CParser:
         BLOCK -> {'typedef' ('void'|QUAL) id ';'} {DECL} {STATE} [BLOCK]
         '''
         block = Block()
-        while self.accept('typedef'):
-            type = self.qual()
-            while self.accept('*'):
-                type = Pointer(type)
-            id = self.accept('id')
-            self.typedefs[id.lexeme] = type
-            self.expect(';')
         while self.peek(*self.TYPE) or self.peek_typedefs():
             block.extend(self.decln())
         while self.peek(';','{','(','id','*','++','--','return','if','switch','while','do','for','break','continue','goto') and not self.peek_typedefs():
@@ -655,47 +657,39 @@ class CParser:
         while not self.peek('end'):
             if self.accept('typedef'):
                 type = self.qual()
-                while self.accept('*'):
-                    type = Pointer(type)
-                id = self.accept('id')
+                type, id = self.declr(type)
                 self.typedefs[id.lexeme] = type
                 self.expect(';')
             else:
+                self.accept('static')
                 type = self.qual()
-                while self.accept('*'):
-                    type = Pointer(type)
-                id = self.accept('id')
-                if self.accept('('):                    #Function
+                type, id = self.declr(type)                
+                if id:
+                    self.globs[id.lexeme] = glob = Glob(type, id)
+                if self.accept('{'):
                     assert id is not None
+                    assert isinstance(type, Func)
+                    assert not any(param.token is None for param in type.params)
                     self.begin_func()
-                    params, variable = self.params()
-                    type = Func(type, [param.type for param in params], variable)
-                    self.expect(')')
-                    self.globs[id.lexeme] = Glob(type, id)
+                    for param in type.params:
+                        self.param_scope[param.token.lexeme] = param
+                    block = self.block()
+                    self.end_func()
+                    program.append(Defn(type, id, block, self.returns, self.calls, self.space))
+                    self.expect('}')
+                elif self.accept('='):
+                    assert id is not None
+                    assert not isinstance(type, Void)
                     if self.accept('{'):
-                        assert not any(param.token is None for param in params)
-                        block = self.block()
+                        assert isinstance(type, (Array,Struct))
+                        glob.init = self.list()
                         self.expect('}')
-                        self.end_func()
-                        program.append(Defn(type, id, params, block, self.returns, self.calls, self.space))
                     else:
-                        self.expect(';')
-                        self.end_func()
+                        glob.init = self.const()
+                    program.append(glob)
+                    self.expect(';')
                 else:
-                    if id:                              #Global
-                        assert not isinstance(type, Void)
-                        while self.accept('['):
-                            type = Array(type, Num(self.expect('num')))
-                            self.expect(']')
-                        glob = Glob(type, id)
-                        if self.accept('='):
-                            if self.accept('{'):
-                                assert isinstance(glob.type, (Array,Struct))
-                                glob.init = self.list()
-                                self.expect('}')
-                            else:
-                                glob.init = self.const()
-                        self.globs[id.lexeme] = glob
+                    if id and type.size:
                         program.append(glob)
                     self.expect(';')
         return program

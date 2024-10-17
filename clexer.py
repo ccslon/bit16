@@ -45,6 +45,8 @@ class CLexer(LexerBase):
         self.line = 1
     RE_typedef  = r'\b(typedef)\b'
     RE_const = r'\b(const)\b'
+    RE_volatile = r'\b(volatile)\b'
+    RE_static = r'\b(static)\b'
     RE_void = r'\b(void)\b'
     RE_word = r'\b(int|char)\b'
     RE_unsigned = r'\b(unsigned)\b'

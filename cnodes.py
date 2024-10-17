@@ -737,9 +737,9 @@ class Glob(Local):
         vstr.call(self.token.lexeme)
 
 class Defn(Expr):
-    def __init__(self, type, id, params, block, returns, calls, space):
+    def __init__(self, type, id, block, returns, calls, space):
         super().__init__(type, id)
-        self.params, self.block, self.returns, self.calls, self.space = params, block, returns, calls, space
+        self.params, self.block, self.returns, self.calls, self.space = type.params, block, returns, calls, space
     def generate(self, vstr):
         regs.clear()
         preview = Visitor()
@@ -849,7 +849,7 @@ class SubScr(Access):
 class Call(Expr):
     def __init__(self, primary, args):
         for i, param in enumerate(primary.type.params):
-            assert param == args[i].type, f'Line {primary.token.line}: Argument #{i+1} of {primary.token.lexeme} {param} != {args[i].type}'
+            assert param.type == args[i].type, f'Line {primary.token.line}: Argument #{i+1} of {primary.token.lexeme} {param.type} != {args[i].type}'
         super().__init__(primary.type.ret, primary.token)
         self.primary, self.args = primary, args
     def reduce(self, vstr, n):

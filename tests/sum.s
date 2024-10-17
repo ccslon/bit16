@@ -46,3 +46,18 @@ sum:
   POP LR, B, C, FP
   ADD SP, 2
   RET
+main:
+  PUSH LR, B, FP
+  MOV FP, SP
+  LD B, =sqr
+  PUSH B
+  MOV B, 5
+  PUSH B
+  CALL sum
+  MOV B, A
+  JR .L5
+.L5:
+  MOV A, B
+  MOV SP, FP
+  POP LR, B, FP
+  RET
