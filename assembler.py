@@ -6,11 +6,16 @@ Created on Fri Aug 25 10:49:03 2023
 """
 
 import re
+from enum import IntEnum
 from bit16 import Reg, Op, Cond, Data, Char, Jump, OpByte, Op4, Offset, OffsetFP, Load, LoadFP, LoadReg, StackOp, Word, unescape
+
+RE_OP = r'|'.join(op.name for op in Op)
+RE_COND = r'|'.join(cond.name for cond in Cond)
+RE_REG = r'|'.join(reg.name for reg in Reg)
 
 TOKENS = {
     'const': r'-?(0x[0-9a-f]+|0b[01]+|\d+)',
-    'string': r'"[^"]*"',
+    'string': r'"(\\"|[^"])*"',
     'char': r"'\\?[^']'",
     'ldm': r'^(ldm)\b',
     'ld': r'^(ld)\b',
@@ -21,10 +26,10 @@ TOKENS = {
     'ret': r'^(ret)\b',
     'halt': r'^(halt)\b',
     'space': r'\b(space)\b',
-    'reg': r'\b('+r'|'.join(reg.name for reg in Reg)+r')\b',
+    'reg': rf'\b({RE_REG})\b',
     'label': r'\.?[a-z_]\w*\s*:',
-    'op': r'^('+r'|'.join(op.name for op in Op)+r')\b',
-    'cond': r'^('+'|'.join(cond.name for cond in Cond)+r')\b',
+    'op': rf'^({RE_OP})\b',
+    'cond': rf'^({RE_COND})\b',
     'id': r'\.?[a-z_]\w*',
     'equal': r'=',
     'lbrace': r'\[',
@@ -348,6 +353,47 @@ class Linker:
 
 assembler = Assembler()
 
+class Color(IntEnum):
+    ITAL = 3
+    GREY = 30
+    RED = 31
+    GREEN = 32
+    ORANGE = 33
+    BLUE = 34
+    PURPLE = 35
+    CYAN = 36
+    WHITE = 37
+
+PATTERNS = {
+    r'"(\\"|[^"])*"': Color.GREEN, #string
+    r"'\\?[^']'": Color.GREEN, #char
+    r'\b-?(0x[0-9a-f]+|0b[01]+|\d+)\b': Color.ORANGE, #const
+    rf'\b({RE_REG})\b': Color.ITAL, #register
+    rf'\b(ld|nop|push|pop|call|ret|halt|{RE_OP}|{RE_COND})': Color.BLUE, #ops
+    r'\.?[a-z_]\w*': Color.CYAN, #id
+    r';.*$': Color.GREY #comment
+}
+
+def repl(match, color):
+    if color:
+        return f'\33[1;{color}m{match[0]}\33[0m'
+    return match[0]
+
+def display(asm):
+    for line in asm.split('\n'):
+        new = ""
+        while line:
+            for pattern, color in PATTERNS.items():
+                match = re.match(pattern, line, re.I)
+                if match:
+                    new += repl(match, color)
+                    line = line[len(match[0]):]
+                    break
+            if match is None:
+                new += line[0]
+                line = line[1:]
+        print(new)
+
 def assemble(program, fflag=True, name='out'):
     if program.endswith('.s'):
         name = program[:-2]
@@ -360,6 +406,8 @@ def assemble(program, fflag=True, name='out'):
             file.write('v2.0 raw\n' + ' '.join(bit16))
 
 if __name__ == '__main__':
-    assemble('main:\nMOV A, \'\\n\'')
-    # assemble('testall.s')
-    # assemble(ASM)
+    ASM = '''
+    main:
+        ret
+    '''
+    assemble(ASM)
