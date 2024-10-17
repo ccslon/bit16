@@ -20,8 +20,8 @@ class Regs:
     def clear(self):
         self.max = -1
     def __getitem__(self, item):
-        if item == 'FP':
-            return Reg.FP
+        if item == Reg.FP:
+            return item
         elif item > Reg.D:
             raise SyntaxError('Not enough registers =(')
         self.max = max(self.max, item)
@@ -167,7 +167,11 @@ class CNode:
     def generate(self, vstr, n):
         pass
 
-class Void(CNode):
+class Type(CNode):
+    def cast(self, other):
+        return self == other
+
+class Void(Type):
     def __init__(self):
         self.size = 0
     def __eq__(self, other):
@@ -175,37 +179,35 @@ class Void(CNode):
     def __str__(self):
         return 'void'
 
-class Type(CNode):
+class Value(CNode):
     def __init__(self):
         self.const = False
-    @staticmethod
-    def address(vstr, n, local, base):
-        vstr.inst3(Op.ADD, reg[n], reg[base], local.location)
+    def address(self, vstr, n, var, base):
+        vstr.inst3(Op.ADD, reg[n], reg[base], var.location)
         return reg[n]
-    @staticmethod
-    def store(vstr, n, local, base):
-        if local.location is None:
-            vstr.load_glob(reg[n+1], local.token.lexeme)
-            vstr.store(reg[n], reg[n+1])
-        else:
-            vstr.store(reg[n], reg[base], local.location, local.token.lexeme)
+    def reduce(self, vstr, n, var, base):
+        vstr.load(reg[n], reg[base], var.location, var.token.lexeme)
         return reg[n]
-    @staticmethod
-    def reduce(vstr, n, local, base):
-        if local.location is None:
-            vstr.load_glob(reg[n], local.token.lexeme)
-            vstr.load(reg[n], reg[n])
-        else:
-            vstr.load(reg[n], reg[base], local.location, local.token.lexeme)
+    def store(self, vstr, n, var, base):
+        vstr.store(reg[n], reg[base], var.location, var.token.lexeme)
         return reg[n]
-    @staticmethod
-    def glob(vstr, glob):
+    def glob_address(self, vstr, n, glob):
+        vstr.load_glob(reg[n], glob.token.lexeme)
+        return reg[n]
+    def glob_reduce(self, vstr, n, glob):
+        self.glob_address(vstr, n, glob)
+        vstr.load(reg[n], reg[n])
+        return reg[n]
+    def glob_store(self, vstr, n, glob):
+        self.glob_address(vstr, n+1, glob)
+        vstr.store(reg[n], reg[n+1])
+    def glob_generate(self, vstr, glob):
         if glob.init:
             vstr.glob(glob.token.lexeme, glob.init.data(vstr))
         else:
-            vstr.space(glob.token.lexeme, glob.type.size)
+            vstr.space(glob.token.lexeme, self.size)
 
-class Word(Type):
+class Word(Value):
     def __init__(self, type, unsigned=False):
         super().__init__()
         self.type = type
@@ -226,6 +228,12 @@ class Pointer(Word):
         self.to = self.of = self.type
         self.unsigned = True
         self.size = 1
+    def call(self, vstr, n, var, base):
+        self.reduce(vstr, n, var, base)
+        vstr.call(reg[n])
+    def glob_call(self, vstr, n, glob):
+        self.glob_reduce(vstr, n, glob)
+        vstr.call(reg[n])
     def cast(self, other):
         return isinstance(other, Word)
     def __eq__(self, other):
@@ -236,26 +244,23 @@ class Pointer(Word):
     def __str__(self):
         return f'{self.to}*'
 
-class Struct(Frame, Type):
+class Struct(Frame, Value):
     def __init__(self, name):
         super().__init__()
         self.const = False
         self.name = name
-    @staticmethod
-    def store(vstr, n, local, base):
-        Struct.address(vstr, n+1, local, base)
-        for i in range(local.type.size):
+    def store(self, vstr, n, var, base):
+        self.address(vstr, n+1, var, base)
+        for i in range(var.type.size):
             vstr.load(reg[n+2], reg[n], i)
             vstr.store(reg[n+2], reg[n+1], i)
-    @staticmethod
-    def reduce(vstr, n, local, base):
-        return Struct.address(vstr, n, local, base)
-    @staticmethod
-    def glob(vstr, glob):
+    def reduce(self, vstr, n, var, base):
+        return self.address(vstr, n, var, base)
+    def glob_generate(self, vstr, glob):
         if glob.init:
             vstr.datas(glob.token.lexeme, [expr.data(vstr) for expr in glob.init])
         else:
-            vstr.space(glob.token.lexeme, glob.type.size)
+            vstr.space(glob.token.lexeme, self.size)
     def cast(self, other):
         return self == other
     def __eq__(self, other):
@@ -263,7 +268,7 @@ class Struct(Frame, Type):
     def __str__(self):
         return f'struct {self.name}'
 
-class Union(UserDict, Type): #TODO
+class Union(UserDict, Value): #TODO
     def __init__(self, name):
         super().__init__()
         self.const = False
@@ -274,29 +279,22 @@ class Union(UserDict, Type): #TODO
         self.size = max(self.size, attr.type.size)
         super().__setitem__(name, attr)
 
-class Array(Type):
+class Array(Value):
     def __init__(self, of, length):
         super().__init__()
         if length is not None:
             self.size = of.size * length.value
         self.of = of
         self.length = length
-    @staticmethod
-    def address(vstr, n, local, base):
-        if local.location is None:
-            vstr.load_glob(reg[n], local.token.lexeme)
-        else:
-            Word.address(vstr, n, local, base)
-        return reg[n]
-    @staticmethod
-    def reduce(vstr, n, local, base):
-        return Array.address(vstr, n, local, base)
-    @staticmethod
-    def glob(vstr, glob):
+    def reduce(self, vstr, n, var, base):
+        return self.address(vstr, n, var, base)
+    def glob_reduce(self, vstr, n, glob):
+        return self.glob_address(vstr, n, glob)
+    def glob_generate(self, vstr, glob):
         if glob.init:
             vstr.datas(glob.token.lexeme, [expr.data(vstr) for expr in glob.init])
         else:
-            vstr.space(glob.token.lexeme, glob.type.size)
+            vstr.space(glob.token.lexeme, self.size)
     def cast(self, other):
         return self == other
     def __eq__(self, other):
@@ -304,10 +302,12 @@ class Array(Type):
     def __str__(self):
         return f'{self.of}[]'
 
-class Func(Type):
+class Func(Value):
     def __init__(self, ret, params, variable):
         self.ret, self.params, self.variable = ret, params, variable
         self.size = ret.size
+    def glob_call(self, vstr, n, glob):
+        vstr.call(glob.token.lexeme)
     def cast(self, other):
         return False
     def __eq__(self, other):
@@ -410,6 +410,41 @@ class String(Expr):
     def reduce(self, vstr, n):
         vstr.load_glob(reg[n], self.data(vstr))
         return reg[n]
+
+class Local(Expr):
+    def store(self, vstr, n):
+        return self.type.store(vstr, n, self, Reg.FP)
+    def reduce(self, vstr, n):
+        return self.type.reduce(vstr, n, self, Reg.FP)
+    def address(self, vstr, n):
+        return self.type.address(vstr, n, self, Reg.FP)
+    def call(self, vstr, n):
+        self.type.call(vstr, n, self, Reg.FP)
+
+class Attr(Local):
+    def store(self, vstr, n):
+        return self.type.store(vstr, n, self, n+1)
+    def reduce(self, vstr, n):
+        return self.type.reduce(vstr, n, self, n)
+    def address(self, vstr, n):
+        return self.type.address(vstr, n, self, n)
+    def call(self, vstr, n):
+        self.type.call(vstr, n, self, n)
+
+class Glob(Local):
+    def __init__(self, type, token):
+        super().__init__(type, token)
+        self.init = None
+    def address(self, vstr, n):
+        return self.type.glob_address(vstr, n, self)
+    def reduce(self, vstr, n):
+        return self.type.glob_reduce(vstr, n, self)
+    def store(self, vstr, n):
+        return self.type.glob_store(vstr, n, self)    
+    def generate(self, vstr):
+        self.type.glob_generate(vstr, self)
+    def call(self, vstr, n):
+        self.type.glob_call(vstr, n, self)
 
 class OpExpr(Expr):
     def __init__(self, type, op):
@@ -696,45 +731,6 @@ class Block(UserList, Expr):
     def generate(self, vstr, n):
         for statement in self:
             statement.generate(vstr, n)
-
-class Local(Expr):
-    def store(self, vstr, n):
-        return self.type.store(vstr, n, self, 'FP')
-    def reduce(self, vstr, n):
-        return self.type.reduce(vstr, n, self, 'FP')
-    def address(self, vstr, n):
-        return self.type.address(vstr, n, self, 'FP')
-    def call(self, vstr, n):
-        Word.reduce(vstr, n, self, 'FP')
-        vstr.call(reg[n])
-
-class Attr(Local):
-    def store(self, vstr, n):
-        return self.type.store(vstr, n, self, n+1)
-    def reduce(self, vstr, n):
-        return self.type.reduce(vstr, n, self, n)
-    def address(self, vstr, n):
-        return self.type.address(vstr, n, self, n)
-    def call(self, vstr, n):
-        Word.reduce(vstr, n, self, n)
-        vstr.call(reg[n])
-
-class Glob(Local):
-    def __init__(self, type, token):
-        super().__init__(type, token)
-        self.location = None
-        self.init = None
-    def store(self, vstr, n):
-        return self.type.store(vstr, n, self, n+1)
-    def reduce(self, vstr, n):
-        return self.type.reduce(vstr, n, self, n)
-    def address(self, vstr, n):
-        vstr.load_glob(reg[n], self.token.lexeme)
-        return reg[n]
-    def generate(self, vstr):
-        self.type.glob(vstr, self)
-    def call(self, vstr, n):
-        vstr.call(self.token.lexeme)
 
 class Defn(Expr):
     def __init__(self, type, id, block, returns, calls, space):
