@@ -238,7 +238,9 @@ class Pointer(Word):
         return isinstance(other, Pointer) and (self.to == other.to \
                                                or isinstance(self.to, Void) \
                                                or isinstance(other.to, Void)) \
-            or isinstance(other, Array) and self.of == other.of
+            or isinstance(other, Array) and (self.of == other.of \
+                                             or isinstance(self.to, Void)) \
+            or isinstance(other, Func) and self.to == other
     def __str__(self):
         return f'{self.to}*'
 

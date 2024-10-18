@@ -1,7 +1,8 @@
 #define NULL (void*)0
+typedef unsigned int size_t;
 typedef int* FILE;
-FILE stdout = (int*)0x8000;
-FILE stdin = (int*)0x8001;
+FILE stdout = (FILE)0x8000;
+FILE stdin = (FILE)0x8001;
 char fgetc(FILE* stream) {
     return **stream;
 }
@@ -9,7 +10,7 @@ char fgetc(FILE* stream) {
 char getchar() {
     return *stdin;
 }
-char* fgets(char* s, int n, FILE* stream) {
+char* fgets(char* s, size_t n, FILE* stream) {
     char c;
     char* cs = s;
     while (--n > 0 && (c = fgetc(stream))) // "enter"
@@ -19,7 +20,7 @@ char* fgets(char* s, int n, FILE* stream) {
     return s;
 }
 char* gets(char* s) {
-    return fgets(s, 0xff, &stdin);
+    return fgets(s, 0xffff, &stdin);
 }
 int fputc(char c, FILE* stream) {
     **stream = c;
@@ -42,26 +43,25 @@ int puts(const char* s) {
     putchar('\n');
     return 0;
 }
+void printu(unsigned int n) {
+    if (n / 10)
+        printu(n / 10);
+    putchar(n % 10 + '0');
+}
 void printd(int n) {
     if (n < 0) {
         putchar('-');
         n = -n;
     }
-    if (n / 10)
-        printd(n / 10);
-    putchar(n % 10 + '0');
+    printu(n);
 }
-void printx(int n, char uplo) {
-    if (n < 0) {
-        putchar('-');
-        n = -n;
-    }
+void printx(unsigned int n, char uplo) {
     if (n / 16)
         printx(n / 16, uplo);
-    if (n % 16 > 9) 
+    if (n % 16 > 9)
         putchar(n % 16 - 10 + uplo);
     else
-        putchar(n % 16 + '0');
+        putchar(n % 16 + '0');        
 }
 void printf(const char* format, ...) {
     int* ap;
@@ -70,21 +70,25 @@ void printf(const char* format, ...) {
     for (c = format; *c; c++) {
         if (*c == '%') {
             switch (*++c) {
+                case 'u': {
+                    printu(((unsigned int)*ap++));
+                    break;
+                }
                 case 'i': ;
                 case 'd': {
                     printd(((int)*ap++));
                     break;
                 }
                 case 'x': {
-                    printx(((int)*ap++), 'a');
+                    printx(((unsigned int)*ap++), 'a');
                     break;
                 }
                 case 'X': {
-                    printx(((int)*ap++), 'A');
+                    printx(((unsigned int)*ap++), 'A');
                     break;
                 }
                 case 's': {
-                     printf(((char*)*ap++));
+                    printf(((char*)*ap++));
                     break;
                 }
                 case 'c': {

@@ -38,8 +38,8 @@ Cat make_cat(char* name, int age, Owner* owner) {
     cat.owner = owner;
     return cat;
 }
-int intcmp(int a, int b) {
-    return a - b;
+int intcmp(void* a, void* b) {
+    return *(int*)a - *(int*)b;
 }
 #define LEN 5
 int arr[LEN];
@@ -71,12 +71,12 @@ void main() {
     for (i = 0; i < LEN; i++)
         printf("%d ", arr[i]);
     putchar('\n');
-    qsort(arr, 0, LEN-1, &intcmp);
+    qsort(arr, sizeof(int), 0, LEN-1, &intcmp);
     for (i = 0; i < LEN; i++)
         printf("%d ", arr[i]);
     putchar('\n');
     //bsearch
     for (i = 0; i < N; i++) {
-        printf("%d\n", bsearch(i, sarr, 6, &intcmp));
+        printf("%d\n", bsearch(&i, sarr, sizeof(int), 6, &intcmp));
     }
 }

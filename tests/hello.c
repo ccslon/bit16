@@ -1,5 +1,6 @@
 void printf(char*, ...);
 
-void main() {
+int main() {
     printf("Hello world!\n");
+    return 0;
 }
