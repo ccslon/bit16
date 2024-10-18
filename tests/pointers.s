@@ -5,7 +5,7 @@ change:
   LD A, [A]
   ADD A, 10
   LD B, [FP, 3] ; n
-  LD [B], A
+  ST [B], A
   MOV SP, FP
   POP A, B, FP
   ADD SP, 1
@@ -16,7 +16,7 @@ foo:
   MOV FP, SP
   LD B, [FP, 5] ; m
   MUL B, 5
-  LD [FP, 0], B ; n
+  ST [FP, 0], B ; n
   ADD B, FP, 0
   PUSH B
   CALL change

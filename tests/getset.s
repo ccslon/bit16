@@ -19,7 +19,7 @@ set:
   LD B, [FP, 4] ; g
   LD C, [FP, 5] ; i
   ADD B, C
-  LD [B], A
+  ST [B], A
   MOV SP, FP
   POP A, B, C, FP
   ADD SP, 3
@@ -27,7 +27,7 @@ set:
 getarray:
   PUSH B, FP
   MOV FP, SP
-  LD A, =array
+  LDW A, =array
   LD B, [FP, 2] ; i
   ADD A, B
   LD A, [A]
@@ -41,10 +41,10 @@ setarray:
   PUSH A, B, C, FP
   MOV FP, SP
   LD A, [FP, 5] ; t
-  LD B, =array
+  LDW B, =array
   LD C, [FP, 4] ; i
   ADD B, C
-  LD [B], A
+  ST [B], A
   MOV SP, FP
   POP A, B, C, FP
   ADD SP, 2
@@ -72,7 +72,7 @@ getstack:
   ADD B, FP, 0
   LD C, [FP, 13] ; i
   ADD B, C
-  LD [B], A
+  ST [B], A
 .L3:
   MOV SP, FP
   ADD SP, 10

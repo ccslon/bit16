@@ -23,47 +23,47 @@ main:
   PUSH LR, B, C, FP
   SUB SP, 16
   MOV FP, SP
-  LD B, =.S1
-  LD [FP, 0], B ; ptr
+  LDW B, =.S1
+  ST [FP, 0], B ; ptr
   ADD B, FP, 1
   MOV C, 'H'
-  LD [B, 0], C
+  ST [B, 0], C
   MOV C, 'e'
-  LD [B, 1], C
+  ST [B, 1], C
   MOV C, 'l'
-  LD [B, 2], C
+  ST [B, 2], C
   MOV C, 'l'
-  LD [B, 3], C
+  ST [B, 3], C
   MOV C, 'o'
-  LD [B, 4], C
+  ST [B, 4], C
   MOV C, ' '
-  LD [B, 5], C
+  ST [B, 5], C
   MOV C, 's'
-  LD [B, 6], C
+  ST [B, 6], C
   MOV C, 't'
-  LD [B, 7], C
+  ST [B, 7], C
   MOV C, 'a'
-  LD [B, 8], C
+  ST [B, 8], C
   MOV C, 'c'
-  LD [B, 9], C
+  ST [B, 9], C
   MOV C, 'k'
-  LD [B, 10], C
+  ST [B, 10], C
   MOV C, '['
-  LD [B, 11], C
+  ST [B, 11], C
   MOV C, ']'
-  LD [B, 12], C
+  ST [B, 12], C
   MOV C, '\n'
-  LD [B, 13], C
+  ST [B, 13], C
   MOV C, '\0'
-  LD [B, 14], C
-  LD B, =.S2
+  ST [B, 14], C
+  LDW B, =.S2
   PUSH B
   CALL print
-  LD B, =gptr
+  LDW B, =gptr
   LD B, [B]
   PUSH B
   CALL print
-  LD B, =garr
+  LDW B, =garr
   PUSH B
   CALL print
   LD B, [FP, 0] ; ptr

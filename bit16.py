@@ -77,7 +77,6 @@ def unescape(text):
     for k, v in UNESCAPE.items():
         text = text.replace(k, v)
     return text
-
 def escape(char):
     return ESCAPE.get(char, char)
 

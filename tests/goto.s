@@ -5,12 +5,12 @@ foo:
   CMP A, 3
   JLE .L1
   MOV A, 3
-  LD [FP, 1], A ; bar
+  ST [FP, 1], A ; bar
   JR baz
 .L1:
   LD A, [FP, 1] ; bar
   MUL A, 3
-  LD [FP, 1], A ; bar
+  ST [FP, 1], A ; bar
 baz:
   LD A, [FP, 1] ; bar
   JR .L0

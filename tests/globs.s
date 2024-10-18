@@ -14,22 +14,22 @@ print_cat:
   PUSH A, FP
   SUB SP, 5
   MOV FP, SP
-  LD A, =name
+  LDW A, =name
   LD A, [A]
-  LD [FP, 0], A ; store
-  LD A, =num
+  ST [FP, 0], A ; store
+  LDW A, =num
   LD A, [A]
-  LD [FP, 1], A ; n
+  ST [FP, 1], A ; n
   LD A, [FP, 7] ; cat
   LD A, [A, 0] ; name
-  LD [FP, 2], A ; mycat
+  ST [FP, 2], A ; mycat
   LD A, [FP, 7] ; cat
   LD A, [A, 1] ; age
-  LD [FP, 3], A ; age
+  ST [FP, 3], A ; age
   LD A, [FP, 7] ; cat
   LD A, [A, 2] ; owner
   LD A, [A, 0] ; name
-  LD [FP, 4], A ; owner
+  ST [FP, 4], A ; owner
   MOV SP, FP
   ADD SP, 5
   POP A, FP
@@ -39,23 +39,23 @@ main:
   PUSH LR, B, C, FP
   SUB SP, 1
   MOV FP, SP
-  LD B, =cats
+  LDW B, =cats
   MOV C, 0
   MUL C, 3
   ADD B, C
-  LD [FP, 0], B ; cat1
-  LD B, =.S3
+  ST [FP, 0], B ; cat1
+  LDW B, =.S3
   LD C, [FP, 0] ; cat1
-  LD [C, 0], B ; name
+  ST [C, 0], B ; name
   MOV B, 10
   LD C, [FP, 0] ; cat1
-  LD [C, 1], B ; age
-  LD B, =owners
+  ST [C, 1], B ; age
+  LDW B, =owners
   MOV C, 0
   MUL C, 2
   ADD B, C
   LD C, [FP, 0] ; cat1
-  LD [C, 2], B ; owner
+  ST [C, 2], B ; owner
   LD B, [FP, 0] ; cat1
   PUSH B
   CALL print_cat

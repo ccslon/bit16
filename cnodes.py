@@ -141,13 +141,13 @@ class Emitter(Visitor):
     def ret(self):
         self.add('RET')
     def load_glob(self, rd, name):
-        self.add(f'LD {rd.name}, ={name}')
+        self.add(f'LDW {rd.name}, ={name}')
     def load(self, rd, rb, offset=None, name=None):
         self.add(f'LD {rd.name}, [{rb.name}'+(f', {offset}' if offset is not None else '')+']'+(f' ; {name}' if name else ''))
     def store(self, rd, rb, offset=None, name=None):
-        self.add(f'LD [{rb.name}'+(f', {offset}' if offset is not None else '')+f'], {rd.name}'+(f' ; {name}' if name else ''))
+        self.add(f'ST [{rb.name}'+(f', {offset}' if offset is not None else '')+f'], {rd.name}'+(f' ; {name}' if name else ''))
     def imm(self, rd, value):
-        self.add(f'LD {rd.name}, {value}')
+        self.add(f'LDW {rd.name}, {value}')
     def inst(self, op, rd, src):
         if op in [Op.NOT, Op.NEG]:
             self.add(f'{op.name} {rd.name}')

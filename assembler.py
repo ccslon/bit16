@@ -17,8 +17,10 @@ TOKENS = {
     'const': r'-?(0x[0-9a-f]+|0b[01]+|\d+)',
     'string': r'"(\\"|[^"])*"',
     'char': r"'\\?[^']'",
-    'ldm': r'^(ldm)\b',
+    # 'ldm': r'^(ldm)\b',    
+    'ldw': r'^(ldw)\b',
     'ld': r'^(ld)\b',
+    'st': r'^(st)\b',
     'nop': r'^(nop)\b',
     'push': r'^(push)\b',
     'pop': r'^(pop)\b',
@@ -200,16 +202,16 @@ class Assembler:
                     elif self.match('ld', 'reg', ',', '[', 'reg', ',', 'const', ']'):
                         self.load(*self.values())
                                             
-                    elif self.match('ld', '[', 'reg', ']', ',', 'reg'):
+                    elif self.match('st', '[', 'reg', ']', ',', 'reg'):
                         self.store0(*self.values())
-                    elif self.match('ld', '[', 'reg', ',', 'reg', ']', ',', 'reg'):
+                    elif self.match('st', '[', 'reg', ',', 'reg', ']', ',', 'reg'):
                         self.store_w_reg_offset(*self.values())
-                    elif self.match('ld', '[', 'reg', ',', 'const', ']', ',', 'reg'):
+                    elif self.match('st', '[', 'reg', ',', 'const', ']', ',', 'reg'):
                         self.store(*self.values())
                         
-                    elif self.match('ld', 'reg', ',', 'const'):
+                    elif self.match('ldw', 'reg', ',', 'const'):
                         self.load_word(*self.values())
-                    elif self.match('ld', 'reg', ',', '=', 'id'):
+                    elif self.match('ldw', 'reg', ',', '=', 'id'):
                         self.load_word(*self.values())
                         
                     elif self.accept('push'):
@@ -369,7 +371,7 @@ PATTERNS = {
     r"'\\?[^']'": Color.GREEN, #char
     r'\b-?(0x[0-9a-f]+|0b[01]+|\d+)\b': Color.ORANGE, #const
     rf'\b({RE_REG})\b': Color.ITAL, #register
-    rf'\b(ld|nop|push|pop|call|ret|halt|{RE_OP}|{RE_COND})': Color.BLUE, #ops
+    rf'\b(ldw|ld|st|nop|push|pop|call|ret|halt|{RE_OP}|{RE_COND})\b': Color.BLUE, #ops
     r'\.?[a-z_]\w*': Color.CYAN, #id
     r';.*$': Color.GREY #comment
 }

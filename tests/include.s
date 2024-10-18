@@ -6,7 +6,7 @@ test:
   MOV A, 10
   MOV B, 100
   MUL A, B
-  LD [FP, 0], A ; num
+  ST [FP, 0], A ; num
   MOV SP, FP
   ADD SP, 1
   POP A, B, FP

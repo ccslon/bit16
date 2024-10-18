@@ -3,7 +3,7 @@ test:
   SUB SP, 2
   MOV FP, SP
   MOV A, 0
-  LD [FP, 0], A ; i
+  ST [FP, 0], A ; i
 .L0:
   LD A, [FP, 0] ; i
   CMP A, 10
@@ -17,14 +17,14 @@ test:
 .L4:
   LD A, [FP, 1] ; minN
 .L3:
-  LD [FP, 1], A ; minN
+  ST [FP, 1], A ; minN
   LD A, [FP, 1] ; minN
   ADD B, A, 1
-  LD [FP, 1], B ; minN
+  ST [FP, 1], B ; minN
 .L1:
   LD A, [FP, 0] ; i
   ADD B, A, 1
-  LD [FP, 0], B ; i
+  ST [FP, 0], B ; i
   JR .L0
 .L2:
   MOV SP, FP
