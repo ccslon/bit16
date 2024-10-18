@@ -118,8 +118,28 @@ class Jump(Inst):
         if const9 < 0:
             const9 = negative(const9, 9)
         self.bin = '000',f'{cond:04b}',f'{const9:09b}'
-        
-class OpByte(Inst):
+
+class Unary(Inst):
+    def __init__(self, op, rd):
+        self.str = f'{op.name} {rd.name}'
+        self.dec = 1,0,op,rd,rd
+        self.bin = '001','0',f'{op:04b}','XX',f'{rd:03b}',f'{rd:03b}'
+            
+class Binary(Inst):
+    def __init__(self, imm, op, src, rd):
+        if imm:
+            assert -16 <= src < 16
+            self.str = f'{op.name} {rd.name}, {src}'
+            self.dec = 1,imm,op,src,rd
+            if src < 0:
+                src = negative(src, 5)
+            self.bin = '001','1',f'{op:04b}',f'{src:05b}',f'{rd:03b}'
+        else:
+            self.str = f'{op.name} {rd.name}, {src.name}'
+            self.dec = 1,imm,op,0,src,rd
+            self.bin = '001','0',f'{op:04b}','XX',f'{src:03b}',f'{rd:03b}'
+
+class Byte(Inst):
     def __init__(self, op, byte, rd):
         if isinstance(byte, str):
             self.str = f"{op.name} {rd.name}, '{escape(byte)}'"
@@ -130,82 +150,59 @@ class OpByte(Inst):
             self.str = f'{op.name} {rd.name}, 0x{byte:02X}'
             self.dec = 2,op,byte,rd
             self.bin = '010',f'{op:02b}',f'{byte:08b}',f'{rd:03b}'
-            
-class Op4(Inst):
-    def __init__(self, imm, op, rd, src):
-        if op in [Op.NOT, Op.NEG]:
-            self.str = f'{op.name} {rd.name}'
-            self.dec = 1,0,op,rd,rd
-            self.bin = '001','0',f'{op:04b}','XX',f'{rd:03b}',f'{rd:03b}'
-        else:
-            if imm:
-                assert -16 <= src < 16
-                self.str = f'{op.name} {rd.name}, {src}'
-                self.dec = 1,imm,op,src,rd
-                if src < 0:
-                    src = negative(src, 5)
-                self.bin = '001','1',f'{op:04b}',f'{src:05b}',f'{rd:03b}'
-            else:
-                self.str = f'{op.name} {rd.name}, {src.name}'
-                self.dec = 1,imm,op,0,src,rd
-                self.bin = '001','0',f'{op:04b}','XX',f'{src:03b}',f'{rd:03b}'
 
 class Offset(Inst):
-    def __init__(self, op, rd, rs, const5):
-        assert -16 <= const5 < 16
-        self.str = f'{op.name} {rd.name}, {rs.name}, {const5}'
-        self.dec = 3,0,0,rs,const5,rd
-        if op == Op.SUB:
-            const5 = negative(-const5, 5)
-        self.bin = '011','0','X',f'{rs:03b}',f'{const5:05b}',f'{rd:03b}'
+    def __init__(self, op, rd, rs, offset):
+        if -16 <= offset < 16:
+            self.str = f'{op.name} {rd.name}, {rs.name}, {offset}'
+            self.dec = 3,0,0,rs,offset,rd
+            if op == Op.SUB:
+                offset = negative(-offset, 5)
+            self.bin = '011','0','X',f'{rs:03b}',f'{offset:05b}',f'{rd:03b}'
+        else:            
+            assert 0 <= offset < 256
+            assert rs == Reg.FP
+            self.str = f'{op.name} {rd.name}, FP, 0x{offset:02X}'
+            self.dec = 3,1,0,offset,rd
+            self.bin = '011','1','X',f'{offset:08b}',f'{rd:03b}'
 
-class OffsetFP(Inst):
-    def __init__(self, op, rd, byte):
-        assert 0 <= byte < 256
-        self.str = f'{op.name} {rd.name}, FP, 0x{byte:02X}'
-        self.dec = 3,1,0,byte,rd
-        self.bin = '011','1','X',f'{byte:08b}',f'{rd:03b}'
-
-class Load(Inst):
-    def __init__(self, storing, rd, rb, offset5):
-        assert 0 <= offset5 < 32
+class LoadStore(Inst):
+    def __init__(self, storing, rd, rb, offset):
         if storing:
-            self.str = f'LD [{rb.name}, {offset5}], {rd.name}'
+            self.str = f'ST [{rb.name}, {offset}], {rd.name}'
         else:
-            self.str = f'LD {rd.name}, [{rb.name}, {offset5}]'
-        self.dec = 4,0,int(storing),rb,offset5,rd
-        self.bin = '100','0',str(int(storing)),f'{rb:03b}',f'{offset5:05b}',f'{rd:03b}'
-
-class LoadFP(Inst):
-    def __init__(self, storing, rd, offset8):
-        assert 0 <= offset8 < 256
-        if storing:
-            self.str = f'LD [FP, {offset8}], {rd.name}'
+            self.str = f'LD {rd.name}, [{rb.name}, {offset}]'
+        if -16 <= offset < 16:
+            if offset < 0:
+                offset = negative(-offset, 5)
+            self.dec = 4,0,storing,rb,offset,rd
+            self.bin = '100','0',str(storing),f'{rb:03b}',f'{offset:05b}',f'{rd:03b}'
         else:
-            self.str = f'LD {rd.name}, [FP, {offset8}]'
-        self.dec = 4,1,int(storing),offset8,rd
-        self.bin = '100','1',str(int(storing)),f'{offset8:08b}',f'{rd:03b}'
+            assert 0 <= offset < 256
+            assert rb == Reg.FP
+            self.dec = 4,1,storing,offset,rd
+            self.bin = '100','1',str(storing),f'{offset:08b}',f'{rd:03b}'
 
-class LoadReg(Inst):
-    def __init__(self, storing, rd, rb, ro):
+class LoadStoreReg(Inst):
+    def __init__(self, storing, rb, ro, rd):
         if storing:
-            self.str = f'LD [{rb.name}, {ro.name}], {rd.name}'
+            self.str = f'ST [{rb.name}, {ro.name}], {rd.name}'
         else:
             self.str = f'LD {rd.name}, [{rb.name}, {ro.name}]'
-        self.dec = 5,0,int(storing),0,ro,rb,rd
-        self.bin = '101','0',str(int(storing)),'XX',f'{ro:03b}',f'{rb:03b}',f'{rd:03b}'
+        self.dec = 5,0,storing,rb,0,ro,rd
+        self.bin = '101','0',str(storing),f'{rb:03b}','XX',f'{ro:03b}',f'{rd:03b}'
 
-class StackOp(Inst):
+class PushPop(Inst):
     def __init__(self, pushing, rd):
         if pushing:
             self.str = f'PUSH {rd.name}'
         else:
             self.str = f'POP {rd.name}'
-        self.dec = 6,0,int(pushing),0,rd
-        self.bin = '110','X',str(int(pushing)),'XXXXXXXX',f'{rd:03b}'
+        self.dec = 6,0,pushing,0,rd
+        self.bin = '110','X',str(pushing),'XXXXXXXX',f'{rd:03b}'
 
-class Word(Inst):
+class LoadWord(Inst):
     def __init__(self, rd):
-        self.str = f'LD {rd.name}, ...'
+        self.str = f'LDW {rd.name}, ...'
         self.dec = 7,0,rd
         self.bin = '111','XXXXXXXXXX',f'{rd:03b}'
