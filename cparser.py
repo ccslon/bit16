@@ -25,7 +25,7 @@ TODO
 [X] Different calling convention. Went with stdcall-like
 [X] Fix void and void*
 [X] Fix array strings e.g. char str[3] = "Hi";
-[ ] init Arrays of unknown size
+[X] init Arrays of unknown size
 [X] Add negative numbers
 [X] Fix const
 [X] Add unsigned
@@ -363,7 +363,7 @@ class CParser:
                     value = self.enum(value)
                 self.expect('}')
             else:
-                assert id and id.lexeme in self.enums
+                assert id and id.lexeme in self.enums, self.error(f'Enum name "{id.lexeme}" not found')
             spec = Word('int')
         else:
             if self.accept('unsigned'):
@@ -393,7 +393,7 @@ class CParser:
         type_name = self.qual()
         types = []
         id = self._declr(types)
-        assert id is None
+        assert id is None, self.error(f'Unexpected name "{id.lexeme}" in TYPE NAME')
         for new_type, args in reversed(types):
             type_name = new_type(type_name, *args)
         return type_name
@@ -448,7 +448,7 @@ class CParser:
         if self.peek('='):
             token = next(self)
             if self.accept('{'):
-                assert isinstance(declr.type, (Array,Struct))
+                assert isinstance(declr.type, (Array,Struct)), self.error('Cannot list assign to scalar')
                 init = InitListAssign(token, declr, self.list())
                 self.expect('}')
             elif isinstance(declr.type, Array) and self.peek('string'):
@@ -546,13 +546,11 @@ class CParser:
         '''
         if self.accept(';'):
             statement = Statement()
-
         elif self.accept('{'):
             self.begin_scope()
             statement = self.block()
             self.end_scope()
             self.expect('}')
-
         elif self.accept('if'):
             self.expect('(')
             expr = self.expr()
@@ -560,7 +558,6 @@ class CParser:
             statement = If(expr, self.statement())
             if self.accept('else'):
                 statement.false = self.statement()
-
         elif self.accept('switch'):
             self.expect('(')
             test = self.expr()
@@ -575,13 +572,11 @@ class CParser:
                 self.expect(':')
                 statement.default = self.statement()
             self.expect('}')
-
         elif self.accept('while'):
             self.expect('(')
             expr = self.expr()
             self.expect(')')
             statement = While(expr, self.statement())
-
         elif self.accept('for'):
             self.expect('(')
             inits = []
@@ -599,7 +594,6 @@ class CParser:
                     steps.append(self.expr())
                 self.expect(')')
             statement = For(inits, cond, steps, self.statement())
-
         elif self.accept('do'):
             statement = self.statement()
             self.expect('while')
@@ -607,32 +601,26 @@ class CParser:
             statement = Do(statement, self.expr())
             self.expect(')')
             self.expect(';')
-
         elif self.peek('return'):
             self.returns = True
             token = next(self)
             if self.accept(';'):
-                statement = Return(token, None)
+                statement = Return(token, self.defn.type.ret, None, self.defn.token.lexeme)
             else:
-                statement = Return(token, self.expr())
+                statement = Return(token, self.defn.type.ret, self.expr(), self.defn.token.lexeme)
                 self.expect(';')
-
         elif self.accept('break'):
             statement = Break()
             self.expect(';')
-
         elif self.accept('continue'):
             statement = Continue()
             self.expect(';')
-
         elif self.accept('goto'):
             statement = Goto(self.expect('id'))
             self.expect(';')
-
         elif self.peekn('id',':'):
             statement = Label(next(self))
             next(self)
-
         else:
             statement = self.expr()
             self.expect(';')
@@ -667,10 +655,10 @@ class CParser:
                 if id:
                     self.globs[id.lexeme] = glob = Glob(type, id)
                 if self.accept('{'):
-                    assert id is not None
-                    assert isinstance(type, Func)
-                    assert not any(param.token is None for param in type.params)
-                    self.begin_func()
+                    assert id is not None, self.error('Function definition needs a name')
+                    assert isinstance(type, Func), self.error(f'"{id.lexeme}" is not of function type')
+                    assert not any(param.token is None for param in type.params), self.error(f'"{id.lexeme}" cannot have abstract parameters')
+                    self.begin_func(glob)
                     for param in type.params:
                         self.param_scope[param.token.lexeme] = param
                     block = self.block()
@@ -678,10 +666,10 @@ class CParser:
                     program.append(Defn(type, id, block, self.returns, self.calls, self.space))
                     self.expect('}')
                 elif self.accept('='):
-                    assert id is not None
-                    assert not isinstance(type, Void)
+                    assert id is not None, self.error('Assigning to nothing')
+                    assert not isinstance(type, Void), self.error('Cannot assign a void type a value')
                     if self.accept('{'):
-                        assert isinstance(type, (Array,Struct))
+                        assert isinstance(type, (Array,Struct)), self.error('Cannot list assign to scalar')
                         glob.init = self.list()
                         self.expect('}')
                     else:
@@ -689,7 +677,7 @@ class CParser:
                     program.append(glob)
                     self.expect(';')
                 else:
-                    if id and type.size:
+                    if id and not isinstance(type, Func):
                         program.append(glob)
                     self.expect(';')
         return program
@@ -698,7 +686,8 @@ class CParser:
         return self.peek('id', offset=offset) \
             and self.tokens[self.index+offset].lexeme in self.typedefs
 
-    def begin_func(self):
+    def begin_func(self, defn):
+        self.defn = defn
         self.space = 0
         self.returns = False
         self.calls = False

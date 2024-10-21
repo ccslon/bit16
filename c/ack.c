@@ -1,3 +1,4 @@
+void printf(char*, ...);
 #define LIM 5
 int ack(int m, int n) {
     if (m == 0) {
@@ -12,7 +13,7 @@ int main() {
     int i, j;
     for (i = 0; i < LIM; i++) {
         for (j = 0; j < LIM; j++) {
-            ack(i, j);
+            printf("ack(%d, %d) = %d\n", i, j, ack(i, j));
         }
     }
     return 0;
