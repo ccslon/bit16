@@ -41,7 +41,7 @@ class Visitor:
         self.clear()
     def clear(self):
         self.n_labels = 0
-        self.if_jump_end = False
+        self.if_jump_end = []
         self.loop = Loop()
     def begin_func(self, defn):
         if defn.type.size or defn.returns:
@@ -615,38 +615,28 @@ class Logic(Binary):
           '||':Op.OR}
     def compare(self, vstr, n, label):
         if self.op == Op.AND:
-            vstr.inst(Op.CMP, self.left.reduce(vstr, n), 0)
-            vstr.jump(Cond.JEQ, f'.L{label}')
-            vstr.inst(Op.CMP, self.right.reduce(vstr, n), 0)
-            vstr.jump(Cond.JEQ, f'.L{label}')
+            self.left.compare(vstr, n, label)
+            self.right.compare(vstr, n, label)
         elif self.op == Op.OR:
             sublabel = vstr.next_label()
-            vstr.inst(Op.CMP, self.left.reduce(vstr, n), 0)
-            vstr.jump(Cond.JNE, f'.L{sublabel}')
-            vstr.inst(Op.CMP, self.right.reduce(vstr, n), 0)
-            vstr.jump(Cond.JEQ, f'.L{label}')
+            self.left.compare_false(vstr, n, sublabel)
+            self.right.compare(vstr, n, label)
             vstr.append_label(f'.L{sublabel}')
     def compare_false(self, vstr, n, label): 
         if self.op == Op.AND:
             sublabel = vstr.next_label()
-            vstr.inst(Op.CMP, self.left.reduce(vstr, n), 0)
-            vstr.jump(Cond.JEQ, f'.L{sublabel}')
-            vstr.inst(Op.CMP, self.right.reduce(vstr, n), 0)
-            vstr.jump(Cond.JNE, f'.L{label}')
+            self.left.compare(vstr, n, sublabel)
+            self.right.compare_false(vstr, n, label)
             vstr.append_label(f'.L{sublabel}')
         elif self.op == Op.OR:
-            vstr.inst(Op.CMP, self.left.reduce(vstr, n), 0)
-            vstr.jump(Cond.JNE, f'.L{label}')
-            vstr.inst(Op.CMP, self.right.reduce(vstr, n), 0)
-            vstr.jump(Cond.JNE, f'.L{label}')
+            self.left.compare_false(vstr, n, label)
+            self.right.compare_false(vstr, n, label)
     def reduce(self, vstr, n):
         if self.op == Op.AND:
             label = vstr.next_label()
             sublabel = vstr.next_label()
-            vstr.inst(Op.CMP, self.left.reduce(vstr, n), 0)
-            vstr.jump(Cond.JEQ, f'.L{label}')
-            vstr.inst(Op.CMP, self.right.reduce(vstr, n), 0)
-            vstr.jump(Cond.JEQ, f'.L{label}')
+            self.left.compare(vstr, n, label)
+            self.right.compare(vstr, n, label)
             vstr.inst(Op.MOV, reg[n], 1)
             vstr.jump(Cond.JR, f'.L{sublabel}')
             vstr.append_label(f'.L{label}')
@@ -656,10 +646,8 @@ class Logic(Binary):
             label = vstr.next_label()
             sublabel = vstr.next_label()
             subsublabel = vstr.next_label()
-            vstr.inst(Op.CMP, self.left.reduce(vstr, n), 0)
-            vstr.jump(Cond.JNE, f'.L{label}')            
-            vstr.inst(Op.CMP, self.right.reduce(vstr, n), 0)
-            vstr.jump(Cond.JEQ, f'.L{sublabel}')
+            self.left.compare_false(vstr, n, label)
+            self.right.compare(vstr, n, sublabel)
             vstr.append_label(f'.L{label}')
             vstr.inst(Op.MOV, reg[n], 1)
             vstr.jump(Cond.JR, f'.L{subsublabel}')
@@ -673,7 +661,6 @@ class Condition(Expr):
         self.type = true.type
         self.cond, self.true, self.false = cond, true, false
     def reduce(self, vstr, n):
-        vstr.if_jump_end = False
         label = vstr.next_label()
         sublabel = vstr.next_label() if self.false else label
         self.cond.compare(vstr, n, sublabel)
@@ -889,7 +876,7 @@ class If(Statement):
     def __init__(self, cond, state):
         self.cond, self.true, self.false = cond, state, None
     def generate(self, vstr, n):
-        vstr.if_jump_end = False
+        vstr.if_jump_end.append(False)
         label = vstr.next_label()
         sublabel = vstr.next_label() if self.false else label
         self.cond.compare(vstr, n, sublabel)
@@ -897,21 +884,21 @@ class If(Statement):
         if self.false:
             if not (isinstance(self.true, Return) or (isinstance(self.true, Block) and self.true and isinstance(self.true[-1], Return))):
                 vstr.jump(Cond.JR, f'.L{label}')
-                vstr.if_jump_end = True
+                vstr.if_jump_end[-1] = True
             vstr.append_label(f'.L{sublabel}')
             self.false.branch(vstr, n, label)
-            if vstr.if_jump_end:
+            if vstr.if_jump_end[-1]:
                 vstr.append_label(f'.L{label}')
         else:
             vstr.append_label(f'.L{label}')
     def branch(self, vstr, n, root):
-        sublabel = vstr.next_label()
+        sublabel = vstr.next_label() if self.false else root
         self.cond.compare(vstr, n, sublabel)
         self.true.generate(vstr, n)
         if self.false:
             if not (isinstance(self.true, Return) or (isinstance(self.true, Block) and self.true and isinstance(self.true[-1], Return))):
                 vstr.jump(Cond.JR, f'.L{root}')
-                vstr.if_jump_end = True
+                vstr.if_jump_end[-1] = True
             vstr.append_label(f'.L{sublabel}')
             self.false.branch(vstr, n, root)
 
