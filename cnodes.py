@@ -875,7 +875,7 @@ class Call(Expr):
 class Return(Expr):
     def __init__(self, token, ret, expr, name):
         super().__init__(Void() if expr is None else expr.type, token)
-        assert ret == expr.type, self.error(f'{ret} != {self.type} in {name}')
+        assert ret == self.type, self.error(f'{ret} != {self.type} in {name}')
         self.expr = expr
     def generate(self, vstr, n):
         if self.expr:

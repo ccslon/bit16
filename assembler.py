@@ -7,7 +7,7 @@ Created on Fri Aug 25 10:49:03 2023
 
 import re
 from enum import IntEnum
-from bit16 import Reg, Op, Cond, Data, Char, Jump, Unary, Binary, Byte, Offset, LoadStore, LoadStoreReg, PushPop, LoadWord, unescape
+from bit16 import Reg, Op, Cond, Data, Char, Jump, Unary, Binary, Byte, Offset, Load, LoadReg, PushPop, LoadWord, unescape
 
 RE_OP = r'|'.join(op.name for op in Op)
 RE_COND = r'|'.join(cond.name for cond in Cond)
@@ -69,10 +69,10 @@ class Assembler:
         self.new_inst(Jump, cond, label)
     def unary(self, op, rd):
         self.new_inst(Unary, op, rd)
-    def binary(self, op, rd, src, const):
-        if const:
+    def binary(self, op, rd, src, imm):
+        if imm:
             if -16 <= src < 16:
-                self.new_inst(Binary, 1, op, src, rd)
+                self.new_inst(Binary, True, op, src, rd)
             elif 0 <= src < 256:
                 assert op in [Op.MOV, Op.ADD, Op.SUB, Op.CMP]
                 self.byte(op, rd, src)
@@ -80,7 +80,7 @@ class Assembler:
                 assert op == Op.MOV
                 self.load_word(rd, src)
         else:
-            self.new_inst(Binary, 0, op, src, rd)
+            self.new_inst(Binary, False, op, src, rd)
     def offset(self, op, rd, rs, offset):
         assert op in [Op.ADD, Op.SUB]
         self.new_inst(Offset, op, rd, rs, offset)
@@ -92,23 +92,23 @@ class Assembler:
             assert -16 <= offset < 256
         else:
             assert -16 <= offset < 16
-        self.new_inst(LoadStore, 0, rd, rb, offset)
+        self.new_inst(Load, False, rd, rb, offset)
     def load_reg(self, rd, rb, ro):
-        self.new_inst(LoadStoreReg, 0, rb, ro, rd)
+        self.new_inst(LoadReg, False, rb, ro, rd)
     def store(self, rb, offset, rd):
         if rb == Reg.FP:
             assert -16 <= offset < 256
         else:
             assert -16 <= offset < 16 
-        self.new_inst(LoadStore, 1, rd, rb, offset)
+        self.new_inst(Load, True, rd, rb, offset)
     def store0(self, rb, rd):
-        self.new_inst(LoadStore, 1, rd, rb, 0)
+        self.new_inst(Load, True, rd, rb, 0)
     def store_reg(self, rb, ro, rd):
-        self.new_inst(LoadStoreReg, 1, rb, ro, rd)
+        self.new_inst(LoadReg, True, rb, ro, rd)
     def pop(self, rd):
-        self.new_inst(PushPop, 0, rd)
+        self.new_inst(PushPop, False, rd)
     def push(self, rd):
-        self.new_inst(PushPop, 1, rd)
+        self.new_inst(PushPop, True, rd)
     def load_word(self, rd, value):
         self.new_inst(LoadWord, rd)
         self.new_imm(value)
@@ -181,9 +181,9 @@ class Assembler:
                     elif self.match('op', 'reg'):
                         self.unary(*self.values())
                     elif self.match('op', 'reg', ',', 'reg'):
-                        self.binary(*self.values(), const=False)
+                        self.binary(*self.values(), False)
                     elif self.match('op', 'reg', ',', 'const'):
-                        self.binary(*self.values(), const=True)
+                        self.binary(*self.values(), True)
                     elif self.match('op', 'reg', ',', 'char'):
                         self.byte(*self.values())
                     elif self.match('op', 'reg', ',', 'reg', ',', 'const'):
@@ -229,14 +229,14 @@ class Assembler:
                         
                     elif self.match('call','reg'):
                         self.offset(Op.ADD, Reg.LR, Reg.PC, 2)
-                        self.binary(Op.MOV, Reg.PC, *self.values(), const=False)
+                        self.binary(Op.MOV, Reg.PC, *self.values(), False)
                         
                     elif self.match('call', 'id'):
                         self.offset(Op.ADD, Reg.LR, Reg.PC, 3)
                         self.load_word(Reg.PC, *self.values())
                         
                     elif self.match('ret'):
-                        self.binary(Op.MOV, Reg.PC, Reg.LR, const=False)
+                        self.binary(Op.MOV, Reg.PC, Reg.LR, False)
                     
                     elif self.accept('ldm'):
                         if self.accept('{'):
@@ -260,7 +260,7 @@ class Assembler:
                                 self.store(dest, i, reg)
                         
                     elif self.match('halt'):
-                        self.binary(Op.MOV, Reg.PC, Reg.PC, const=False)
+                        self.binary(Op.MOV, Reg.PC, Reg.PC, False)
                     else:
                         self.error()
         return self.inst + self.data
